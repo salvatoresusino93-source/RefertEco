@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RefertEco — Gestionale Referti</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=2">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=2">
+<link rel="apple-touch-icon" href="icon-192.png?v=2">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sb-hdr">
+      <div class="sb-logo">RefertEco</div>
+      <div class="sb-sub">Gestionale referti ecografici</div>
+    </div>
+    <nav class="sb-nav">
+      <div class="nav-lbl">Menu</div>
+      <button class="nav-btn active" id="nav-nuovo" onclick="showView('nuovo')"><span class="ic">✦</span> Nuovo referto</button>
+      <button class="nav-btn" id="nav-archivio" onclick="showView('archivio')"><span class="ic">◫</span> Archivio referti</button>
+      <button class="nav-btn" id="nav-impostazioni" onclick="showView('impostazioni')"><span class="ic">⚙</span> Impostazioni</button>
+    </nav>
+    <div class="sb-ft" id="sb-count">0 referti archiviati</div>
+    <button class="quit-btn" onclick="quitApp()" title="Spegni il server e chiudi">⏻ Chiudi programma</button>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">Nuovo referto</div>
+      <div class="topbar-date" id="topbar-date"></div>
+    </div>
+    <div class="content">
+
+      <!-- ═══ VIEW NUOVO ═══ -->
+      <div class="view active" id="view-nuovo">
+        <div class="nuovo-layout">
+        <div class="nuovo-form">
+        <div class="form-card">
+
+          <div class="form-section">
+            <div class="sec-lbl">Dati paziente</div>
+            <div class="form-row c3">
+              <div class="fg"><label>Cognome *</label><input type="text" id="f-cognome" placeholder="Rossi" autocomplete="off"></div>
+              <div class="fg"><label>Nome *</label><input type="text" id="f-nome" placeholder="Mario" autocomplete="off"></div>
+              <div class="fg"><label>Data di nascita</label><input type="date" id="f-nascita"></div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="sec-lbl">Esame</div>
+            <div class="form-row c2">
+              <div class="fg">
+                <label>Tipo di esame *</label>
+                <div class="tipo-wrap">
+                  <select id="f-tipo-sel" onchange="onTipoSelChange()">
+                    <option value="">— Seleziona dal menu —</option>
+                    <optgroup label="ADDOME">
+                      <option value="Ecografia addome superiore">Ecografia addome superiore</option>
+                      <option value="Ecografia addome inferiore">Ecografia addome inferiore</option>
+                      <option value="Ecografia addome completo">Ecografia addome completo</option>
+                      <option value="Ecografia epatica">Ecografia epatica</option>
+                      <option value="Ecografia epato-biliare">Ecografia epato-biliare</option>
+                      <option value="Ecografia colecisti e vie biliari">Ecografia colecisti e vie biliari</option>
+                      <option value="Ecografia pancreatica">Ecografia pancreatica</option>
+                      <option value="Ecografia splenica">Ecografia splenica</option>
+                      <option value="Ecografia delle anse intestinali">Ecografia delle anse intestinali</option>
+                      <option value="Ecografia della parete addominale">Ecografia della parete addominale</option>
+                      <option value="Eco-CEUS epatica">Eco-CEUS epatica (con mdc)</option>
+                    </optgroup>
+                    <optgroup label="APPARATO URINARIO">
+                      <option value="Ecografia apparato urinario">Ecografia apparato urinario</option>
+                      <option value="Ecografia renale">Ecografia renale</option>
+                      <option value="Ecografia vescicale">Ecografia vescicale</option>
+                      <option value="Ecografia vescico-prostatica sovrapubica">Ecografia vescico-prostatica sovrapubica</option>
+                      <option value="Ecografia prostatica transrettale">Ecografia prostatica transrettale</option>
+                      <option value="Ecografia surrenalica">Ecografia surrenalica</option>
+                    </optgroup>
+                    <optgroup label="COLLO E TIROIDE">
+                      <option value="Ecografia tiroide">Ecografia tiroide</option>
+                      <option value="Ecografia tiroide e paratiroidi">Ecografia tiroide e paratiroidi</option>
+                      <option value="Ecografia del collo">Ecografia del collo</option>
+                      <option value="Ecografia linfonodale laterocervicale">Ecografia linfonodale laterocervicale</option>
+                      <option value="Ecografia ghiandole salivari">Ecografia ghiandole salivari</option>
+                      <option value="Ecografia parotide">Ecografia parotide</option>
+                    </optgroup>
+                    <optgroup label="APPARATO GENITALE FEMMINILE / OSTETRICA">
+                      <option value="Ecografia ginecologica sovrapubica">Ecografia ginecologica sovrapubica</option>
+                      <option value="Ecografia ginecologica transvaginale">Ecografia ginecologica transvaginale</option>
+                      <option value="Ecografia pelvica">Ecografia pelvica</option>
+                      <option value="Ecografia ostetrica I trimestre">Ecografia ostetrica I trimestre</option>
+                      <option value="Ecografia ostetrica morfologica (II trimestre)">Ecografia ostetrica morfologica (II trimestre)</option>
+                      <option value="Ecografia ostetrica di accrescimento (III trimestre)">Ecografia ostetrica di accrescimento (III trimestre)</option>
+                      <option value="Ecografia ostetrica con translucenza nucale">Ecografia ostetrica con translucenza nucale</option>
+                      <option value="Ecocardiografia fetale">Ecocardiografia fetale</option>
+                    </optgroup>
+                    <optgroup label="APPARATO GENITALE MASCHILE">
+                      <option value="Ecografia scrotale">Ecografia scrotale</option>
+                      <option value="Ecografia testicolare">Ecografia testicolare</option>
+                      <option value="Ecocolordoppler scrotale">Ecocolordoppler scrotale</option>
+                    </optgroup>
+                    <optgroup label="MAMMELLA">
+                      <option value="Ecografia mammaria monolaterale">Ecografia mammaria monolaterale</option>
+                      <option value="Ecografia mammaria bilaterale">Ecografia mammaria bilaterale</option>
+                      <option value="Ecografia mammaria con studio ascellare">Ecografia mammaria bilaterale con studio ascellare</option>
+                    </optgroup>
+                    <optgroup label="MUSCOLO-SCHELETRICA E PARTI MOLLI">
+                      <option value="Ecografia muscolo-scheletrica">Ecografia muscolo-scheletrica</option>
+                      <option value="Ecografia muscolo-tendinea">Ecografia muscolo-tendinea</option>
+                      <option value="Ecografia parti molli">Ecografia parti molli</option>
+                      <option value="Ecografia spalla">Ecografia spalla</option>
+                      <option value="Ecografia gomito">Ecografia gomito</option>
+                      <option value="Ecografia polso e mano">Ecografia polso e mano</option>
+                      <option value="Ecografia anca">Ecografia anca</option>
+                      <option value="Ecografia ginocchio">Ecografia ginocchio</option>
+                      <option value="Ecografia caviglia e piede">Ecografia caviglia e piede</option>
+                      <option value="Ecografia anca neonatale">Ecografia anca neonatale</option>
+                      <option value="Ecografia inguinale">Ecografia inguinale</option>
+                      <option value="Ecografia cute e sottocute">Ecografia cute e sottocute</option>
+                    </optgroup>
+                    <optgroup label="VASCOLARE / DOPPLER">
+                      <option value="Ecocolordoppler TSA (tronchi sovraortici)">Ecocolordoppler TSA (tronchi sovraortici)</option>
+                      <option value="Ecocolordoppler aorta addominale">Ecocolordoppler aorta addominale</option>
+                      <option value="Ecocolordoppler arterioso arti inferiori">Ecocolordoppler arterioso arti inferiori</option>
+                      <option value="Ecocolordoppler venoso arti inferiori">Ecocolordoppler venoso arti inferiori</option>
+                      <option value="Ecocolordoppler arterioso arti superiori">Ecocolordoppler arterioso arti superiori</option>
+                      <option value="Ecocolordoppler venoso arti superiori">Ecocolordoppler venoso arti superiori</option>
+                      <option value="Ecocolordoppler arterie renali">Ecocolordoppler arterie renali</option>
+                      <option value="Ecocolordoppler circolo portale">Ecocolordoppler circolo portale</option>
+                      <option value="Ecocolordoppler penieno">Ecocolordoppler penieno</option>
+                      <option value="Ecocolordoppler transcranico">Ecocolordoppler transcranico</option>
+                      <option value="Ecocolordoppler vasi mesenterici">Ecocolordoppler vasi mesenterici</option>
+                    </optgroup>
+                    <optgroup label="TORACE E ALTRO">
+                      <option value="Ecografia torace e pleura">Ecografia torace e pleura</option>
+                      <option value="Ecografia polmonare (LUS)">Ecografia polmonare (LUS)</option>
+                      <option value="Ecografia linfonodi">Ecografia linfonodi</option>
+                      <option value="Ecografia oculare">Ecografia oculare</option>
+                      <option value="Ecografia al letto (POCUS)">Ecografia al letto (POCUS)</option>
+                      <option value="Ecografia intraoperatoria">Ecografia intraoperatoria</option>
+                      <option value="Ecografia interventistica (guida biopsia/drenaggio)">Ecografia interventistica (guida biopsia/drenaggio)</option>
+                    </optgroup>
+                    <option value="__custom__">✏ Scrivi dicitura personalizzata…</option>
+                  </select>
+                  <div class="tipo-custom" id="tipo-custom" style="display:none">
+                    <input type="text" id="f-tipo-custom" placeholder="es. Ecografia scrotale, Eco-CEUS epatica…" oninput="onTipoCustomInput()">
+                    <div class="tipo-hint" style="margin-top:4px">Il testo verrà usato come dicitura dell'esame nel referto e nel PDF.</div>
+                  </div>
+                </div>
+              </div>
+              <div class="fg"><label>Data esame *</label><input type="date" id="f-data"></div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="sec-lbl">Referto</div>
+            <div class="tpl-bar" id="tpl-bar"></div>
+            <div class="predefiniti-bar">
+              <button class="btn-predef" onclick="togglePanelPredef()">📋 Predefiniti personali</button>
+            </div>
+            <div class="panel-predef" id="panel-predef" style="display:none">
+              <div class="predef-list" id="predef-list"></div>
+              <div class="predef-add">
+                <select id="predef-cat-sel" style="font-size:12.5px;">
+                  <option value="Generici">Generici</option>
+                  <option value="Addome">Addome</option>
+                  <option value="Tiroide">Tiroide</option>
+                  <option value="Linfonodi">Linfonodi</option>
+                  <option value="Spalla">Spalla</option>
+                  <option value="Gomito">Gomito</option>
+                  <option value="Ginocchio">Ginocchio</option>
+                  <option value="Caviglia">Caviglia</option>
+                  <option value="Tessuti molli">Tessuti molli</option>
+                  <option value="Testicolo">Testicolo</option>
+                  <option value="Doppler TSA">Doppler TSA</option>
+                  <option value="Doppler venoso">Doppler venoso</option>
+                  <option value="Doppler arterioso">Doppler arterioso</option>
+                  <option value="Doppler arterie renali">Doppler arterie renali</option>
+                </select>
+                <input type="text" id="predef-titolo" placeholder="Titolo (es. Negativo, Steatosi lieve…)">
+                <textarea id="predef-testo" placeholder="Testo del predefinito…" style="min-height:70px;font-size:13px;"></textarea>
+                <button class="btn btn-primary btn-sm" onclick="salvaPredef()">+ Aggiungi predefinito</button>
+              </div>
+            </div>
+            <div class="fg">
+              <div class="ta-wrap">
+                <textarea id="f-referto" placeholder="Testo del referto… oppure usa il microfono 🎤"></textarea>
+                <button class="mic-btn" id="mic-referto" title="Dettatura vocale" onclick="toggleDictation('f-referto','mic-referto','db-referto')">🎤</button>
+              </div>
+              <div class="dict-bar" id="db-referto">
+                <div class="dict-dot"></div>
+                <span>Dettatura in corso — parla in italiano. Clicca 🎤 per fermare.</span>
+              </div>
+              <div class="ai-bar">
+                <button class="ai-corr-btn" id="ai-corr-btn" onclick="correggiAI()">✨ Correggi e formatta con AI</button>
+                <span class="ai-spinner" id="ai-spinner" style="display:none"><span class="ai-spin-ico">⏳</span> Correzione in corso…</span>
+                <button class="btn btn-secondary btn-sm" id="ai-annulla-btn" style="display:none" onclick="annullaCorrezioneAI()">↩ Annulla correzione</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-primary" onclick="salvaReferto()">💾 Salva referto</button>
+            <button class="btn btn-secondary" onclick="resetForm()">Reset</button>
+            <span style="flex:1"></span>
+            <span style="font-size:11px;color:var(--text-muted);font-family:'DM Mono',monospace;">Dati salvati su database locale · SQLite</span>
+          </div>
+        </div>
+        </div><!-- fine nuovo-form -->
+
+        <!-- RESIZER -->
+        <div class="nuovo-resizer" id="nuovo-resizer" title="Trascina per ridimensionare">
+          <div class="nuovo-resizer-grip"><span></span><span></span><span></span></div>
+        </div>
+
+        <!-- VIEWER IMMAGINI -->
+        <div class="nuovo-viewer" id="nuovo-viewer"
+             ondragover="viewerDragOver(event)"
+             ondragleave="viewerDragLeave(event)"
+             ondrop="viewerDrop(event)"
+             onwheel="viewerScroll(event)">
+
+          <div class="viewer-topbar">
+            <span class="viewer-title">Immagini</span>
+            <div class="viewer-zoom-ctrl">
+              <button class="viewer-zoom-btn" onclick="zoomBy(1/1.4)" title="Riduci (−)">−</button>
+              <span class="viewer-zoom-lbl" id="viewer-zoom-lbl" onclick="resetZoom()" title="Reset zoom">1×</span>
+              <button class="viewer-zoom-btn" onclick="zoomBy(1.4)" title="Ingrandisci (+)">+</button>
+            </div>
+            <button class="viewer-measure-btn" id="viewer-measure-btn" onclick="toggleMeasureMode()" title="Strumento misura — click su 2 punti per misurare la distanza">📏</button>
+            <button class="viewer-measure-clr" id="viewer-measure-clr" onclick="clearMeasurements()" title="Cancella tutte le misure" style="display:none">✕ misure</button>
+            <label class="viewer-import-btn" title="Importa file immagine">
+              📁
+              <input type="file" multiple accept=".jpg,.jpeg,.png,.dcm,.DCM" style="display:none" onchange="caricaImmaginiViewer(event)">
+            </label>
+            <label class="viewer-import-btn" title="Importa cartella di immagini">
+              📂
+              <input type="file" webkitdirectory multiple style="display:none" onchange="caricaImmaginiViewer(event)">
+            </label>
+            <button class="viewer-clear-btn" onclick="svuotaViewer()" title="Rimuovi immagini">✕</button>
+          </div>
+
+          <div class="viewer-empty" id="viewer-empty">
+            <div class="viewer-empty-ico">🖼</div>
+            <div class="viewer-empty-txt">Trascina le immagini qui<br>o clicca 📁 per importare</div>
+          </div>
+
+          <div class="viewer-display" id="viewer-display" style="display:none">
+            <div class="viewer-img-wrap" id="viewer-img-wrap" ondblclick="onViewerDblClick(event)">
+              <img id="viewer-img" alt="">
+              <canvas id="viewer-canvas"></canvas>
+              <button class="viewer-del-btn" onclick="eliminaImgViewer()" title="Elimina immagine">🗑</button>
+            </div>
+            <div class="viewer-footer">
+              <span class="viewer-counter" id="viewer-counter">1 / 1</span>
+              <span class="viewer-cal-badge" id="viewer-cal-badge" style="display:none"></span>
+              <span class="viewer-hint" id="viewer-hint">↕ scorri per cambiare</span>
+            </div>
+          </div>
+
+          <div class="viewer-loading" id="viewer-loading" style="display:none">
+            <span class="ai-spin-ico">⏳</span> Caricamento…
+          </div>
+
+        </div><!-- fine nuovo-viewer -->
+        </div><!-- fine nuovo-layout -->
+      </div>
+
+      <!-- ═══ VIEW ARCHIVIO ═══ -->
+      <div class="view" id="view-archivio">
+        <div class="arch-tb">
+          <div class="sw"><span class="si">🔍</span><input type="text" id="s-text" placeholder="Cerca paziente…" oninput="renderArchivio()"></div>
+          <select class="fsel" id="s-tipo" onchange="renderArchivio()">
+            <option value="">Tutti i tipi</option>
+            <optgroup label="ADDOME">
+              <option value="Ecografia addome superiore">Addome superiore</option>
+              <option value="Ecografia addome inferiore">Addome inferiore</option>
+              <option value="Ecografia addome completo">Addome completo</option>
+              <option value="Ecografia epatica">Epatica</option>
+              <option value="Ecografia epato-biliare">Epato-biliare</option>
+              <option value="Ecografia colecisti e vie biliari">Colecisti e vie biliari</option>
+              <option value="Ecografia pancreatica">Pancreatica</option>
+              <option value="Ecografia splenica">Splenica</option>
+              <option value="Ecografia delle anse intestinali">Anse intestinali</option>
+              <option value="Ecografia della parete addominale">Parete addominale</option>
+              <option value="Eco-CEUS epatica">Eco-CEUS epatica</option>
+            </optgroup>
+            <optgroup label="APPARATO URINARIO">
+              <option value="Ecografia apparato urinario">Apparato urinario</option>
+              <option value="Ecografia renale">Renale</option>
+              <option value="Ecografia vescicale">Vescicale</option>
+              <option value="Ecografia vescico-prostatica sovrapubica">Vescico-prostatica sovrapubica</option>
+              <option value="Ecografia prostatica transrettale">Prostatica transrettale</option>
+              <option value="Ecografia surrenalica">Surrenalica</option>
+            </optgroup>
+            <optgroup label="COLLO E TIROIDE">
+              <option value="Ecografia tiroide">Tiroide</option>
+              <option value="Ecografia tiroide e paratiroidi">Tiroide e paratiroidi</option>
+              <option value="Ecografia del collo">Collo</option>
+              <option value="Ecografia linfonodale laterocervicale">Linfonodale laterocervicale</option>
+              <option value="Ecografia ghiandole salivari">Ghiandole salivari</option>
+              <option value="Ecografia parotide">Parotide</option>
+            </optgroup>
+            <optgroup label="APPARATO GENITALE FEMMINILE / OSTETRICA">
+              <option value="Ecografia ginecologica sovrapubica">Ginecologica sovrapubica</option>
+              <option value="Ecografia ginecologica transvaginale">Ginecologica transvaginale</option>
+              <option value="Ecografia pelvica">Pelvica</option>
+              <option value="Ecografia ostetrica I trimestre">Ostetrica I trimestre</option>
+              <option value="Ecografia ostetrica morfologica (II trimestre)">Ostetrica morfologica II trim.</option>
+              <option value="Ecografia ostetrica di accrescimento (III trimestre)">Ostetrica accrescimento III trim.</option>
+              <option value="Ecografia ostetrica con translucenza nucale">Translucenza nucale</option>
+              <option value="Ecocardiografia fetale">Ecocardiografia fetale</option>
+            </optgroup>
+            <optgroup label="APPARATO GENITALE MASCHILE">
+              <option value="Ecografia scrotale">Scrotale</option>
+              <option value="Ecografia testicolare">Testicolare</option>
+              <option value="Ecocolordoppler scrotale">Ecocolordoppler scrotale</option>
+            </optgroup>
+            <optgroup label="MAMMELLA">
+              <option value="Ecografia mammaria monolaterale">Mammaria monolaterale</option>
+              <option value="Ecografia mammaria bilaterale">Mammaria bilaterale</option>
+              <option value="Ecografia mammaria con studio ascellare">Mammaria con studio ascellare</option>
+            </optgroup>
+            <optgroup label="MUSCOLO-SCHELETRICA E PARTI MOLLI">
+              <option value="Ecografia muscolo-scheletrica">Muscolo-scheletrica</option>
+              <option value="Ecografia muscolo-tendinea">Muscolo-tendinea</option>
+              <option value="Ecografia parti molli">Parti molli</option>
+              <option value="Ecografia spalla">Spalla</option>
+              <option value="Ecografia gomito">Gomito</option>
+              <option value="Ecografia polso e mano">Polso e mano</option>
+              <option value="Ecografia anca">Anca</option>
+              <option value="Ecografia ginocchio">Ginocchio</option>
+              <option value="Ecografia caviglia e piede">Caviglia e piede</option>
+              <option value="Ecografia anca neonatale">Anca neonatale</option>
+              <option value="Ecografia inguinale">Inguinale</option>
+              <option value="Ecografia cute e sottocute">Cute e sottocute</option>
+            </optgroup>
+            <optgroup label="VASCOLARE / DOPPLER">
+              <option value="Ecocolordoppler TSA (tronchi sovraortici)">Ecocolordoppler TSA</option>
+              <option value="Ecocolordoppler aorta addominale">Aorta addominale</option>
+              <option value="Ecocolordoppler arterioso arti inferiori">Arterioso arti inferiori</option>
+              <option value="Ecocolordoppler venoso arti inferiori">Venoso arti inferiori</option>
+              <option value="Ecocolordoppler arterioso arti superiori">Arterioso arti superiori</option>
+              <option value="Ecocolordoppler venoso arti superiori">Venoso arti superiori</option>
+              <option value="Ecocolordoppler arterie renali">Arterie renali</option>
+              <option value="Ecocolordoppler circolo portale">Circolo portale</option>
+              <option value="Ecocolordoppler penieno">Penieno</option>
+              <option value="Ecocolordoppler transcranico">Transcranico</option>
+              <option value="Ecocolordoppler vasi mesenterici">Vasi mesenterici</option>
+            </optgroup>
+            <optgroup label="TORACE E ALTRO">
+              <option value="Ecografia torace e pleura">Torace e pleura</option>
+              <option value="Ecografia polmonare (LUS)">Polmonare (LUS)</option>
+              <option value="Ecografia linfonodi">Linfonodi</option>
+              <option value="Ecografia oculare">Oculare</option>
+              <option value="Ecografia al letto (POCUS)">Al letto (POCUS)</option>
+              <option value="Ecografia intraoperatoria">Intraoperatoria</option>
+              <option value="Ecografia interventistica (guida biopsia/drenaggio)">Interventistica</option>
+            </optgroup>
+          </select>
+          <select class="fsel" id="s-anno" onchange="renderArchivio()"><option value="">Tutti gli anni</option></select>
+          <button class="btn btn-secondary btn-sm" onclick="esportaArchivio()">⬇ Backup</button>
+          <label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0;">⬆ Ripristina<input type="file" accept=".json" style="display:none" onchange="importaArchivio(event)"></label>
+        </div>
+        <div class="stats-row" id="stats-row"></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th onclick="sortBy('cognome')" id="th-cognome">Paziente <span class="sort-arrow">↕</span></th>
+                <th onclick="sortBy('data')" id="th-data">Data esame <span class="sort-arrow">↕</span></th>
+                <th>Tipo esame</th>
+                <th onclick="sortBy('nascita')" id="th-nascita">Età <span class="sort-arrow">↕</span></th>
+                <th style="text-align:right">Azioni</th>
+              </tr>
+            </thead>
+            <tbody id="arch-tbody"></tbody>
+          </table>
+          <div class="empty-state" id="empty-state" style="display:none">
+            <div class="empty-ico">📋</div>
+            <div class="empty-title">Nessun referto trovato</div>
+            <div style="font-size:13px;color:var(--text-muted)">Crea il primo referto dalla sezione "Nuovo referto"</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ VIEW IMPOSTAZIONI ═══ -->
+      <div class="view" id="view-impostazioni">
+
+        <div class="form-card" style="max-width:660px">
+          <div class="form-section">
+            <div class="sec-lbl">Posizione database</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px;line-height:1.6">
+              Scegli dove salvare i referti. Con <strong style="color:var(--text)">Google Drive</strong>
+              l'archivio è condiviso e sincronizzato su tutti i computer dove usi RefertEco.
+            </p>
+            <div style="display:flex;flex-direction:column;gap:10px">
+
+              <label class="mode-card">
+                <input type="radio" name="modalita" value="locale" id="r-locale" onchange="onModalitaChange()">
+                <div class="mode-card-body">
+                  <div class="mode-title">Locale — solo questo computer</div>
+                  <div class="mode-path" id="path-locale-display">—</div>
+                </div>
+              </label>
+
+              <label class="mode-card">
+                <input type="radio" name="modalita" value="gdrive" id="r-gdrive" onchange="onModalitaChange()">
+                <div class="mode-card-body">
+                  <div class="mode-title">☁ Google Drive — condiviso tra computer</div>
+                  <div class="mode-desc">Richiede <strong>Google Drive per Desktop</strong> installato e attivo su ogni computer.</div>
+                  <div class="gdrive-section" id="gdrive-section">
+                    <div class="gdrive-detected" id="gdrive-detected" style="display:none">✓ Google Drive rilevato automaticamente</div>
+                    <label style="font-size:11px;font-weight:500;color:var(--text-muted)">Percorso cartella RefertEco in Google Drive:</label>
+                    <div style="display:flex;gap:8px">
+                      <input type="text" id="gdrive-path" placeholder="/percorso/Google Drive/My Drive/RefertEco" style="flex:1;font-size:12px;font-family:'DM Mono',monospace">
+                      <button class="btn btn-secondary btn-sm" onclick="rilevaDrive()">Rileva auto</button>
+                    </div>
+                  </div>
+                </div>
+              </label>
+
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-primary" onclick="salvaConfig()">💾 Salva impostazioni</button>
+            <span style="flex:1"></span>
+            <span style="font-size:11px;color:var(--text-muted);font-family:'DM Mono',monospace" id="config-status"></span>
+          </div>
+        </div>
+
+        <div class="form-card" style="max-width:660px;margin-top:18px">
+          <div class="form-section">
+            <div class="sec-lbl">AI — Correzione referto</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">
+              Inserisci la tua chiave API Anthropic per abilitare il pulsante <strong>✨ Correggi e formatta con AI</strong>.<br>
+              <span style="font-size:11px">Ottieni la chiave su <strong>console.anthropic.com</strong> → API Keys.</span>
+            </p>
+            <div class="fg" style="margin-bottom:10px">
+              <label>Chiave API Anthropic</label>
+              <input type="password" id="anthropic-api-key" placeholder="sk-ant-api03-…" autocomplete="off" style="font-family:'DM Mono',monospace;font-size:12px;">
+            </div>
+            <div id="ai-key-status" style="font-size:12px;margin-bottom:10px"></div>
+            <button class="btn btn-primary btn-sm" onclick="salvaConfig()">💾 Salva chiave API</button>
+          </div>
+        </div>
+
+        <div class="form-card" style="max-width:660px;margin-top:18px">
+          <div class="form-section">
+            <div class="sec-lbl">Tema colore PDF</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6">Scegli il colore usato nell'intestazione, nei titoli e nei dettagli del PDF esportato.</p>
+            <div class="tema-swatches" id="tema-swatches">
+              <div class="tema-swatch" data-tema="verde" onclick="selezionaTema('verde')">
+                <div class="tema-dot" style="background:#2d5016"></div>
+                <span>Verde</span>
+              </div>
+              <div class="tema-swatch" data-tema="nero" onclick="selezionaTema('nero')">
+                <div class="tema-dot" style="background:#111111"></div>
+                <span>Nero</span>
+              </div>
+              <div class="tema-swatch" data-tema="blu" onclick="selezionaTema('blu')">
+                <div class="tema-dot" style="background:#1a3a6b"></div>
+                <span>Blu</span>
+              </div>
+              <div class="tema-swatch" data-tema="bordeaux" onclick="selezionaTema('bordeaux')">
+                <div class="tema-dot" style="background:#7a1a1a"></div>
+                <span>Bordeaux</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-card" style="max-width:660px;margin-top:18px">
+          <div class="form-section">
+            <div class="sec-lbl">Come configurare Google Drive</div>
+            <ol class="step-list">
+              <li>Installa <strong>Google Drive per Desktop</strong> su ogni computer<br>
+                <span style="font-size:11px;color:var(--text-muted)">→ drive.google.com → scarica l'app</span></li>
+              <li>Accedi con il <strong>tuo account Google</strong> su ogni computer</li>
+              <li>Su <strong>ogni</strong> computer: apri RefertEco → Impostazioni → seleziona <em>Google Drive</em> → clicca <strong>Rileva auto</strong> → <strong>Salva</strong></li>
+              <li><strong>Riavvia</strong> il programma su ogni computer</li>
+              <li>I referti salvati da qualsiasi computer appariranno su tutti ✓</li>
+            </ol>
+            <div class="info-box">
+              💡 <strong>Primo computer:</strong> i referti esistenti restano locali. Usa <em>⬇ Backup</em> per esportarli e <em>⬆ Ripristina</em> per importarli dopo aver configurato Google Drive.
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- MODAL DETTAGLIO -->
+<div class="modal-ov" id="modal-ov" onclick="closeModalOv(event)">
+  <div class="modal">
+    <div class="m-hd">
+      <div><div class="m-title" id="m-title"></div><div class="m-meta" id="m-meta"></div></div>
+      <button class="m-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="m-body">
+      <div id="m-view-section">
+        <div class="info-grid" id="m-info"></div>
+        <div class="sec-lbl" style="margin-bottom:10px">Referto</div>
+        <div class="prev-box" id="m-referto"></div>
+        <div class="img-section-hdr">
+          <span class="sec-lbl" style="margin:0">Immagini</span>
+          <label class="btn btn-secondary btn-sm img-import-label">
+            📁 Importa immagini
+            <input type="file" id="img-file-input" accept=".dcm,.DCM,.jpg,.jpeg,.png" multiple style="display:none" onchange="importaImmagini(event)">
+          </label>
+        </div>
+        <div class="img-grid" id="m-img-grid"></div>
+      </div>
+      <div id="m-edit-section" style="display:none"></div>
+    </div>
+    <div class="m-ft">
+      <button class="btn btn-danger btn-sm" id="m-del">🗑 Elimina</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeModal()">Chiudi</button>
+      <button class="btn btn-secondary btn-sm" id="m-btn-annulla-mod" style="display:none" onclick="annullaModificaReferto()">Annulla</button>
+      <button class="btn btn-primary btn-sm" id="m-btn-modifica" onclick="apriModificaReferto()">✏ Modifica</button>
+      <button class="btn btn-primary btn-sm" id="m-btn-salva-mod" style="display:none" onclick="salvaModificaReferto()">💾 Salva modifiche</button>
+      <button class="btn btn-primary btn-sm" id="m-pdf">📄 Esporta PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM -->
+<div class="conf-ov" id="conf-ov">
+  <div class="conf-box">
+    <div class="conf-title">Conferma eliminazione</div>
+    <div class="conf-msg" id="conf-msg"></div>
+    <div class="conf-act">
+      <button class="btn btn-secondary btn-sm" onclick="closeConfirm()">Annulla</button>
+      <button class="btn btn-danger btn-sm" id="conf-ok">Elimina</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="lib/dicom-parser.min.js"></script>
+<script src="lib/jpeg-lossless-decoder.min.js?v=20260518g"></script>
+<script src="app.js?v=20260518g"></script>
+</body>
+</html>

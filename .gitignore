@@ -1,0 +1,34 @@
+# Dipendenze
+node_modules/
+
+# Build output
+dist/
+dist */
+build/
+out/
+
+# Dati locali e sensibili (referti pazienti, chiavi API, ecc.)
+referteco.db
+referteco_data.json
+config.json
+.referteco/
+immagini/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Log
+*.log
+npm-debug.log*
+
+# Cache temporanea
+.cache/
+*.tmp

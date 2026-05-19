@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RefertEco — Gestionale Referti</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg:#f4f1ec; --surface:#faf8f5; --surface2:#edeae4; --border:#d4cfc7;
+  --text:#1a1714; --text-muted:#6b6560;
+  --accent:#2d5016; --accent-light:#e8f0df; --accent-mid:#4a7c2a;
+  --red:#8b1a1a; --red-light:#f5e8e8;
+  --mic:#c0392b; --mic-light:#fdecea;
+  --shadow:0 1px 3px rgba(0,0,0,0.08),0 4px 16px rgba(0,0,0,0.05);
+  --shadow-lg:0 8px 32px rgba(0,0,0,0.12);
+  --r:4px; --rl:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5;}
+.app{display:flex;height:100vh;overflow:hidden;}
+
+/* SIDEBAR */
+.sidebar{width:240px;min-width:240px;background:var(--text);color:var(--bg);display:flex;flex-direction:column;}
+.sb-hdr{padding:28px 22px 20px;border-bottom:1px solid rgba(255,255,255,0.08);}
+.sb-logo{font-family:'DM Serif Display',serif;font-size:22px;color:var(--bg);letter-spacing:-0.02em;}
+.sb-sub{font-size:10px;color:rgba(244,241,236,0.4);font-family:'DM Mono',monospace;letter-spacing:0.08em;text-transform:uppercase;margin-top:3px;}
+.sb-nav{padding:16px 10px;flex:1;}
+.nav-lbl{font-size:9.5px;letter-spacing:0.1em;text-transform:uppercase;color:rgba(244,241,236,0.3);font-family:'DM Mono',monospace;padding:8px 12px 5px;}
+.nav-btn{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border:none;background:none;color:rgba(244,241,236,0.65);font-family:'DM Sans',sans-serif;font-size:13.5px;cursor:pointer;border-radius:var(--r);transition:all 0.15s;text-align:left;}
+.nav-btn:hover{background:rgba(255,255,255,0.07);color:var(--bg);}
+.nav-btn.active{background:var(--accent);color:white;}
+.nav-btn .ic{width:18px;text-align:center;font-size:14px;}
+.sb-ft{padding:14px 22px;border-top:1px solid rgba(255,255,255,0.08);font-size:10.5px;color:rgba(244,241,236,0.25);font-family:'DM Mono',monospace;}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:13px 30px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.topbar-title{font-family:'DM Serif Display',serif;font-size:20px;letter-spacing:-0.02em;}
+.topbar-date{font-size:11.5px;color:var(--text-muted);font-family:'DM Mono',monospace;}
+.content{flex:1;overflow-y:auto;padding:26px 30px;}
+
+.view{display:none;}
+.view.active{display:block;}
+
+/* FORM */
+.form-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--shadow);overflow:hidden;max-width:820px;}
+.form-section{padding:22px 26px;border-bottom:1px solid var(--border);}
+.form-section:last-child{border-bottom:none;}
+.sec-lbl{font-size:9.5px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-muted);font-family:'DM Mono',monospace;margin-bottom:14px;display:flex;align-items:center;gap:10px;}
+.sec-lbl::after{content:'';flex:1;height:1px;background:var(--border);}
+.form-row{display:grid;gap:14px;}
+.c3{grid-template-columns:1fr 1fr 1fr;}
+.c2{grid-template-columns:1fr 1fr;}
+.fg{display:flex;flex-direction:column;gap:5px;}
+label{font-size:11.5px;font-weight:500;color:var(--text-muted);}
+input[type="text"],input[type="date"],select,textarea{font-family:'DM Sans',sans-serif;font-size:13.5px;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:8px 11px;outline:none;transition:border-color 0.15s,box-shadow 0.15s;width:100%;}
+input:focus,select:focus,textarea:focus{border-color:var(--accent-mid);box-shadow:0 0 0 3px rgba(74,124,42,0.1);}
+textarea{resize:vertical;min-height:165px;line-height:1.72;font-size:14px;}
+
+/* TIPO ESAME */
+.tipo-wrap{display:flex;flex-direction:column;gap:7px;}
+.tipo-wrap select{font-size:15px;font-weight:500;padding:10px 12px;}
+.tipo-custom input{font-size:15px;font-weight:500;padding:10px 12px;}
+.tipo-hint{font-size:11px;color:var(--text-muted);font-style:italic;}
+
+/* TEMPLATE PILLS */
+.tpl-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;min-height:4px;}
+.tpl-btn{font-size:11px;padding:4px 10px;border:1px solid var(--border);background:var(--surface2);border-radius:20px;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--text-muted);transition:all 0.15s;}
+.tpl-btn:hover{border-color:var(--accent-mid);color:var(--accent);background:var(--accent-light);}
+
+/* PREDEFINITI */
+.predefiniti-bar{margin-bottom:8px;}
+.btn-predef{font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;padding:5px 13px;border-radius:var(--r);border:1px solid var(--border);background:var(--surface2);cursor:pointer;color:var(--text-muted);transition:all 0.15s;}
+.btn-predef:hover{border-color:var(--accent-mid);color:var(--accent);background:var(--accent-light);}
+.panel-predef{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:10px;}
+.predef-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;min-height:4px;}
+.predef-item{display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:3px 6px 3px 10px;font-size:11.5px;}
+.predef-use{background:none;border:none;cursor:pointer;font-size:11.5px;color:var(--accent);font-family:'DM Sans',sans-serif;font-weight:500;padding:0;}
+.predef-use:hover{text-decoration:underline;}
+.predef-del{background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-muted);padding:0;line-height:1;}
+.predef-del:hover{color:var(--red);}
+.predef-empty{font-size:12px;color:var(--text-muted);font-style:italic;padding:4px 0;}
+.predef-add{display:flex;flex-direction:column;gap:7px;border-top:1px solid var(--border);padding-top:12px;}
+.predef-add input,.predef-add textarea{font-size:12.5px;}
+.ta-wrap{position:relative;}
+.ta-wrap textarea{padding-right:48px;}
+.mic-btn{position:absolute;top:8px;right:8px;width:33px;height:33px;border-radius:50%;border:1px solid var(--border);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:all 0.18s;color:var(--text-muted);z-index:2;}
+.mic-btn:hover{background:var(--accent-light);border-color:var(--accent-mid);color:var(--accent);}
+.mic-btn.rec{background:var(--mic);border-color:var(--mic);color:white;animation:pulse 1s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(192,57,43,0.4);}50%{box-shadow:0 0 0 7px rgba(192,57,43,0);}}
+.dict-bar{display:none;align-items:center;gap:8px;padding:7px 12px;margin-top:6px;background:var(--mic-light);border:1px solid #f5c6c0;border-radius:var(--r);font-size:12px;color:var(--mic);}
+.dict-bar.show{display:flex;}
+.dict-dot{width:8px;height:8px;border-radius:50%;background:var(--mic);animation:blink 0.8s infinite;flex-shrink:0;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.2;}}
+
+/* BUTTONS */
+.form-actions{padding:18px 26px;background:var(--surface2);display:flex;gap:10px;align-items:center;}
+.btn{font-family:'DM Sans',sans-serif;font-size:13.5px;font-weight:500;padding:9px 20px;border-radius:var(--r);border:none;cursor:pointer;transition:all 0.15s;}
+.btn-primary{background:var(--accent);color:white;}
+.btn-primary:hover{background:var(--accent-mid);transform:translateY(-1px);box-shadow:0 4px 12px rgba(45,80,22,0.25);}
+.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border);}
+.btn-secondary:hover{background:var(--surface2);}
+.btn-danger{background:var(--red-light);color:var(--red);border:1px solid #e8c8c8;}
+.btn-danger:hover{background:#f0d0d0;}
+.btn-sm{font-size:12px;padding:5px 13px;}
+
+/* ARCHIVIO */
+.arch-tb{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center;}
+.sw{position:relative;flex:1;min-width:200px;max-width:300px;}
+.sw input{padding-left:32px;}
+.si{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:13px;pointer-events:none;}
+.fsel{width:auto;min-width:150px;}
+.stats-row{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+.stat-pill{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 13px;font-size:11.5px;color:var(--text-muted);font-family:'DM Mono',monospace;}
+.stat-pill strong{color:var(--text);}
+.tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;box-shadow:var(--shadow);}
+table{width:100%;border-collapse:collapse;}
+thead{background:var(--surface2);border-bottom:1px solid var(--border);}
+th{padding:10px 15px;text-align:left;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);font-weight:600;font-family:'DM Mono',monospace;cursor:pointer;user-select:none;white-space:nowrap;}
+th:hover{color:var(--text);}
+td{padding:10px 15px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--accent-light);}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:500;white-space:nowrap;}
+.b-add{background:#e8f5e8;color:#2d6a2d;border:1px solid #c8e8c8;}
+.b-uri{background:#e8eef5;color:#2d4a6a;border:1px solid #c8d8e8;}
+.b-tir{background:#f5f0e8;color:#6a4a2d;border:1px solid #e8d8c8;}
+.b-msk{background:#f0e8f5;color:#5a2d6a;border:1px solid #dcc8e8;}
+.b-dop{background:#e8f0f5;color:#2d5a6a;border:1px solid #c8dce8;}
+.b-mol{background:#f5f5e8;color:#5a5a2d;border:1px solid #e0e0c8;}
+.b-gen{background:var(--surface2);color:var(--text-muted);border:1px solid var(--border);}
+.td-act{display:flex;gap:6px;justify-content:flex-end;}
+.empty-state{text-align:center;padding:56px 20px;color:var(--text-muted);}
+.empty-ico{font-size:36px;margin-bottom:10px;opacity:0.35;}
+.empty-title{font-family:'DM Serif Display',serif;font-size:17px;color:var(--text);margin-bottom:5px;}
+
+/* MODAL */
+.modal-ov{display:none;position:fixed;inset:0;background:rgba(26,23,20,0.55);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(2px);}
+.modal-ov.open{display:flex;}
+.modal{background:var(--surface);border-radius:var(--rl);box-shadow:var(--shadow-lg);width:92%;max-width:680px;max-height:88vh;overflow-y:auto;animation:mIn 0.18s ease;}
+@keyframes mIn{from{opacity:0;transform:scale(0.97) translateY(8px);}to{opacity:1;transform:none;}}
+.m-hd{padding:18px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.m-title{font-family:'DM Serif Display',serif;font-size:18px;}
+.m-meta{font-size:11.5px;color:var(--text-muted);font-family:'DM Mono',monospace;margin-top:2px;}
+.m-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-muted);}
+.m-close:hover{color:var(--text);}
+.m-body{padding:18px 22px;}
+.m-ft{padding:12px 22px;border-top:1px solid var(--border);background:var(--surface2);display:flex;gap:8px;justify-content:flex-end;}
+.info-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;}
+.ii label{font-size:9.5px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-family:'DM Mono',monospace;display:block;margin-bottom:2px;}
+.ii span{font-size:13.5px;font-weight:500;}
+.prev-box{font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:14px;min-height:80px;}
+
+/* TOAST */
+.toast{position:fixed;bottom:22px;right:22px;background:var(--text);color:var(--bg);padding:10px 18px;border-radius:var(--r);font-size:13px;box-shadow:var(--shadow-lg);z-index:200;transform:translateY(70px);opacity:0;transition:all 0.22s ease;}
+.toast.show{transform:none;opacity:1;}
+.toast.ok{border-left:3px solid #4caf50;}
+.toast.err{border-left:3px solid var(--red);}
+
+/* CONFIRM */
+.conf-ov{display:none;position:fixed;inset:0;background:rgba(26,23,20,0.4);z-index:200;align-items:center;justify-content:center;}
+.conf-ov.open{display:flex;}
+.conf-box{background:var(--surface);border-radius:var(--rl);box-shadow:var(--shadow-lg);padding:24px 28px;max-width:360px;width:90%;animation:mIn 0.15s ease;}
+.conf-title{font-family:'DM Serif Display',serif;font-size:17px;margin-bottom:8px;}
+.conf-msg{font-size:13px;color:var(--text-muted);margin-bottom:20px;line-height:1.6;}
+.conf-act{display:flex;gap:8px;justify-content:flex-end;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sb-hdr">
+      <div class="sb-logo">RefertEco</div>
+      <div class="sb-sub">Gestionale referti ecografici</div>
+    </div>
+    <nav class="sb-nav">
+      <div class="nav-lbl">Menu</div>
+      <button class="nav-btn active" id="nav-nuovo" onclick="showView('nuovo')"><span class="ic">✦</span> Nuovo referto</button>
+      <button class="nav-btn" id="nav-archivio" onclick="showView('archivio')"><span class="ic">◫</span> Archivio referti</button>
+    </nav>
+    <div class="sb-ft" id="sb-count">0 referti archiviati</div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">Nuovo referto</div>
+      <div class="topbar-date" id="topbar-date"></div>
+    </div>
+    <div class="content">
+
+      <!-- ═══ VIEW NUOVO ═══ -->
+      <div class="view active" id="view-nuovo">
+        <div class="form-card">
+
+          <div class="form-section">
+            <div class="sec-lbl">Dati paziente</div>
+            <div class="form-row c3">
+              <div class="fg"><label>Cognome *</label><input type="text" id="f-cognome" placeholder="Rossi" autocomplete="off"></div>
+              <div class="fg"><label>Nome *</label><input type="text" id="f-nome" placeholder="Mario" autocomplete="off"></div>
+              <div class="fg"><label>Data di nascita</label><input type="date" id="f-nascita"></div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="sec-lbl">Esame</div>
+            <div class="form-row c2">
+              <div class="fg">
+                <label>Tipo di esame *</label>
+                <div class="tipo-wrap">
+                  <select id="f-tipo-sel" onchange="onTipoSelChange()">
+                    <option value="">— Seleziona dal menu —</option>
+
+                    <optgroup label="ADDOME">
+                      <option value="Ecografia addome superiore">Ecografia addome superiore</option>
+                      <option value="Ecografia addome inferiore">Ecografia addome inferiore</option>
+                      <option value="Ecografia addome completo">Ecografia addome completo</option>
+                      <option value="Ecografia epatica">Ecografia epatica</option>
+                      <option value="Ecografia epato-biliare">Ecografia epato-biliare</option>
+                      <option value="Ecografia colecisti e vie biliari">Ecografia colecisti e vie biliari</option>
+                      <option value="Ecografia pancreatica">Ecografia pancreatica</option>
+                      <option value="Ecografia splenica">Ecografia splenica</option>
+                      <option value="Ecografia delle anse intestinali">Ecografia delle anse intestinali</option>
+                      <option value="Ecografia della parete addominale">Ecografia della parete addominale</option>
+                      <option value="Eco-CEUS epatica">Eco-CEUS epatica (con mdc)</option>
+                    </optgroup>
+
+                    <optgroup label="APPARATO URINARIO">
+                      <option value="Ecografia apparato urinario">Ecografia apparato urinario</option>
+                      <option value="Ecografia renale">Ecografia renale</option>
+                      <option value="Ecografia vescicale">Ecografia vescicale</option>
+                      <option value="Ecografia vescico-prostatica sovrapubica">Ecografia vescico-prostatica sovrapubica</option>
+                      <option value="Ecografia prostatica transrettale">Ecografia prostatica transrettale</option>
+                      <option value="Ecografia surrenalica">Ecografia surrenalica</option>
+                    </optgroup>
+
+                    <optgroup label="COLLO E TIROIDE">
+                      <option value="Ecografia tiroide">Ecografia tiroide</option>
+                      <option value="Ecografia tiroide e paratiroidi">Ecografia tiroide e paratiroidi</option>
+                      <option value="Ecografia del collo">Ecografia del collo</option>
+                      <option value="Ecografia linfonodale laterocervicale">Ecografia linfonodale laterocervicale</option>
+                      <option value="Ecografia ghiandole salivari">Ecografia ghiandole salivari</option>
+                      <option value="Ecografia parotide">Ecografia parotide</option>
+                    </optgroup>
+
+                    <optgroup label="APPARATO GENITALE FEMMINILE / OSTETRICA">
+                      <option value="Ecografia ginecologica sovrapubica">Ecografia ginecologica sovrapubica</option>
+                      <option value="Ecografia ginecologica transvaginale">Ecografia ginecologica transvaginale</option>
+                      <option value="Ecografia pelvica">Ecografia pelvica</option>
+                      <option value="Ecografia ostetrica I trimestre">Ecografia ostetrica I trimestre</option>
+                      <option value="Ecografia ostetrica morfologica (II trimestre)">Ecografia ostetrica morfologica (II trimestre)</option>
+                      <option value="Ecografia ostetrica di accrescimento (III trimestre)">Ecografia ostetrica di accrescimento (III trimestre)</option>
+                      <option value="Ecografia ostetrica con translucenza nucale">Ecografia ostetrica con translucenza nucale</option>
+                      <option value="Ecocardiografia fetale">Ecocardiografia fetale</option>
+                    </optgroup>
+
+                    <optgroup label="APPARATO GENITALE MASCHILE">
+                      <option value="Ecografia scrotale">Ecografia scrotale</option>
+                      <option value="Ecografia testicolare">Ecografia testicolare</option>
+                      <option value="Ecocolordoppler scrotale">Ecocolordoppler scrotale</option>
+                    </optgroup>
+
+                    <optgroup label="MAMMELLA">
+                      <option value="Ecografia mammaria monolaterale">Ecografia mammaria monolaterale</option>
+                      <option value="Ecografia mammaria bilaterale">Ecografia mammaria bilaterale</option>
+                      <option value="Ecografia mammaria con studio ascellare">Ecografia mammaria bilaterale con studio ascellare</option>
+                    </optgroup>
+
+                    <optgroup label="MUSCOLO-SCHELETRICA E PARTI MOLLI">
+                      <option value="Ecografia muscolo-scheletrica">Ecografia muscolo-scheletrica</option>
+                      <option value="Ecografia muscolo-tendinea">Ecografia muscolo-tendinea</option>
+                      <option value="Ecografia parti molli">Ecografia parti molli</option>
+                      <option value="Ecografia spalla">Ecografia spalla</option>
+                      <option value="Ecografia gomito">Ecografia gomito</option>
+                      <option value="Ecografia polso e mano">Ecografia polso e mano</option>
+                      <option value="Ecografia anca">Ecografia anca</option>
+                      <option value="Ecografia ginocchio">Ecografia ginocchio</option>
+                      <option value="Ecografia caviglia e piede">Ecografia caviglia e piede</option>
+                      <option value="Ecografia anca neonatale">Ecografia anca neonatale</option>
+                      <option value="Ecografia inguinale">Ecografia inguinale</option>
+                      <option value="Ecografia cute e sottocute">Ecografia cute e sottocute</option>
+                    </optgroup>
+
+                    <optgroup label="VASCOLARE / DOPPLER">
+                      <option value="Ecocolordoppler TSA (tronchi sovraortici)">Ecocolordoppler TSA (tronchi sovraortici)</option>
+                      <option value="Ecocolordoppler aorta addominale">Ecocolordoppler aorta addominale</option>
+                      <option value="Ecocolordoppler arterioso arti inferiori">Ecocolordoppler arterioso arti inferiori</option>
+                      <option value="Ecocolordoppler venoso arti inferiori">Ecocolordoppler venoso arti inferiori</option>
+                      <option value="Ecocolordoppler arterioso arti superiori">Ecocolordoppler arterioso arti superiori</option>
+                      <option value="Ecocolordoppler venoso arti superiori">Ecocolordoppler venoso arti superiori</option>
+                      <option value="Ecocolordoppler arterie renali">Ecocolordoppler arterie renali</option>
+                      <option value="Ecocolordoppler circolo portale">Ecocolordoppler circolo portale</option>
+                      <option value="Ecocolordoppler penieno">Ecocolordoppler penieno</option>
+                      <option value="Ecocolordoppler transcranico">Ecocolordoppler transcranico</option>
+                      <option value="Ecocolordoppler vasi mesenterici">Ecocolordoppler vasi mesenterici</option>
+                    </optgroup>
+
+                    <optgroup label="TORACE E ALTRO">
+                      <option value="Ecografia torace e pleura">Ecografia torace e pleura</option>
+                      <option value="Ecografia polmonare (LUS)">Ecografia polmonare (LUS)</option>
+                      <option value="Ecografia linfonodi">Ecografia linfonodi</option>
+                      <option value="Ecografia oculare">Ecografia oculare</option>
+                      <option value="Ecografia al letto (POCUS)">Ecografia al letto (POCUS)</option>
+                      <option value="Ecografia intraoperatoria">Ecografia intraoperatoria</option>
+                      <option value="Ecografia interventistica (guida biopsia/drenaggio)">Ecografia interventistica (guida biopsia/drenaggio)</option>
+                    </optgroup>
+
+                    <option value="__custom__">✏ Scrivi dicitura personalizzata…</option>
+                  </select>
+                  <div class="tipo-custom" id="tipo-custom" style="display:none">
+                    <input type="text" id="f-tipo-custom" placeholder="es. Ecografia scrotale, Eco-CEUS epatica, Ecografia anca neonatale…" oninput="onTipoCustomInput()">
+                    <div class="tipo-hint" style="margin-top:4px">Il testo verrà usato come dicitura dell'esame nel referto e nel PDF.</div>
+                  </div>
+                </div>
+              </div>
+              <div class="fg"><label>Data esame *</label><input type="date" id="f-data"></div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="sec-lbl">Referto</div>
+            <div class="tpl-bar" id="tpl-bar"></div>
+            <div class="predefiniti-bar">
+              <button class="btn-predef" onclick="togglePanelPredef()">📋 Predefiniti personali</button>
+            </div>
+            <div class="panel-predef" id="panel-predef" style="display:none">
+              <div class="predef-list" id="predef-list"></div>
+              <div class="predef-add">
+                <input type="text" id="predef-titolo" placeholder="Titolo predefinito (es. Negativo addome sup.)">
+                <textarea id="predef-testo" placeholder="Testo del predefinito…" style="min-height:70px;font-size:13px;"></textarea>
+                <button class="btn btn-primary btn-sm" onclick="salvaPredef()">+ Aggiungi predefinito</button>
+              </div>
+            </div>
+            <div class="fg">
+              <div class="ta-wrap">
+                <textarea id="f-referto" placeholder="Testo del referto… oppure usa il microfono 🎤"></textarea>
+                <button class="mic-btn" id="mic-referto" title="Dettatura vocale" onclick="toggleDictation('f-referto','mic-referto','db-referto')">🎤</button>
+              </div>
+              <div class="dict-bar" id="db-referto">
+                <div class="dict-dot"></div>
+                <span>Dettatura in corso — parla in italiano. Clicca 🎤 per fermare.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-primary" onclick="salvaReferto()">💾 Salva referto</button>
+            <button class="btn btn-secondary" onclick="resetForm()">Reset</button>
+            <span style="flex:1"></span>
+            <span style="font-size:11px;color:var(--text-muted);font-family:'DM Mono',monospace;">Dati salvati localmente · Chrome</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ VIEW ARCHIVIO ═══ -->
+      <div class="view" id="view-archivio">
+        <div class="arch-tb">
+          <div class="sw"><span class="si">🔍</span><input type="text" id="s-text" placeholder="Cerca paziente…" oninput="renderArchivio()"></div>
+          <select class="fsel" id="s-tipo" onchange="renderArchivio()">
+            <option value="">Tutti i tipi</option>
+            <option value="Ecografia addome superiore">Addome superiore</option>
+            <option value="Ecografia addome completo">Addome completo</option>
+            <option value="Ecografia apparato urinario">Apparato urinario</option>
+            <option value="Ecografia tiroide">Tiroide</option>
+            <option value="Ecografia parti molli">Parti molli</option>
+            <option value="Ecocolordoppler">Ecocolordoppler</option>
+            <option value="Ecografia muscolo-scheletrica">Muscolo-scheletrica</option>
+          </select>
+          <select class="fsel" id="s-anno" onchange="renderArchivio()"><option value="">Tutti gli anni</option></select>
+          <button class="btn btn-secondary btn-sm" onclick="esportaArchivio()">⬇ Backup</button>
+          <label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0;">⬆ Ripristina<input type="file" accept=".json" style="display:none" onchange="importaArchivio(event)"></label>
+        </div>
+        <div class="stats-row" id="stats-row"></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th onclick="sortBy('cognome')">Paziente ↕</th>
+                <th onclick="sortBy('data')">Data esame ↕</th>
+                <th>Tipo esame</th>
+                <th onclick="sortBy('nascita')">Età ↕</th>
+                <th style="text-align:right">Azioni</th>
+              </tr>
+            </thead>
+            <tbody id="arch-tbody"></tbody>
+          </table>
+          <div class="empty-state" id="empty-state" style="display:none">
+            <div class="empty-ico">📋</div>
+            <div class="empty-title">Nessun referto trovato</div>
+            <div style="font-size:13px;color:var(--text-muted)">Crea il primo referto dalla sezione "Nuovo referto"</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- MODAL DETTAGLIO -->
+<div class="modal-ov" id="modal-ov" onclick="closeModalOv(event)">
+  <div class="modal">
+    <div class="m-hd">
+      <div><div class="m-title" id="m-title"></div><div class="m-meta" id="m-meta"></div></div>
+      <button class="m-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="m-body">
+      <div class="info-grid" id="m-info"></div>
+      <div class="sec-lbl" style="margin-bottom:10px">Referto</div>
+      <div class="prev-box" id="m-referto"></div>
+    </div>
+    <div class="m-ft">
+      <button class="btn btn-danger btn-sm" id="m-del">🗑 Elimina</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeModal()">Chiudi</button>
+      <button class="btn btn-primary btn-sm" id="m-pdf">📄 Esporta PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM -->
+<div class="conf-ov" id="conf-ov">
+  <div class="conf-box">
+    <div class="conf-title">Conferma eliminazione</div>
+    <div class="conf-msg" id="conf-msg"></div>
+    <div class="conf-act">
+      <button class="btn btn-secondary btn-sm" onclick="closeConfirm()">Annulla</button>
+      <button class="btn btn-danger btn-sm" id="conf-ok">Elimina</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── DATI MEDICO (intestazione PDF) ──────────────────────────
+const MEDICO = {
+  nome:     'Dott. Salvatore Susino',
+  titolo:   'Medico Chirurgo — Specialista in Radiodiagnostica',
+  studio:   'Ambulatorio di Ecografia Clinica',
+  indirizzo:'Via dell\'Arno, n° 34 — Pozzallo (RG)',
+  email:    'salvatoresusino.md@gmail.com',
+  cell:     '339-4028454',
+  ordine:   'O.M. RG 3071',
+  cf:       'CF: SSNSVT93M14H163N',
+};
+
+// ── STORAGE ─────────────────────────────────────────────────
+const KEY = 'referteco_v3';
+let referti = [];
+let sortField = 'data', sortDir = -1;
+
+function load() {
+  try { referti = JSON.parse(localStorage.getItem(KEY)) || []; } catch { referti = []; }
+  updateCount();
+}
+function save() { localStorage.setItem(KEY, JSON.stringify(referti)); updateCount(); }
+function updateCount() { document.getElementById('sb-count').textContent = referti.length + ' referti archiviati'; }
+
+// ── DATE ────────────────────────────────────────────────────
+function oggi() { return new Date().toISOString().split('T')[0]; }
+function fmt(d) { if(!d) return '—'; const [y,m,g]=d.split('-'); return g+'/'+m+'/'+y; }
+function eta(n,e) {
+  if(!n||!e) return '—';
+  const nd=new Date(n), ed=new Date(e);
+  let a=ed.getFullYear()-nd.getFullYear();
+  if(ed.getMonth()<nd.getMonth()||(ed.getMonth()===nd.getMonth()&&ed.getDate()<nd.getDate())) a--;
+  return a+' aa';
+}
+function etaLabel(n,e) {
+  if(!n||!e) return '';
+  const nd=new Date(n), ed=new Date(e);
+  let a=ed.getFullYear()-nd.getFullYear();
+  if(ed.getMonth()<nd.getMonth()||(ed.getMonth()===nd.getMonth()&&ed.getDate()<nd.getDate())) a--;
+  if(a<2) {
+    // calcola mesi
+    let m=(ed.getMonth()-nd.getMonth())+(ed.getFullYear()-nd.getFullYear())*12;
+    if(ed.getDate()<nd.getDate()) m--;
+    return m<=0?'< 1 mese':m+' mesi';
+  }
+  return a+' anni';
+}
+
+function initTopbar() {
+  document.getElementById('topbar-date').textContent =
+    new Date().toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+}
+
+// ── NAVIGAZIONE ─────────────────────────────────────────────
+function showView(n) {
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('view-'+n).classList.add('active');
+  document.getElementById('nav-'+n).classList.add('active');
+  document.getElementById('topbar-title').textContent = n==='nuovo'?'Nuovo referto':'Archivio referti';
+  if(n==='archivio'){populateAnni();renderArchivio();}
+}
+
+// ── TIPO ESAME ──────────────────────────────────────────────
+function onTipoSelChange() {
+  const v = document.getElementById('f-tipo-sel').value;
+  const cust = document.getElementById('tipo-custom');
+  if(v==='__custom__') {
+    cust.style.display='block';
+    document.getElementById('f-tipo-custom').focus();
+  } else {
+    cust.style.display='none';
+  }
+  onTipoChange();
+}
+
+function getTipoAttivo() {
+  const sel = document.getElementById('f-tipo-sel').value;
+  if(sel==='__custom__') return document.getElementById('f-tipo-custom').value.trim();
+  return sel;
+}
+
+function onTipoCustomInput() { onTipoChange(); }
+
+// ── TEMPLATES ────────────────────────────────────────────────
+const TEMPLATES = {
+  'Ecografia addome superiore':[
+    {lbl:'Negativo',txt:'Fegato di dimensioni nella norma, ecostruttura omogenea, regolare profilo superficiale. Non si rilevano lesioni focali. Colecisti normodistesa, pareti sottili, contenuto anecogeno, non calcolosi. Vie biliari intra- ed extraepatiche non dilatate. Pancreas visualizzato nei suoi segmenti, di aspetto ecografico nella norma. Milza di dimensioni e struttura nella norma. Non versamento libero addominale.'},
+    {lbl:'Steatosi lieve',txt:'Fegato di dimensioni nella norma con incremento dell\'ecogenicità parenchimale, compatibile con quadro di steatosi epatica di grado lieve. Non si rilevano lesioni focali. Colecisti normodistesa, pareti sottili, non calcolosi. Vie biliari non dilatate. Pancreas nella norma. Milza nella norma.'},
+    {lbl:'Steatosi moderata',txt:'Fegato di dimensioni nella norma con marcato incremento dell\'ecogenicità parenchimale e riduzione dell\'attenuazione del fascio ultrasonoro, compatibile con steatosi epatica di grado moderato-severo. Non si rilevano lesioni focali. Colecisti normodistesa, non calcolosi. Vie biliari non dilatate. Pancreas nella norma. Milza nella norma.'},
+    {lbl:'Calcolosi colecisti',txt:'Fegato di dimensioni nella norma, ecostruttura omogenea. Non si rilevano lesioni focali. Colecisti normodistesa con presenza di formazione iperecogena di ___ mm con cono d\'ombra posteriore, riferibile a calcolo. Pareti colecistiche di spessore nella norma. Vie biliari intra- ed extraepatiche non dilatate. Pancreas nella norma. Milza nella norma.'},
+    {lbl:'Cisti epatica',txt:'Fegato di dimensioni nella norma. Si documenta formazione anecogena a margini netti di ___ mm in sede ___, di tipo cistico semplice, priva di setti interni e componente solida. Colecisti nella norma. Vie biliari non dilatate. Pancreas nella norma. Milza nella norma.'},
+  ],
+  'Ecografia addome completo':[
+    {lbl:'Negativo',txt:'Fegato di dimensioni nella norma, ecostruttura omogenea, non lesioni focali. Colecisti normodistesa, non calcolosi. Vie biliari non dilatate. Pancreas nella norma. Milza nella norma.\nRene destro di dimensioni nella norma, regolare differenziazione cortico-midollare, assenza di idronefrosi e litiasi. Rene sinistro di dimensioni nella norma, regolare differenziazione cortico-midollare, assenza di idronefrosi e litiasi.\nVescica in idoneo riempimento, pareti regolari, contenuto anecogeno. Residuo post-minzionale nella norma.\nNon versamento libero in cavità peritoneale.'},
+  ],
+  'Ecografia apparato urinario':[
+    {lbl:'Negativo',txt:'Rene destro di dimensioni nella norma (___ mm), regolare morfologia e differenziazione cortico-midollare, assenza di idronefrosi e immagini di tipo litiasico.\nRene sinistro di dimensioni nella norma (___ mm), regolare morfologia e differenziazione cortico-midollare, assenza di idronefrosi e immagini di tipo litiasico.\nVescica in idoneo riempimento, pareti regolari, contenuto anecogeno, non immagini intraluminali. Residuo post-minzionale nella norma (___ ml).'},
+    {lbl:'Calcolosi renale',txt:'Rene destro: si documenta formazione iperecogena con cono d\'ombra posteriore di ___ mm in sede ___, riferibile a litiasi. Assenza di idronefrosi.\nRene sinistro: nella norma per dimensioni e morfologia, regolare differenziazione cortico-midollare, assenza di idronefrosi.\nVescica nella norma.'},
+    {lbl:'Idronefrosi',txt:'Rene ___: si documenta dilatazione del sistema pielo-caliceale di grado ___ (lieve/moderato/severo), con pelvi renale di ___ mm. Non si rilevano immagini di tipo litiasico nel tratto ureterale visualizzabile.\nRene ___: nella norma.\nVescica nella norma.'},
+  ],
+  'Ecografia tiroide':[
+    {lbl:'Negativo',txt:'Tiroide di dimensioni nella norma, ecostruttura omogenea, ecogenicità conservata. Lobo destro: ___ × ___ × ___ mm. Lobo sinistro: ___ × ___ × ___ mm. Istmo: ___ mm.\nNon si rilevano formazioni nodulari. Non linfoadenomegalie laterocervicali rilevabili.'},
+    {lbl:'Nodulo tiroideo',txt:'Tiroide di dimensioni nella norma. Si documenta formazione nodulare ___ (ipo/iso/iperecogena), a margini ___, di ___ × ___ mm, in sede ___ del lobo ___. Pattern vascolare ___. Classificazione EU-TIRADS ___.\nNon ulteriori noduli rilevabili. Non linfoadenomegalie laterocervicali rilevabili.'},
+    {lbl:'Tiroidite',txt:'Tiroide di volume ___ (aumentato/ridotto), ecostruttura disomogenea con aree ipoecogene diffuse, compatibile con quadro di tiroidite cronica. Lobo destro: ___ × ___ × ___ mm. Lobo sinistro: ___ × ___ × ___ mm.\nNon si rilevano formazioni nodulari di rilievo. Non linfoadenomegalie laterocervicali rilevabili.'},
+  ],
+  'Ecografia parti molli':[
+    {lbl:'Negativo',txt:'In sede ___, a livello ___, i piani muscolo-aponeurotici appaiono nella norma, senza evidenza di raccolte, lesioni focali o alterazioni strutturali di rilievo. Il tessuto adiposo sottocutaneo è omogeneo. Non si rilevano immagini di tipo litiasico o corpi mobili.'},
+    {lbl:'Cisti',txt:'In sede ___ si documenta formazione anecogena a margini netti di ___ × ___ mm, con parete sottile, priva di componente solida interna, di tipo cistico semplice. Non si rilevano ulteriori alterazioni di rilievo nei piani esplorati.'},
+    {lbl:'Raccolta',txt:'In sede ___ si documenta raccolta ___ (anecogena/ipoecogena/complessa) di ___ × ___ mm, a margini ___. Non si documentano segni di vascolarizzazione interna al color Doppler.'},
+    {lbl:'Lipoma',txt:'In sede ___ si documenta formazione iperecogena omogenea a margini netti di ___ × ___ mm, in sede sottocutanea, compatibile con lipoma. Non si documentano segni di vascolarizzazione interna al color Doppler.'},
+  ],
+  'Ecocolordoppler':[
+    {lbl:'TSA negativo',txt:'Asse carotideo destro: arteria carotide comune, biforcazione, arteria carotide interna ed esterna pervie, con normale profilo di flusso. IMT nella norma (___ mm). Non placche aterosclerotiche.\nAsse carotideo sinistro: arteria carotide comune, biforcazione, arteria carotide interna ed esterna pervie, con normale profilo di flusso. IMT nella norma (___ mm). Non placche aterosclerotiche.\nArterie vertebrali bilateralmente pervie, flusso anterogrado.'},
+    {lbl:'Placca carotidea',txt:'Asse carotideo ___: presenza di placca aterosclerotica ___ (ipo/iso/iperecogena, omogenea/disomogenea) in sede ___ di ___ mm, con stenosi stimabile ___ (< 50% / 50-70% / > 70%). Flusso conservato/alterato a valle.\nAsse carotideo ___: nella norma.'},
+    {lbl:'Arti inf. negativo',txt:'Asse iliaco-femorale-popliteo-tibiale bilateralmente pervio, comprimibile, senza evidenza di trombosi endoluminale. Flusso trifasico conservato nei segmenti esplorati. Non varici di rilievo.'},
+    {lbl:'TVP',txt:'A livello ___ si documenta trombosi venosa del/la ___. Il vaso risulta non comprimibile, con assenza di flusso al color Doppler. I segmenti a monte e a valle appaiono pervii.'},
+  ],
+  'Ecografia muscolo-scheletrica':[
+    {lbl:'Spalla negativa',txt:'Cuffia dei rotatori integra. Tendine del sopraspinato di aspetto nella norma, non soluzioni di continuo, non calcificazioni. Tendine del sottospinato nella norma. Tendine del capo lungo del bicipite normodecorrente nel solco bicipitale. Non versamento in borsa subacromio-deltoidea. Articolazione gleno-omerale nella norma.'},
+    {lbl:'Ginocchio negativo',txt:'Tendine quadricipitale e tendine rotuleo integri, nella norma per ecostruttura e spessore. Legamenti collaterali nella norma. Non versamento articolare di rilievo. Non cisti di Baker. Cartilagine femorale nella norma nei settori esplorati.'},
+    {lbl:'Tendinopatia',txt:'A livello del tendine ___ si documenta alterazione ecostrutturale con aree ipoecogene e incremento del calibro tendineo (___ mm), compatibile con quadro di tendinopatia. Al color Doppler si documenta/non si documenta ipervascolarizzazione intratendinea.'},
+    {lbl:'Lesione muscolare',txt:'A livello del muscolo ___ si documenta alterazione ecostrutturale con area ___ (ipoecogena/anecogena/disomogenea) di ___ × ___ mm, compatibile con lesione di grado ___ (stiramento/parziale/completa). Non ematoma organizzato.'},
+  ],
+};
+
+function onTipoChange() {
+  const tipo = getTipoAttivo();
+  const bar = document.getElementById('tpl-bar');
+  bar.innerHTML = '';
+  (TEMPLATES[tipo]||[]).forEach(t=>{
+    const b=document.createElement('button');
+    b.className='tpl-btn'; b.textContent=t.lbl;
+    b.onclick=()=>{document.getElementById('f-referto').value=t.txt;};
+    bar.appendChild(b);
+  });
+}
+
+// ── SALVA ────────────────────────────────────────────────────
+function salvaReferto() {
+  const cognome=document.getElementById('f-cognome').value.trim();
+  const nome=document.getElementById('f-nome').value.trim();
+  const tipo=getTipoAttivo();
+  const data=document.getElementById('f-data').value;
+  if(!cognome||!nome){toast('Inserire cognome e nome','err');return;}
+  if(!tipo){toast('Selezionare o digitare il tipo di esame','err');return;}
+  if(!data){toast('Inserire la data dell\'esame','err');return;}
+  const r={
+    id:Date.now().toString(),
+    cognome,nome,
+    nascita:document.getElementById('f-nascita').value,
+    tipo,data,
+    referto:document.getElementById('f-referto').value.trim(),
+    creato:new Date().toISOString(),
+  };
+  referti.push(r);
+  save();
+  toast('Referto salvato','ok');
+  resetForm();
+}
+
+function resetForm() {
+  ['f-cognome','f-nome','f-nascita','f-referto','f-tipo-custom'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('f-tipo-sel').value='';
+  document.getElementById('f-data').value=oggi();
+  document.getElementById('tpl-bar').innerHTML='';
+  document.getElementById('tipo-custom').style.display='none';
+  stopAllDictation();
+}
+
+// ── PREDEFINITI PERSONALI ────────────────────────────────────
+const PKEY = 'referteco_predef_v1';
+let predefiniti = [];
+
+const PREDEF_DEFAULT = [
+  {id:'p1', titolo:'Esame negativo (generico)', testo:'L\'esame ecografico non evidenzia alterazioni di rilievo a carico delle strutture esaminate.'},
+  {id:'p2', titolo:'Non versamento libero', testo:'Non si evidenzia versamento libero in cavità.'},
+  {id:'p3', titolo:'Linfonodi reattivi', testo:'In sede si documentano alcune formazioni linfonodali di aspetto reattivo, con morfologia conservata e ilo iperecogeno riconoscibile, di dimensioni massime ___ mm.'},
+  {id:'p4', titolo:'Cisti semplice (generica)', testo:'Si documenta formazione anecogena a margini netti di ___ mm, a contenuto omogeneo, priva di setti interni e componente solida, di tipo cistico semplice.'},
+  {id:'p5', titolo:'Formazione solida (generica)', testo:'Si documenta formazione ___ (ipo/iso/iperecogena), a margini ___, di ___ × ___ mm, in sede ___. Al color Doppler si documenta/non si documenta vascolarizzazione interna. Si consiglia correlazione clinica e approfondimento diagnostico.'},
+  {id:'p6', titolo:'Esame limitato da gas', testo:'L\'esame risulta parzialmente limitato dalla presenza di abbondante meteorismo intestinale.'},
+  {id:'p7', titolo:'Controllo ecografico consigliato', testo:'Si consiglia controllo ecografico a distanza di ___ mesi.'},
+];
+
+function loadPredef() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PKEY));
+    predefiniti = saved || [...PREDEF_DEFAULT];
+  } catch {
+    predefiniti = [...PREDEF_DEFAULT];
+  }
+}
+
+function savePredef() {
+  localStorage.setItem(PKEY, JSON.stringify(predefiniti));
+}
+
+function togglePanelPredef() {
+  const p = document.getElementById('panel-predef');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  if (p.style.display === 'block') renderPredef();
+}
+
+function renderPredef() {
+  const list = document.getElementById('predef-list');
+  if (predefiniti.length === 0) {
+    list.innerHTML = '<div class="predef-empty">Nessun predefinito. Aggiungine uno qui sotto.</div>';
+    return;
+  }
+  list.innerHTML = predefiniti.map(p => `
+    <div class="predef-item">
+      <button class="predef-use" onclick="usaPredef('${p.id}')" title="${esc(p.testo)}">${esc(p.titolo)}</button>
+      <button class="predef-del" onclick="eliminaPredef('${p.id}')" title="Elimina">×</button>
+    </div>`).join('');
+}
+
+function usaPredef(id) {
+  const p = predefiniti.find(x => x.id === id);
+  if (!p) return;
+  const ta = document.getElementById('f-referto');
+  const cur = ta.value.trim();
+  ta.value = cur ? cur + '\n' + p.testo : p.testo;
+  ta.focus();
+}
+
+function eliminaPredef(id) {
+  predefiniti = predefiniti.filter(x => x.id !== id);
+  savePredef();
+  renderPredef();
+}
+
+function salvaPredef() {
+  const titolo = document.getElementById('predef-titolo').value.trim();
+  const testo = document.getElementById('predef-testo').value.trim();
+  if (!titolo || !testo) { toast('Inserire titolo e testo del predefinito', 'err'); return; }
+  predefiniti.push({ id: 'p' + Date.now(), titolo, testo });
+  savePredef();
+  renderPredef();
+  document.getElementById('predef-titolo').value = '';
+  document.getElementById('predef-testo').value = '';
+  toast('Predefinito aggiunto', 'ok');
+}
+
+// ── DETTATURA VOCALE ─────────────────────────────────────────
+let recognitions = {};
+let micPermesso = false;
+
+async function richiediPermessoMic() {
+  if (micPermesso) return true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(t => t.stop()); // chiude subito, serve solo per il permesso
+    micPermesso = true;
+    return true;
+  } catch(e) {
+    toast('Microfono non autorizzato — controlla le impostazioni Chrome', 'err');
+    return false;
+  }
+}
+
+async function toggleDictation(taId, btnId, barId) {
+  if(!('webkitSpeechRecognition' in window)&&!('SpeechRecognition' in window)){
+    toast('Dettatura non supportata: usa Chrome','err'); return;
+  }
+  if(recognitions[taId]) {
+    recognitions[taId].stop();
+    return;
+  }
+  // Richiedi permesso una volta sola
+  const ok = await richiediPermessoMic();
+  if (!ok) return;
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const r = new SR();
+  r.lang='it-IT'; r.continuous=true; r.interimResults=true;
+  recognitions[taId]=r;
+
+  const ta=document.getElementById(taId);
+  const btn=document.getElementById(btnId);
+  const bar=document.getElementById(barId);
+  btn.classList.add('rec');
+  bar.classList.add('show');
+
+  let baseText = ta.value;
+  if(baseText && !baseText.endsWith(' ')) baseText += ' ';
+
+  r.onresult=e=>{
+    let interim='', final='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      if(e.results[i].isFinal) final+=e.results[i][0].transcript;
+      else interim+=e.results[i][0].transcript;
+    }
+    if(final) { baseText+=final+' '; }
+    ta.value = baseText + interim;
+  };
+
+  r.onerror=e=>{
+    stopDictation(taId,btnId,barId);
+    if(e.error==='not-allowed') {
+      micPermesso = false;
+      toast('Microfono non autorizzato — controlla le impostazioni Chrome','err');
+    }
+  };
+
+  r.onend=()=>{ stopDictation(taId,btnId,barId); };
+  r.start();
+}
+
+function stopDictation(taId,btnId,barId) {
+  if(recognitions[taId]){
+    try{recognitions[taId].stop();}catch(e){}
+    delete recognitions[taId];
+  }
+  const btn=document.getElementById(btnId);
+  const bar=document.getElementById(barId);
+  if(btn) btn.classList.remove('rec');
+  if(bar) bar.classList.remove('show');
+}
+
+function stopAllDictation() {
+  Object.keys(recognitions).forEach(k=>{
+    try{recognitions[k].stop();}catch(e){}
+    delete recognitions[k];
+  });
+  document.querySelectorAll('.mic-btn').forEach(b=>b.classList.remove('rec'));
+  document.querySelectorAll('.dict-bar').forEach(b=>b.classList.remove('show'));
+}
+
+// ── ARCHIVIO ─────────────────────────────────────────────────
+function populateAnni() {
+  const anni=[...new Set(referti.map(r=>r.data.split('-')[0]))].sort((a,b)=>b-a);
+  const sel=document.getElementById('s-anno');
+  const cur=sel.value;
+  sel.innerHTML='<option value="">Tutti gli anni</option>';
+  anni.forEach(a=>{const o=document.createElement('option');o.value=a;o.textContent=a;if(a===cur)o.selected=true;sel.appendChild(o);});
+}
+
+function filtrati() {
+  const txt=document.getElementById('s-text').value.toLowerCase();
+  const tipo=document.getElementById('s-tipo').value;
+  const anno=document.getElementById('s-anno').value;
+  return referti.filter(r=>{
+    const paz=(r.cognome+' '+r.nome).toLowerCase();
+    if(txt&&!paz.includes(txt))return false;
+    if(tipo&&r.tipo!==tipo)return false;
+    if(anno&&!r.data.startsWith(anno))return false;
+    return true;
+  }).sort((a,b)=>{
+    let va='',vb='';
+    if(sortField==='cognome'){va=a.cognome+a.nome;vb=b.cognome+b.nome;}
+    else if(sortField==='nascita'){va=a.nascita||'';vb=b.nascita||'';}
+    else{va=a.data||'';vb=b.data||'';}
+    return va<vb?sortDir:va>vb?-sortDir:0;
+  });
+}
+
+function bc(tipo) {
+  if(tipo.includes('urinario'))return 'b-uri';
+  if(tipo.includes('tiroide'))return 'b-tir';
+  if(tipo.includes('muscolo')||tipo.includes('scheletrica'))return 'b-msk';
+  const tl=tipo.toLowerCase();
+  if(tl.includes('doppler')||tl.includes('color'))return 'b-dop';
+  if(tipo.includes('parti molli'))return 'b-mol';
+  if(tipo.includes('addome'))return 'b-add';
+  return 'b-gen';
+}
+
+function renderArchivio() {
+  const arr=filtrati();
+  const tbody=document.getElementById('arch-tbody');
+  const empty=document.getElementById('empty-state');
+  document.getElementById('stats-row').innerHTML=
+    '<div class="stat-pill">Totale archivio: <strong>'+referti.length+'</strong></div>'+
+    '<div class="stat-pill">Filtrati: <strong>'+arr.length+'</strong></div>';
+  if(arr.length===0){tbody.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  tbody.innerHTML=arr.map(r=>`
+    <tr>
+      <td><strong>${esc(r.cognome)}</strong> ${esc(r.nome)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${fmt(r.data)}</td>
+      <td><span class="badge ${bc(r.tipo)}">${esc(r.tipo)}</span></td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-muted)">${etaLabel(r.nascita,r.data)}</td>
+      <td><div class="td-act">
+        <button class="btn btn-secondary btn-sm" onclick="openModal('${r.id}')">Visualizza</button>
+      </div></td>
+    </tr>`).join('');
+}
+
+function sortBy(f) {
+  if(sortField===f)sortDir*=-1; else{sortField=f;sortDir=-1;}
+  renderArchivio();
+}
+
+// ── MODAL ────────────────────────────────────────────────────
+function openModal(id) {
+  const r=referti.find(x=>x.id===id); if(!r)return;
+  document.getElementById('m-title').textContent=r.cognome+' '+r.nome;
+  document.getElementById('m-meta').textContent=r.tipo+' · '+fmt(r.data);
+  document.getElementById('m-info').innerHTML=
+    '<div class="ii"><label>Data esame</label><span>'+fmt(r.data)+'</span></div>'+
+    '<div class="ii"><label>Data di nascita</label><span>'+(fmt(r.nascita)||'—')+'</span></div>'+
+    '<div class="ii"><label>Età</label><span>'+etaLabel(r.nascita,r.data)+'</span></div>';
+  document.getElementById('m-referto').textContent=r.referto||'—';
+  document.getElementById('m-del').onclick=()=>confermaElimina(id);
+  document.getElementById('m-pdf').onclick=()=>esportaPDF(id);
+  document.getElementById('modal-ov').classList.add('open');
+}
+function closeModal(){document.getElementById('modal-ov').classList.remove('open');}
+function closeModalOv(e){if(e.target===document.getElementById('modal-ov'))closeModal();}
+
+// ── ELIMINA ──────────────────────────────────────────────────
+function confermaElimina(id) {
+  const r=referti.find(x=>x.id===id); if(!r)return;
+  document.getElementById('conf-msg').textContent='Stai per eliminare il referto di '+r.cognome+' '+r.nome+' del '+fmt(r.data)+'. Questa azione è irreversibile.';
+  document.getElementById('conf-ok').onclick=()=>{
+    referti=referti.filter(x=>x.id!==id);
+    save();closeConfirm();closeModal();renderArchivio();populateAnni();
+    toast('Referto eliminato','ok');
+  };
+  document.getElementById('conf-ov').classList.add('open');
+}
+function closeConfirm(){document.getElementById('conf-ov').classList.remove('open');}
+
+// ── EXPORT PDF ───────────────────────────────────────────────
+function esportaPDF(id) {
+  const r=referti.find(x=>x.id===id); if(!r)return;
+  const dataStampa=new Date().toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const etaStr=etaLabel(r.nascita,r.data);
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html>
+<html lang="it"><head><meta charset="UTF-8">
+<title>Referto — ${esc(r.cognome)} ${esc(r.nome)}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@300;400;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;background:white;}
+.page{max-width:800px;margin:0 auto;padding:36px 48px 44px;}
+
+/* INTESTAZIONE */
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid #2d5016;margin-bottom:0;}
+.hdr-left{}
+.hdr-nome{font-family:'Lora',serif;font-size:17pt;font-weight:600;color:#2d5016;letter-spacing:-0.01em;}
+.hdr-titolo{font-size:9.5pt;color:#555;margin-top:2px;font-weight:300;letter-spacing:0.01em;}
+.hdr-studio{font-size:10pt;color:#333;margin-top:6px;font-weight:600;}
+.hdr-indirizzo{font-size:9pt;color:#666;margin-top:1px;}
+.hdr-right{text-align:right;font-size:8.5pt;color:#777;line-height:1.7;}
+.hdr-right a{color:#777;text-decoration:none;}
+
+/* BARRA VERDE SOTTO INTESTAZIONE */
+.hdr-bar{background:#2d5016;height:2px;margin-bottom:20px;}
+
+/* PAZIENTE */
+.paz-box{display:flex;justify-content:space-between;align-items:flex-start;background:#f5f8f2;border-left:4px solid #4a7c2a;padding:13px 16px;margin-bottom:22px;border-radius:0 4px 4px 0;}
+.paz-left .paz-nome{font-family:'Lora',serif;font-size:14pt;font-weight:600;color:#1c1c1c;}
+.paz-left .paz-sub{font-size:9pt;color:#777;margin-top:2px;}
+.paz-right{text-align:right;font-size:9pt;color:#666;line-height:1.8;}
+.paz-right strong{color:#333;}
+
+/* TITOLO ESAME */
+.esame-title{font-family:'Lora',serif;font-size:13.5pt;font-weight:600;color:#2d5016;text-align:center;margin-bottom:22px;letter-spacing:0.01em;text-transform:uppercase;}
+
+/* SEZIONI */
+.sec{font-size:8pt;text-transform:uppercase;letter-spacing:0.12em;color:#4a7c2a;font-weight:700;margin:18px 0 7px;display:flex;align-items:center;gap:8px;}
+.sec::after{content:'';flex:1;height:1px;background:#c8dcc0;}
+.body-text{font-size:10.5pt;line-height:1.82;color:#1c1c1c;white-space:pre-wrap;text-align:justify;}
+
+/* FIRMA */
+.firma-wrap{margin-top:52px;display:flex;justify-content:flex-end;align-items:flex-end;}
+.firma-box{text-align:center;}
+.firma-line{border-top:1px solid #1c1c1c;width:220px;margin-bottom:6px;}
+.firma-lbl{font-size:9pt;color:#555;font-family:'Lora',serif;}
+
+/* FOOTER */
+.doc-footer{margin-top:32px;padding-top:10px;border-top:1px solid #e0e0e0;display:flex;justify-content:space-between;font-size:7.5pt;color:#bbb;}
+
+@media print{.page{padding:20px 30px;} body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style></head><body>
+<div class="page">
+
+  <div class="hdr">
+    <div class="hdr-left">
+      <div class="hdr-nome">${esc(MEDICO.nome)}</div>
+      <div class="hdr-titolo">${esc(MEDICO.titolo)}</div>
+      <div class="hdr-studio">${esc(MEDICO.studio)}</div>
+      <div class="hdr-indirizzo">${esc(MEDICO.indirizzo)}</div>
+    </div>
+    <div class="hdr-right">
+      <div>✉ ${esc(MEDICO.email)}</div>
+      <div>✆ ${esc(MEDICO.cell)}</div>
+      <div style="margin-top:6px">${esc(MEDICO.ordine)}</div>
+      <div>${esc(MEDICO.cf)}</div>
+    </div>
+  </div>
+  <div class="hdr-bar"></div>
+
+  <div class="paz-box">
+    <div class="paz-left">
+      <div class="paz-nome">${esc(r.cognome)} ${esc(r.nome)}</div>
+      <div class="paz-sub">${r.nascita?'nato/a il '+fmt(r.nascita)+(etaStr?' — '+etaStr:''):''}</div>
+    </div>
+    <div class="paz-right">
+      <div>Data esame: <strong>${fmt(r.data)}</strong></div>
+      <div>N° referto: <strong>${r.id.slice(-6)}</strong></div>
+    </div>
+  </div>
+
+  <div class="esame-title">${esc(r.tipo)}</div>
+
+  <div class="sec">Referto</div>
+  <div class="body-text">${esc(r.referto||'—')}</div>
+
+  <div class="firma-wrap">
+    <div class="firma-box">
+      <div class="firma-line"></div>
+      <div class="firma-lbl">Il Medico Radiologo</div>
+    </div>
+  </div>
+
+  <div class="doc-footer">
+    <span>${esc(MEDICO.studio)} — ${esc(MEDICO.indirizzo)}</span>
+    <span>Documento generato il ${dataStampa}</span>
+  </div>
+
+</div>
+<script>window.onload=()=>window.print();<\/script>
+</body></html>`);
+  win.document.close();
+}
+
+// ── BACKUP ───────────────────────────────────────────────────
+function esportaArchivio() {
+  if(referti.length===0){toast('Nessun referto da esportare','err');return;}
+  const blob=new Blob([JSON.stringify(referti,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='referteco_backup_'+oggi()+'.json';
+  a.click();
+  toast('Backup esportato','ok');
+}
+
+function importaArchivio(e) {
+  const file=e.target.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const data=JSON.parse(ev.target.result);
+      if(!Array.isArray(data))throw new Error();
+      const nuovi=data.filter(r=>!referti.find(x=>x.id===r.id));
+      referti=[...referti,...nuovi];
+      save();populateAnni();renderArchivio();
+      toast('Importati '+nuovi.length+' referti','ok');
+    }catch{toast('File non valido','err');}
+  };
+  reader.readAsText(file);
+  e.target.value='';
+}
+
+// ── UTILITY ──────────────────────────────────────────────────
+function esc(s){if(!s)return '';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+let toastTimer;
+function toast(msg,type){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.className='toast show '+(type||'');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{el.className='toast';},2800);
+}
+
+// ── INIT ─────────────────────────────────────────────────────
+load();
+loadPredef();
+initTopbar();
+document.getElementById('f-data').value=oggi();
+</script>
+</body>
+</html>
