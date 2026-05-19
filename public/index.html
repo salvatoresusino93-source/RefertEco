@@ -395,33 +395,54 @@
         <div class="form-card" style="max-width:660px">
           <div class="form-section">
             <div class="sec-lbl">Posizione database</div>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px;line-height:1.6">
-              Scegli dove salvare i referti. Con <strong style="color:var(--text)">Google Drive</strong>
-              l'archivio è condiviso e sincronizzato su tutti i computer dove usi RefertEco.
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">
+              Scegli dove salvare referti e immagini. Con <strong style="color:var(--text)">Google Drive</strong>
+              i dati si sincronizzano automaticamente tra più computer.
             </p>
+
+            <div style="background:var(--bg-soft, #f7f7f7);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px">
+              <span style="color:var(--text-muted)">Posizione attiva:</span>
+              <span id="current-datadir-display" style="font-family:'DM Mono',monospace;font-weight:600;margin-left:6px">—</span>
+            </div>
+
             <div style="display:flex;flex-direction:column;gap:10px">
 
-              <label class="mode-card">
-                <input type="radio" name="modalita" value="locale" id="r-locale" onchange="onModalitaChange()">
-                <div class="mode-card-body">
-                  <div class="mode-title">Locale — solo questo computer</div>
-                  <div class="mode-path" id="path-locale-display">—</div>
-                </div>
-              </label>
-
+              <!-- Card 1: Google Drive (con click rapido) -->
               <label class="mode-card">
                 <input type="radio" name="modalita" value="gdrive" id="r-gdrive" onchange="onModalitaChange()">
                 <div class="mode-card-body">
-                  <div class="mode-title">☁ Google Drive — condiviso tra computer</div>
-                  <div class="mode-desc">Richiede <strong>Google Drive per Desktop</strong> installato e attivo su ogni computer.</div>
-                  <div class="gdrive-section" id="gdrive-section">
-                    <div class="gdrive-detected" id="gdrive-detected" style="display:none">✓ Google Drive rilevato automaticamente</div>
-                    <label style="font-size:11px;font-weight:500;color:var(--text-muted)">Percorso cartella RefertEco in Google Drive:</label>
-                    <div style="display:flex;gap:8px">
-                      <input type="text" id="gdrive-path" placeholder="/percorso/Google Drive/My Drive/RefertEco" style="flex:1;font-size:12px;font-family:'DM Mono',monospace">
-                      <button class="btn btn-secondary btn-sm" onclick="rilevaDrive()">Rileva auto</button>
+                  <div class="mode-title">☁ Google Drive — sincronizzato tra computer</div>
+                  <div class="mode-desc" style="margin-bottom:8px">Salva in una cartella di Google Drive accessibile da tutti i tuoi PC e Mac.</div>
+
+                  <div id="gdrive-auto-box" style="display:none;background:#e7f5ee;border-left:3px solid #10b981;padding:10px 12px;border-radius:4px;margin-bottom:8px">
+                    <div style="font-size:12px;font-weight:600;color:#065f46;margin-bottom:4px">✓ Google Drive rilevato automaticamente</div>
+                    <div style="font-size:11px;font-family:'DM Mono',monospace;color:#047857;word-break:break-all" id="gdrive-detected-path">—</div>
+                    <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="usaGoogleDrive()" type="button">⚡ Usa questa cartella (1 click)</button>
+                  </div>
+
+                  <div id="gdrive-manual-box" style="display:none">
+                    <div style="font-size:12px;color:#b45309;background:#fef3c7;border-left:3px solid #f59e0b;padding:8px 10px;border-radius:4px;margin-bottom:8px">
+                      ⚠️ Google Drive non rilevato. Installa <strong>Google Drive per Desktop</strong> oppure inserisci manualmente il percorso.
                     </div>
                   </div>
+
+                  <details style="margin-top:6px">
+                    <summary style="font-size:11px;color:var(--text-muted);cursor:pointer">Personalizza percorso</summary>
+                    <div style="display:flex;gap:8px;margin-top:6px">
+                      <input type="text" id="gdrive-path" placeholder="Percorso cartella Google Drive" style="flex:1;font-size:12px;font-family:'DM Mono',monospace">
+                      <button class="btn btn-secondary btn-sm" onclick="rilevaDrive()" type="button">Rileva</button>
+                    </div>
+                  </details>
+                </div>
+              </label>
+
+              <!-- Card 2: Locale -->
+              <label class="mode-card">
+                <input type="radio" name="modalita" value="locale" id="r-locale" onchange="onModalitaChange()">
+                <div class="mode-card-body">
+                  <div class="mode-title">💻 Locale — solo questo computer</div>
+                  <div class="mode-desc" style="margin-bottom:6px">I dati restano sul disco, niente sincronizzazione.</div>
+                  <div class="mode-path" id="path-locale-display" style="font-size:11px">—</div>
                 </div>
               </label>
 
@@ -547,7 +568,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="lib/dicom-parser.min.js"></script>
-<script src="lib/jpeg-lossless-decoder.min.js?v=20260519a"></script>
-<script src="app.js?v=20260519a"></script>
+<script src="lib/jpeg-lossless-decoder.min.js?v=20260519b"></script>
+<script src="app.js?v=20260519b"></script>
 </body>
 </html>

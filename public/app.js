@@ -1965,13 +1965,25 @@ function renderConfig() {
   document.getElementById('path-locale-display').textContent = currentDir + '/referteco_data.json';
   document.getElementById('config-status').textContent = '';
 
+  const curDisplay = document.getElementById('current-datadir-display');
+  if (curDisplay) curDisplay.textContent = currentDir;
+
+  const autoBox = document.getElementById('gdrive-auto-box');
+  const manualBox = document.getElementById('gdrive-manual-box');
+  const autoPath = document.getElementById('gdrive-detected-path');
   if (detectedGoogleDrive) {
-    document.getElementById('gdrive-detected').style.display = 'block';
+    if (autoBox)  autoBox.style.display = 'block';
+    if (manualBox) manualBox.style.display = 'none';
+    if (autoPath) autoPath.textContent = detectedGoogleDrive;
+  } else {
+    if (autoBox)  autoBox.style.display = 'none';
+    if (manualBox) manualBox.style.display = 'block';
   }
-  if (isGdrive) {
-    document.getElementById('gdrive-path').value = dataDir;
-  } else if (detectedGoogleDrive && !document.getElementById('gdrive-path').value) {
-    document.getElementById('gdrive-path').value = detectedGoogleDrive;
+
+  const pathInput = document.getElementById('gdrive-path');
+  if (pathInput) {
+    if (isGdrive) pathInput.value = dataDir;
+    else if (detectedGoogleDrive && !pathInput.value) pathInput.value = detectedGoogleDrive;
   }
 
   const keyStatus = document.getElementById('ai-key-status');
@@ -1981,8 +1993,26 @@ function renderConfig() {
   }
 }
 
-function onModalitaChange() {
-  // nessuna logica extra necessaria, la UI si aggiorna via CSS :has()
+function onModalitaChange() {}
+
+async function usaGoogleDrive() {
+  const detected = _configData.detectedGoogleDrive;
+  if (!detected) {
+    toast('Google Drive non rilevato. Installa Google Drive per Desktop o inserisci il percorso manualmente.', 'err');
+    return;
+  }
+  document.getElementById('r-gdrive').checked = true;
+  const pathInput = document.getElementById('gdrive-path');
+  if (pathInput) pathInput.value = detected;
+  try {
+    const res = await apiPost('/api/config', { dataDir: detected });
+    if (res.error) { toast('Errore: ' + res.error, 'err'); return; }
+    toast('✓ Google Drive attivato! Riavvia il programma per applicare.', 'ok');
+    document.getElementById('config-status').textContent = '✓ Salvato — riavvia per applicare';
+    await loadConfig();
+  } catch(e) {
+    toast('Errore salvataggio: ' + e.message, 'err');
+  }
 }
 
 function rilevaDrive() {
@@ -1990,7 +2020,6 @@ function rilevaDrive() {
   if (detected) {
     document.getElementById('gdrive-path').value = detected;
     document.getElementById('r-gdrive').checked = true;
-    document.getElementById('gdrive-detected').style.display = 'block';
     toast('Google Drive rilevato: ' + detected, 'ok');
   } else {
     toast('Google Drive non trovato. Inserisci il percorso manualmente.', 'err');
