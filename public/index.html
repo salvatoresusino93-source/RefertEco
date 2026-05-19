@@ -533,12 +533,18 @@
         <div class="prev-box" id="m-referto"></div>
         <div class="img-section-hdr">
           <span class="sec-lbl" style="margin:0">Immagini</span>
-          <label class="btn btn-secondary btn-sm img-import-label">
-            📁 Importa immagini
-            <input type="file" id="img-file-input" accept=".dcm,.DCM,.jpg,.jpeg,.png" multiple style="display:none" onchange="importaImmagini(event)">
-          </label>
+          <div style="display:flex;gap:6px">
+            <label class="btn btn-secondary btn-sm img-import-label" title="Importa file singoli">
+              📁 File
+              <input type="file" id="img-file-input" accept=".dcm,.DCM,.dicom,.jpg,.jpeg,.png" multiple style="display:none" onchange="importaImmagini(event)">
+            </label>
+            <label class="btn btn-secondary btn-sm img-import-label" title="Importa intera cartella (anche con sottocartelle)">
+              📂 Cartella
+              <input type="file" id="img-folder-input" webkitdirectory multiple style="display:none" onchange="importaImmagini(event)">
+            </label>
+          </div>
         </div>
-        <div class="img-grid" id="m-img-grid"></div>
+        <div class="img-grid" id="m-img-grid" ondrop="importaImmaginiDrop(event)" ondragover="importaImmaginiDragOver(event)" ondragleave="importaImmaginiDragLeave(event)"></div>
       </div>
       <div id="m-edit-section" style="display:none"></div>
     </div>
@@ -568,7 +574,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="lib/dicom-parser.min.js"></script>
-<script src="lib/jpeg-lossless-decoder.min.js?v=20260519b"></script>
-<script src="app.js?v=20260519b"></script>
+<script src="lib/jpeg-lossless-decoder.min.js?v=20260519c"></script>
+<script src="app.js?v=20260519c"></script>
 </body>
 </html>

@@ -49,7 +49,20 @@ app.get('/api/referti/:id/immagini', (req, res) => {
 });
 
 app.post('/api/referti/:id/immagini', upload.array('files', 2000), (req, res) => {
-  res.json({ importate: req.files.length, files: req.files.map(f => f.filename) });
+  const dest = getImgDir(req.params.id);
+  const isOnDrive = /drive|cloudstorage/i.test(dest);
+  console.log('[upload] referto=' + req.params.id + ' destinazione=' + dest +
+    ' (' + (isOnDrive ? 'GOOGLE DRIVE' : 'locale') + ') file_ricevuti=' + req.files.length);
+  if (req.files.length > 0) {
+    console.log('[upload] primo file: ' + req.files[0].filename + ' (' + req.files[0].size + ' B)');
+    console.log('[upload] ultimo file: ' + req.files[req.files.length - 1].filename);
+  }
+  res.json({
+    importate: req.files.length,
+    files: req.files.map(f => f.filename),
+    dest: dest,
+    syncedToDrive: isOnDrive
+  });
 });
 
 app.delete('/api/referti/:id/immagini/:filename', (req, res) => {

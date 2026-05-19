@@ -354,32 +354,19 @@ async function caricaImmaginiViewer(e) {
   e.target.value = '';
 }
 
-function _nomeFileUnivoco(file, estensione) {
-  const rel = file.webkitRelativePath || file._fullPath || file.name;
-  const parts = rel.split(/[\/\\]/).filter(Boolean);
-  let base = file.name;
-  if (estensione) {
-    const cleanName = file.name.replace(/\.[^.]+$/, '') || ('dicom_' + Date.now());
-    base = cleanName + estensione;
-  }
-  if (parts.length > 1) {
-    const dirParts = parts.slice(0, -1).map(p => p.replace(/[^a-zA-Z0-9._-]/g, '_'));
-    return dirParts.join('__') + '__' + base;
-  }
-  return base;
-}
-
+// Verifica se un file è un DICOM leggendo la magic "DICM" all'offset 128
 async function _isFileDicom(file) {
   try {
     if (file.size < 132) return false;
     const slice = file.slice(128, 132);
     const buf = await slice.arrayBuffer();
     const v = new Uint8Array(buf);
-    return v[0] === 0x44 && v[1] === 0x49 && v[2] === 0x43 && v[3] === 0x4D;
+    return v[0] === 0x44 && v[1] === 0x49 && v[2] === 0x43 && v[3] === 0x4D; // "DICM"
   } catch(e) { return false; }
 }
 
 async function processaFilesViewer(files) {
+  // Estensioni note: accettazione immediata (con rinomina univoca per path)
   const noti = [];
   const daControllare = [];
   for (const f of files) {
@@ -395,6 +382,7 @@ async function processaFilesViewer(files) {
       daControllare.push(f);
     }
   }
+  // File senza estensione nota: controlla magic DICM
   const dicomDetected = await Promise.all(daControllare.map(async f => {
     const ok = await _isFileDicom(f);
     if (!ok) return null;
@@ -415,6 +403,7 @@ async function processaFilesViewer(files) {
   document.getElementById('viewer-display').style.display = 'none';
   document.getElementById('viewer-loading').style.display = 'flex';
 
+  // Upload in batch per evitare limiti server / timeout
   const BATCH = 30;
   let importatiOk = 0;
   for (let i = 0; i < supportati.length; i += BATCH) {
@@ -434,6 +423,7 @@ async function processaFilesViewer(files) {
   console.log('[Import] Totale caricati: ' + importatiOk + '/' + supportati.length);
   if (importatiOk === 0) toast('Errore caricamento immagini', 'err');
 
+  // Ricarica lista dal server e genera displayUrl localmente
   await ricaricaViewer(supportati);
 }
 
@@ -518,13 +508,14 @@ function viewerDragOver(e) {
 function viewerDragLeave() {
   document.getElementById('nuovo-viewer').classList.remove('drag-over');
 }
-// Legge ricorsivamente file da una FileSystemEntry (file o directory)
+// Legge ricorsivamente file da una FileSystemEntry (file o directory).
+// Attacca il fullPath sul File per evitare collisioni di nome tra sottocartelle.
 async function leggiEntry(entry) {
   if (entry.isFile) {
     return new Promise(resolve => entry.file(f => {
       try { Object.defineProperty(f, '_fullPath', { value: entry.fullPath, writable: false }); } catch(e) {}
       resolve([f]);
-    }, err => { console.warn('[Import] errore file', entry.fullPath, err); resolve([]); }));
+    }, err => { console.warn('[Import] errore lettura file', entry.fullPath, err); resolve([]); }));
   }
   if (entry.isDirectory) {
     console.log('[Import] Entro in directory:', entry.fullPath);
@@ -535,8 +526,8 @@ async function leggiEntry(entry) {
         reader.readEntries(lotto => {
           if (!lotto.length) { resolve(); return; }
           tutteLeEntries.push(...lotto);
-          leggiLotto();
-        }, err => { console.warn('[Import] errore directory', entry.fullPath, err); resolve(); });
+          leggiLotto(); // readEntries restituisce max 100 voci alla volta
+        }, err => { console.warn('[Import] errore lettura directory', entry.fullPath, err); resolve(); });
       };
       leggiLotto();
     });
@@ -547,13 +538,30 @@ async function leggiEntry(entry) {
   return [];
 }
 
+// Genera un nome univoco basato sul path della sottocartella per evitare collisioni
+function _nomeFileUnivoco(file, estensione) {
+  // webkitRelativePath: presente con <input webkitdirectory>; _fullPath: presente da drag-and-drop
+  const rel = file.webkitRelativePath || file._fullPath || file.name;
+  const parts = rel.split(/[\/\\]/).filter(Boolean);
+  let base = file.name;
+  if (estensione) {
+    const cleanName = file.name.replace(/\.[^.]+$/, '') || ('dicom_' + Date.now());
+    base = cleanName + estensione;
+  }
+  // Se ci sono sottocartelle nel path, prefissa il basename con esse
+  if (parts.length > 1) {
+    const dirParts = parts.slice(0, -1).map(p => p.replace(/[^a-zA-Z0-9._-]/g, '_'));
+    return dirParts.join('__') + '__' + base;
+  }
+  return base;
+}
+
 async function viewerDrop(e) {
   e.preventDefault();
   document.getElementById('nuovo-viewer').classList.remove('drag-over');
 
   let files = [];
   if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
-    // Usa l'API FileSystem per leggere anche le cartelle trascinate
     const entries = Array.from(e.dataTransfer.items)
       .filter(item => item.kind === 'file')
       .map(item => item.webkitGetAsEntry())
@@ -1056,6 +1064,7 @@ async function renderDicomThumb(url, placeholder) {
     const resp = await fetch(url);
     const buf = await resp.arrayBuffer();
     const ds = dicomParser.parseDicom(new Uint8Array(buf));
+    const pixelSpacing = extractDicomPixelSpacing(ds);
     const dataUrl = await dicomDsToDataUrl(ds, buf);
     if (dataUrl) {
       const img = document.createElement('img');
@@ -1087,19 +1096,90 @@ async function estraiNomeDicom(file) {
   } catch (e) { return null; }
 }
 
+// Handler per il pulsante "Importa immagini" nell'archivio (sia singoli che cartella con sottocartelle)
 async function importaImmagini(event) {
-  const files = Array.from(event.target.files);
-  if (!files.length || !_modalRefertoId) return;
+  let files = Array.from(event.target.files);
+  if (!files.length || !_modalRefertoId) { event.target.value = ''; return; }
+  await _processaImmaginiArchivio(files);
+  event.target.value = '';
+}
 
+// Drop di file/cartelle direttamente sulla griglia immagini dell'archivio
+async function importaImmaginiDrop(e) {
+  e.preventDefault();
+  if (!_modalRefertoId) return;
+  const dz = document.getElementById('m-img-grid');
+  if (dz) dz.classList.remove('drag-over');
+
+  let files = [];
+  if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+    const entries = Array.from(e.dataTransfer.items)
+      .filter(item => item.kind === 'file')
+      .map(item => item.webkitGetAsEntry())
+      .filter(Boolean);
+    const nested = await Promise.all(entries.map(leggiEntry));
+    files = nested.flat();
+  } else {
+    files = Array.from(e.dataTransfer.files);
+  }
+  if (!files.length) return;
+  await _processaImmaginiArchivio(files);
+}
+
+function importaImmaginiDragOver(e) {
+  e.preventDefault();
+  const dz = document.getElementById('m-img-grid');
+  if (dz) dz.classList.add('drag-over');
+}
+function importaImmaginiDragLeave(e) {
+  const dz = document.getElementById('m-img-grid');
+  if (dz) dz.classList.remove('drag-over');
+}
+
+// Logica condivisa per processare immagini in modalità archivio (referto già salvato).
+// Stessa robustezza di processaFilesViewer (rilevamento DICOM via magic byte, nomi univoci,
+// batch upload, gestione errori dettagliata).
+async function _processaImmaginiArchivio(files) {
+  if (!_modalRefertoId) return;
   const r = referti.find(x => x.id === _modalRefertoId);
   if (!r) return;
 
-  // Controllo nome per i file DICOM
-  const dicomFiles = files.filter(f => /\.dcm$/i.test(f.name));
-  for (const file of dicomFiles) {
+  // 1) Filtra e prepara i file con nomi univoci basati sul path
+  const noti = [];
+  const daControllare = [];
+  for (const f of files) {
+    if (/\.(jpe?g|png|dcm|dicom)$/i.test(f.name)) {
+      const ext = /\.dicom$/i.test(f.name) ? '.dcm' : null;
+      const nuovoNome = _nomeFileUnivoco(f, ext);
+      if (nuovoNome !== f.name || ext) {
+        noti.push(new File([f], nuovoNome, { type: f.type }));
+      } else {
+        noti.push(f);
+      }
+    } else {
+      daControllare.push(f);
+    }
+  }
+  // 2) File senza estensione nota: rileva DICOM dalla magic
+  const dicomDetected = await Promise.all(daControllare.map(async f => {
+    const ok = await _isFileDicom(f);
+    if (!ok) return null;
+    const nuovoNome = _nomeFileUnivoco(f, '.dcm');
+    return new File([f], nuovoNome, { type: 'application/dicom' });
+  }));
+  const supportati = noti.concat(dicomDetected.filter(Boolean));
+
+  console.log('[Import-Archivio] referto ' + _modalRefertoId + ': ricevuti=' + files.length + ' validi=' + supportati.length);
+  if (!supportati.length) {
+    toast('Nessun file immagine/DICOM valido trovato', 'err');
+    return;
+  }
+
+  // 3) Controllo nome paziente sui file DICOM (warning una sola volta)
+  const dicomCheck = supportati.filter(f => /\.dcm$/i.test(f.name)).slice(0, 5); // max 5 controlli
+  for (const file of dicomCheck) {
     const nomeDicom = await estraiNomeDicom(file);
     if (nomeDicom) {
-      // I DICOM usano formato COGNOME^NOME o varianti
       const normalizzato = nomeDicom.replace(/\^/g, ' ').trim().toLowerCase();
       const cognomeRef = r.cognome.toLowerCase();
       const nomeRef = r.nome.toLowerCase();
@@ -1111,27 +1191,40 @@ async function importaImmagini(event) {
           `Referto: "${r.cognome} ${r.nome}"\n\n` +
           `Importare comunque?`
         );
-        if (!ok) { event.target.value = ''; return; }
+        if (!ok) return;
         break;
       }
     }
   }
 
-  const formData = new FormData();
-  files.forEach(f => formData.append('files', f));
+  // 4) Upload in batch (evita limiti server / timeout)
+  toast('Caricamento in corso… (' + supportati.length + ' file)', '');
+  const BATCH = 30;
+  let importatiOk = 0;
+  for (let i = 0; i < supportati.length; i += BATCH) {
+    const slice = supportati.slice(i, i + BATCH);
+    const formData = new FormData();
+    slice.forEach(f => formData.append('files', f));
+    try {
+      const resp = await fetch('/api/referti/' + _modalRefertoId + '/immagini', { method: 'POST', body: formData });
+      if (!resp.ok) {
+        console.error('[Import-Archivio] batch ' + (i / BATCH + 1) + ' HTTP ' + resp.status);
+        continue;
+      }
+      const j = await resp.json().catch(() => ({}));
+      importatiOk += (j.importate || slice.length);
+      console.log('[Import-Archivio] batch ' + (i / BATCH + 1) + ': ' + (j.importate || slice.length) + ' file');
+    } catch(e) {
+      console.error('[Import-Archivio] errore batch ' + (i / BATCH + 1), e);
+    }
+  }
 
-  try {
-    toast('Caricamento in corso…', '');
-    const resp = await fetch('/api/referti/' + _modalRefertoId + '/immagini', {
-      method: 'POST', body: formData,
-    });
-    const res = await resp.json();
-    await loadImmagini(_modalRefertoId);
-    toast('Importate ' + res.importate + ' immagini', 'ok');
-  } catch (e) {
+  await loadImmagini(_modalRefertoId);
+  if (importatiOk > 0) {
+    toast('Importate ' + importatiOk + ' immagini su Google Drive (sync in corso…)', 'ok');
+  } else {
     toast('Errore durante il caricamento', 'err');
   }
-  event.target.value = '';
 }
 
 // Converte URL immagine in data URL (per stampa offline)
@@ -1147,38 +1240,44 @@ async function imgToDataUrl(url) {
   } catch (e) { return null; }
 }
 
-// Controlla se un buffer JPEG è decodificabile nativamente dal browser.
-// Scansiona i marker dopo FF D8: SOF0/1/2 = ok, SOF3+ = JPEG Lossless (non supportato dal browser).
 function _jpegIsBaseline(d) {
   let i = 2;
   while (i + 3 < d.length) {
     if (d[i] !== 0xFF) break;
     const m = d[i + 1];
-    if (m === 0xC0 || m === 0xC1 || m === 0xC2) return true;  // Baseline / Progressive → ok
-    if (m === 0xC3 || (m >= 0xC5 && m <= 0xC7)) return false; // JPEG Lossless → no
-    if (m === 0xD9) break; // EOI
+    if (m === 0xC0 || m === 0xC1 || m === 0xC2) return true;
+    if (m === 0xC3 || (m >= 0xC5 && m <= 0xC7)) return false;
+    if (m === 0xD9) break;
+    if (i + 3 >= d.length) break;
     const segLen = (d[i + 2] << 8) | d[i + 3];
+    if (segLen < 2) break;
     i += 2 + segLen;
   }
   return true;
 }
 
-// Decodifica un frame JPEG Lossless usando jpeg-lossless-decoder-js e lo rende su canvas.
 function _renderJpegLossless(d, rows, cols, bpp, spp, photometric) {
   try {
+    console.log('[DICOM] _renderJpegLossless: rows=' + rows + ' cols=' + cols + ' bpp=' + bpp + ' spp=' + spp + ' photometric=' + photometric + ' dataLen=' + d.byteLength);
+    console.log('[DICOM] jpeg global:', typeof jpeg, typeof jpeg !== 'undefined' ? Object.keys(jpeg) : 'N/A');
     const decoder = new jpeg.lossless.Decoder();
     const ab = d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength);
     const numBytes = Math.ceil(bpp / 8);
-    const output = decoder.decode(ab, 0, d.byteLength, numBytes); // Uint8Array o Uint16Array
+    console.log('[DICOM] Calling decoder.decode, numBytes=' + numBytes);
+    const output = decoder.decode(ab, 0, d.byteLength, numBytes);
+    console.log('[DICOM] Decoder output type=' + (output ? output.constructor.name : 'null') + ' length=' + (output ? output.length : 0) + ' expected=' + (rows * cols * spp));
+    if (!output || output.length === 0) { console.error('[DICOM] Decoder returned empty output'); return null; }
     const n = rows * cols;
     const cv = document.createElement('canvas');
     cv.width = cols; cv.height = rows;
-    const imgData = cv.getContext('2d').createImageData(cols, rows);
+    const ctx = cv.getContext('2d');
+    const imgData = ctx.createImageData(cols, rows);
     const invert = photometric === 'MONOCHROME1';
     if (spp === 1) {
       let mn = Infinity, mx = -Infinity;
       for (let i = 0; i < n; i++) { if (output[i] < mn) mn = output[i]; if (output[i] > mx) mx = output[i]; }
       const rng = mx - mn || 1;
+      console.log('[DICOM] Grayscale range: min=' + mn + ' max=' + mx + ' invert=' + invert);
       for (let i = 0; i < n; i++) {
         let v = Math.round((output[i] - mn) / rng * 255);
         if (invert) v = 255 - v;
@@ -1193,16 +1292,17 @@ function _renderJpegLossless(d, rows, cols, bpp, spp, photometric) {
         imgData.data[i*4+3] = 255;
       }
     }
-    cv.getContext('2d').putImageData(imgData, 0, 0);
+    ctx.putImageData(imgData, 0, 0);
+    console.log('[DICOM] _renderJpegLossless: OK');
     return cv.toDataURL('image/jpeg', 0.85);
-  } catch(e) { console.error('JPEG Lossless decode error:', e); return null; }
+  } catch(e) { console.error('[DICOM] _renderJpegLossless ERRORE:', e); return null; }
 }
 
 // Converte pixel data DICOM (già parsato) in data URL
 async function dicomDsToDataUrl(ds, buf) {
   try {
     const el = ds.elements.x7fe00010;
-    if (!el) return null;
+    if (!el) { console.warn('[DICOM] Nessun elemento pixel data (7FE00010)'); return null; }
 
     const rows = ds.uint16('x00280010') || 0;
     const cols = ds.uint16('x00280011') || 0;
@@ -1211,52 +1311,77 @@ async function dicomDsToDataUrl(ds, buf) {
     let photometric = 'MONOCHROME2';
     try { photometric = (ds.string('x00280004') || 'MONOCHROME2').trim().toUpperCase(); } catch(e) {}
 
+    console.log('[DICOM] dicomDsToDataUrl: rows=' + rows + ' cols=' + cols + ' bpp=' + bpp + ' spp=' + spp + ' photometric=' + photometric);
+    console.log('[DICOM] el.items:', el.items ? el.items.length + ' items' : 'nessuno', '| el.length:', el.length, '| el.dataOffset:', el.dataOffset);
+
     // Pixel data encapsulati (JPEG / PNG / JPEG-Lossless compressi)
     if (el.items && el.items.length) {
-      for (const item of el.items) {
-        if (item.length < 4) continue;
+      console.log('[DICOM] Modalità encapsulata, scansiono ' + el.items.length + ' item(s)');
+      for (let idx = 0; idx < el.items.length; idx++) {
+        const item = el.items[idx];
+        console.log('[DICOM] Item ' + idx + ': length=' + item.length + ' dataOffset=' + item.dataOffset);
+        if (item.length < 4) { console.log('[DICOM] Item ' + idx + ' troppo piccolo, salto'); continue; }
         const d = new Uint8Array(buf, item.dataOffset, item.length);
+        console.log('[DICOM] Item ' + idx + ' magic: ' + d[0].toString(16) + ' ' + d[1].toString(16) + ' ' + d[2].toString(16) + ' ' + d[3].toString(16));
 
         // PNG
         if (d[0] === 0x89 && d[1] === 0x50 && d[2] === 0x4E && d[3] === 0x47) {
+          console.log('[DICOM] Item ' + idx + ': PNG trovato');
           const blob = new Blob([d], { type: 'image/png' });
           return await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
         }
 
         // JPEG (baseline o lossless)
         if (d[0] === 0xFF && d[1] === 0xD8) {
-          if (_jpegIsBaseline(d)) {
+          const isBaseline = _jpegIsBaseline(d);
+          console.log('[DICOM] Item ' + idx + ': JPEG trovato, isBaseline=' + isBaseline);
+          if (isBaseline) {
             const blob = new Blob([d], { type: 'image/jpeg' });
             return await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
           }
-          if (rows && cols && typeof jpeg !== 'undefined' && jpeg.lossless) {
+          // JPEG Lossless
+          const jpegLibOk = typeof jpeg !== 'undefined' && jpeg && jpeg.lossless;
+          console.log('[DICOM] JPEG Lossless: lib disponibile=' + jpegLibOk + ', rows=' + rows + ', cols=' + cols);
+          if (rows && cols && jpegLibOk) {
             const url = _renderJpegLossless(d, rows, cols, bpp, spp, photometric);
             if (url) return url;
+            console.warn('[DICOM] _renderJpegLossless ha restituito null per item ' + idx);
+          } else {
+            console.warn('[DICOM] Impossibile decodificare JPEG Lossless: lib=' + jpegLibOk + ' rows=' + rows + ' cols=' + cols);
           }
         }
       }
-      return null; // dati encapsulati: se nessun item decodificato, non cadere nel path raw
+      console.warn('[DICOM] Nessun item decodificato → restituisco null');
+      return null;
     }
 
     const off = el.dataOffset, len = el.length;
+    console.log('[DICOM] Path non-encapsulato: off=' + off + ' len=' + len + ' (0xFFFFFFFF=' + (len === 0xFFFFFFFF) + ')');
 
     // Rileva encapsulamento: lunghezza undefined OPPURE i primi 4 byte sono un item delimiter (FE FF 00 E0)
     const view8probe = new Uint8Array(buf, off, Math.min(4, buf.byteLength - off));
     const startsWithItem = view8probe.length >= 4 && view8probe[0] === 0xFE && view8probe[1] === 0xFF && view8probe[2] === 0x00 && view8probe[3] === 0xE0;
     const isEncapsulated = len === 0xFFFFFFFF || len === 4294967295 || startsWithItem;
+    console.log('[DICOM] Rilevazione encapsulamento: startsWithItem=' + startsWithItem + ' isEncapsulated=' + isEncapsulated);
 
+    // Fallback: dati encapsulati senza el.items (es. dicom-parser non ha parsato l'incapsulamento)
     if (isEncapsulated) {
+      console.log('[DICOM] Fallback: scansione manuale item encapsulati da offset ' + off);
       const view8 = new Uint8Array(buf);
       let pos = off;
-      const limit = Math.min(buf.byteLength - 8, off + 10 * 1024 * 1024);
+      const limit = Math.min(buf.byteLength - 8, off + 10 * 1024 * 1024); // max 10 MB
       while (pos < limit) {
+        // Leggo tag item: FE FF 00 E0 (little-endian)
         if (view8[pos] === 0xFE && view8[pos+1] === 0xFF && view8[pos+2] === 0x00 && view8[pos+3] === 0xE0) {
           const itemLen = view8[pos+4] | (view8[pos+5] << 8) | (view8[pos+6] << 16) | (view8[pos+7] << 24);
           const frameOff = pos + 8;
+          console.log('[DICOM] Fallback item trovato: pos=' + pos + ' itemLen=' + itemLen);
           if (itemLen > 4 && frameOff + itemLen <= buf.byteLength) {
             const d = new Uint8Array(buf, frameOff, itemLen);
             if (d[0] === 0xFF && d[1] === 0xD8) {
-              if (_jpegIsBaseline(d)) {
+              const isBase = _jpegIsBaseline(d);
+              console.log('[DICOM] Fallback JPEG trovato: baseline=' + isBase);
+              if (isBase) {
                 const blob = new Blob([d], { type: 'image/jpeg' });
                 return await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
               }
@@ -1269,11 +1394,13 @@ async function dicomDsToDataUrl(ds, buf) {
           if (itemLen === 0) { pos += 8; continue; }
           pos += 8 + Math.max(0, itemLen);
         } else if (view8[pos] === 0xFE && view8[pos+1] === 0xFF && view8[pos+2] === 0xDD && view8[pos+3] === 0xE0) {
-          break;
+          console.log('[DICOM] Fallback: sequence delimiter a pos=' + pos);
+          break; // sequence delimiter
         } else {
           pos++;
         }
       }
+      console.warn('[DICOM] Fallback: nessun frame trovato');
       return null;
     }
 
@@ -1965,9 +2092,11 @@ function renderConfig() {
   document.getElementById('path-locale-display').textContent = currentDir + '/referteco_data.json';
   document.getElementById('config-status').textContent = '';
 
+  // Mostra path attivo in alto
   const curDisplay = document.getElementById('current-datadir-display');
   if (curDisplay) curDisplay.textContent = currentDir;
 
+  // Riempi i nuovi box (auto-rilevato / manuale)
   const autoBox = document.getElementById('gdrive-auto-box');
   const manualBox = document.getElementById('gdrive-manual-box');
   const autoPath = document.getElementById('gdrive-detected-path');
@@ -1980,6 +2109,7 @@ function renderConfig() {
     if (manualBox) manualBox.style.display = 'block';
   }
 
+  // Input personalizzato (dentro details)
   const pathInput = document.getElementById('gdrive-path');
   if (pathInput) {
     if (isGdrive) pathInput.value = dataDir;
@@ -1993,17 +2123,22 @@ function renderConfig() {
   }
 }
 
-function onModalitaChange() {}
+function onModalitaChange() {
+  // nessuna logica extra necessaria, la UI si aggiorna via CSS :has()
+}
 
+// Imposta + salva Google Drive in un solo click
 async function usaGoogleDrive() {
   const detected = _configData.detectedGoogleDrive;
   if (!detected) {
     toast('Google Drive non rilevato. Installa Google Drive per Desktop o inserisci il percorso manualmente.', 'err');
     return;
   }
+  // Seleziona il radio Google Drive e mette il path
   document.getElementById('r-gdrive').checked = true;
   const pathInput = document.getElementById('gdrive-path');
   if (pathInput) pathInput.value = detected;
+  // Salva immediatamente
   try {
     const res = await apiPost('/api/config', { dataDir: detected });
     if (res.error) { toast('Errore: ' + res.error, 'err'); return; }
