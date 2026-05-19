@@ -38,8 +38,14 @@ const upload = multer({ storage: imgStorage, limits: { fileSize: 100 * 1024 * 10
 
 app.get('/api/referti/:id/immagini', (req, res) => {
   const dir = getImgDir(req.params.id);
-  if (!fs.existsSync(dir)) return res.json([]);
-  res.json(fs.readdirSync(dir).filter(f => !f.startsWith('.')).sort());
+  try {
+    if (!fs.existsSync(dir)) return res.json([]);
+    const files = fs.readdirSync(dir).filter(f => !f.startsWith('.')).sort();
+    return res.json(files);
+  } catch (e) {
+    console.error('[immagini list] errore lettura ' + dir + ':', e.message);
+    return res.status(500).json({ error: 'Impossibile leggere cartella immagini', dir: dir, dettaglio: e.message });
+  }
 });
 
 app.post('/api/referti/:id/immagini', upload.array('files', 2000), (req, res) => {

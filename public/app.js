@@ -85,7 +85,21 @@ function initTopbar() {
 
 // ── API ───────────────────────────────────────────────────────
 async function apiGet(url) {
-  const r = await fetch(url); return r.json();
+  try {
+    const r = await fetch(url);
+    if (!r.ok) {
+      const errBody = await r.text().catch(() => '');
+      console.error('[apiGet] HTTP ' + r.status + ' su ' + url + ' → ' + errBody);
+      const err = new Error('HTTP ' + r.status);
+      err.status = r.status;
+      err.body = errBody;
+      throw err;
+    }
+    return await r.json();
+  } catch(e) {
+    console.error('[apiGet] errore fetch ' + url, e);
+    throw e;
+  }
 }
 async function apiPost(url, body) {
   const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
@@ -994,8 +1008,23 @@ function closeModalOv(e) { if (e.target === document.getElementById('modal-ov'))
 async function loadImmagini(refertoId) {
   const grid = document.getElementById('m-img-grid');
   grid.innerHTML = '<div class="img-loading">Caricamento…</div>';
-  const files = await apiGet('/api/referti/' + refertoId + '/immagini');
-  renderImmagini(refertoId, files);
+  try {
+    const files = await apiGet('/api/referti/' + refertoId + '/immagini');
+    if (!Array.isArray(files)) {
+      grid.innerHTML = '<div class="img-empty" style="color:#dc2626">Risposta server non valida</div>';
+      return;
+    }
+    renderImmagini(refertoId, files);
+  } catch(e) {
+    console.error('[loadImmagini] errore per referto ' + refertoId, e);
+    const msg = e.status === 404 ? 'Cartella immagini non trovata'
+              : e.status ? ('Errore server HTTP ' + e.status)
+              : 'Impossibile leggere immagini (server non risponde o cartella inaccessibile)';
+    grid.innerHTML = '<div class="img-empty" style="color:#dc2626">' +
+      '⚠️ ' + msg + '<br><small style="opacity:.7">Referto ID: ' + refertoId + '</small>' +
+      '<br><button onclick="loadImmagini(\'' + refertoId + '\')" style="margin-top:8px;padding:4px 10px;cursor:pointer">Riprova</button>' +
+      '</div>';
+  }
 }
 
 function renderImmagini(refertoId, files) {
