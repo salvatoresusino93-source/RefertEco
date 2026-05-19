@@ -1913,13 +1913,20 @@ function initMeasureTool() {
 function confermaElimina(id) {
   const r = referti.find(x => x.id === id); if (!r) return;
   document.getElementById('conf-msg').textContent =
-    'Stai per eliminare il referto di ' + r.cognome + ' ' + r.nome + ' del ' + fmt(r.data) + '. Questa azione è irreversibile.';
+    'Stai per eliminare il referto di ' + r.cognome + ' ' + r.nome + ' del ' + fmt(r.data) +
+    '. Verranno rimosse anche tutte le immagini associate (anche dal Google Drive se configurato). Questa azione è irreversibile.';
   document.getElementById('conf-ok').onclick = async () => {
-    await apiDelete('/api/referti/' + id);
+    const res = await apiDelete('/api/referti/' + id);
     await loadReferti();
     closeConfirm(); closeModal();
     populateAnni(); renderArchivio();
-    toast('Referto eliminato', 'ok');
+    if (res && res.error) {
+      toast('Referto rimosso dal DB ma errore immagini: ' + res.error, 'err');
+    } else {
+      const imgCount = res && res.immaginiEliminate ? res.immaginiEliminate : 0;
+      const msg = imgCount > 0 ? ('Referto eliminato (' + imgCount + ' immagini rimosse)') : 'Referto eliminato';
+      toast(msg, 'ok');
+    }
   };
   document.getElementById('conf-ov').classList.add('open');
 }
@@ -2182,6 +2189,29 @@ async function salvaConfig() {
   toast('Impostazioni salvate', 'ok');
   _configData.dataDir = dataDir;
   await loadConfig();
+}
+
+// ── PULIZIA CARTELLE ORFANE ───────────────────────────────────
+async function pulisciOrfane() {
+  const out = document.getElementById('pulisci-result');
+  if (!confirm('Cercare e cancellare cartelle di immagini SENZA referto associato?\n\nLe cartelle dei referti esistenti NON verranno toccate.')) return;
+  if (out) { out.textContent = '🔄 Scansione in corso…'; out.style.color = 'var(--text-muted)'; }
+  try {
+    const res = await apiPost('/api/referti/pulisci-orfane', {});
+    if (res.error) {
+      if (out) { out.textContent = '❌ ' + res.error; out.style.color = '#dc2626'; }
+      toast('Errore: ' + res.error, 'err');
+      return;
+    }
+    const msg = res.orfane === 0
+      ? '✓ Nessuna cartella orfana trovata.'
+      : '✓ Eliminate ' + res.orfane + ' cartelle orfane (' + res.spazioMB + ' MB liberati)';
+    if (out) { out.textContent = msg; out.style.color = res.orfane > 0 ? 'var(--accent-mid)' : 'var(--text-muted)'; }
+    toast(msg, 'ok');
+  } catch(e) {
+    if (out) { out.textContent = '❌ Errore: ' + e.message; out.style.color = '#dc2626'; }
+    toast('Errore: ' + e.message, 'err');
+  }
 }
 
 // ── QUIT ──────────────────────────────────────────────────────

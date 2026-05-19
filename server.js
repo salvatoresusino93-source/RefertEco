@@ -150,8 +150,77 @@ app.delete('/api/referti/:id', (req, res) => {
   const state = db.get();
   const before = state.referti.length;
   state.referti = state.referti.filter(x => x.id !== req.params.id);
-  if (state.referti.length < before) db.persist();
-  res.json({ ok: true });
+  const wasDeleted = state.referti.length < before;
+  if (wasDeleted) db.persist();
+
+  // Cancella anche la cartella immagini associata (su Google Drive o locale)
+  let immaginiEliminate = 0;
+  const imgDir = getImgDir(req.params.id);
+  if (fs.existsSync(imgDir)) {
+    try {
+      // Conta i file prima della cancellazione per logging
+      try { immaginiEliminate = fs.readdirSync(imgDir).filter(f => !f.startsWith('.')).length; } catch(e) {}
+      fs.rmSync(imgDir, { recursive: true, force: true });
+      const isOnDrive = /drive|cloudstorage/i.test(imgDir);
+      console.log('[delete] referto=' + req.params.id + ' cartella eliminata=' + imgDir +
+        ' (' + (isOnDrive ? 'GOOGLE DRIVE' : 'locale') + ') file_rimossi=' + immaginiEliminate);
+    } catch (e) {
+      console.error('[delete] errore rimozione ' + imgDir + ':', e.message);
+      return res.status(500).json({
+        ok: false,
+        recordEliminato: wasDeleted,
+        error: 'Record eliminato ma cartella immagini non rimossa: ' + e.message,
+        cartella: imgDir
+      });
+    }
+  } else {
+    console.log('[delete] referto=' + req.params.id + ' (nessuna cartella immagini)');
+  }
+
+  res.json({ ok: true, recordEliminato: wasDeleted, immaginiEliminate: immaginiEliminate });
+});
+
+// Pulisce le cartelle immagini orfane (cartelle senza referto corrispondente nel DB)
+app.post('/api/referti/pulisci-orfane', (req, res) => {
+  const imgRoot = path.join(config.getDataDir(), 'immagini');
+  if (!fs.existsSync(imgRoot)) return res.json({ orfane: 0, eliminate: [], spazioMB: 0 });
+
+  const idsValidi = new Set(db.get().referti.map(r => r.id));
+  const eliminate = [];
+  let spazioByte = 0;
+  let errori = [];
+
+  try {
+    const cartelle = fs.readdirSync(imgRoot, { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => d.name);
+
+    for (const id of cartelle) {
+      if (idsValidi.has(id)) continue; // referto esistente, salta
+      const dir = path.join(imgRoot, id);
+      try {
+        // Calcola size
+        const sub = fs.readdirSync(dir);
+        for (const f of sub) {
+          try { spazioByte += fs.statSync(path.join(dir, f)).size; } catch(e) {}
+        }
+        fs.rmSync(dir, { recursive: true, force: true });
+        eliminate.push(id);
+        console.log('[pulisci-orfane] rimossa ' + dir);
+      } catch (e) {
+        errori.push({ id, err: e.message });
+      }
+    }
+  } catch (e) {
+    return res.status(500).json({ error: 'Errore scansione: ' + e.message });
+  }
+
+  res.json({
+    orfane: eliminate.length,
+    eliminate: eliminate,
+    spazioMB: Math.round(spazioByte / 1024 / 1024 * 10) / 10,
+    errori: errori
+  });
 });
 
 app.post('/api/referti/import', (req, res) => {

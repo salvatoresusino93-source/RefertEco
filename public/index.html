@@ -513,6 +513,21 @@
           </div>
         </div>
 
+        <div class="form-card" style="max-width:660px;margin-top:18px">
+          <div class="form-section">
+            <div class="sec-lbl">Manutenzione</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;line-height:1.6">
+              Cerca e rimuove cartelle di immagini di referti che <strong>non esistono più</strong>
+              (es. referti eliminati prima di questa versione che non avevano la pulizia automatica).
+              Sicuro: rimuove solo cartelle di referti che non risultano nel database.
+            </p>
+            <button class="btn btn-secondary btn-sm" onclick="pulisciOrfane()" type="button">
+              🧹 Cerca e cancella cartelle orfane
+            </button>
+            <div id="pulisci-result" style="font-size:12px;margin-top:8px;font-family:'DM Mono',monospace"></div>
+          </div>
+        </div>
+
       </div>
 
     </div>
@@ -574,7 +589,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="lib/dicom-parser.min.js"></script>
-<script src="lib/jpeg-lossless-decoder.min.js?v=20260519c"></script>
-<script src="app.js?v=20260519c"></script>
+<script src="lib/jpeg-lossless-decoder.min.js?v=20260519d"></script>
+<script src="app.js?v=20260519d"></script>
 </body>
 </html>
