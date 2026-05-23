@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Sfondo blu arrotondato -->
+  <rect width="64" height="64" rx="14" fill="#2563eb"/>
+
+  <!-- Corpo calendario (bianco) -->
+  <rect x="10" y="18" width="44" height="36" rx="6" fill="white"/>
+
+  <!-- Intestazione calendario (blu scuro) -->
+  <rect x="10" y="18" width="44" height="15" rx="6" fill="#1e40af"/>
+  <rect x="10" y="26" width="44" height="7" fill="#1e40af"/>
+
+  <!-- Ganci in cima (bianco) -->
+  <rect x="21" y="12" width="5" height="12" rx="2.5" fill="white"/>
+  <rect x="38" y="12" width="5" height="12" rx="2.5" fill="white"/>
+
+  <!-- Numero del giorno in evidenza (cerchio oggi) -->
+  <circle cx="32" cy="41" r="8" fill="#2563eb"/>
+  <text x="32" y="45.5" font-family="Arial,sans-serif" font-size="10"
+        font-weight="700" fill="white" text-anchor="middle">23</text>
+
+  <!-- Pallini giorni settimana (riga sopra) -->
+  <circle cx="17" cy="30" r="2.5" fill="white" opacity="0.9"/>
+  <circle cx="26" cy="30" r="2.5" fill="white" opacity="0.9"/>
+  <circle cx="35" cy="30" r="2.5" fill="white" opacity="0.9"/>
+  <circle cx="44" cy="30" r="2.5" fill="white" opacity="0.9"/>
+
+  <!-- Pallini giorni (riga sotto) -->
+  <circle cx="17" cy="41" r="2.5" fill="white" opacity="0.5"/>
+  <circle cx="26" cy="41" r="2.5" fill="white" opacity="0.5"/>
+  <circle cx="44" cy="41" r="2.5" fill="white" opacity="0.5"/>
+
+  <!-- Pallini giorni (ultima riga) -->
+  <circle cx="17" cy="51" r="2.5" fill="white" opacity="0.5"/>
+  <circle cx="26" cy="51" r="2.5" fill="white" opacity="0.5"/>
+  <circle cx="35" cy="51" r="2.5" fill="white" opacity="0.5"/>
+  <circle cx="44" cy="51" r="2.5" fill="white" opacity="0.3"/>
+</svg>
