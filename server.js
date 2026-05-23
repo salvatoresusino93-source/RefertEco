@@ -273,12 +273,15 @@ app.post('/api/ai/correggi', async (req, res) => {
 const AGENDA_API_URL = 'https://referteco-production.up.railway.app/api';
 const AGENDA_TOKEN   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRlMzliY2YxLTRjZTctNDdiNy1iMzk2LTgyNmU4MTE1NTI0OSIsInVzZXJuYW1lIjoibWVkaWNvIiwicnVvbG8iOiJtZWRpY28iLCJpYXQiOjE3Nzk1NDMzMDAsImV4cCI6MjA5NTExOTMwMH0.siqAwgLKT7pN9zaGNnP6kcne-3lhEaQBIY30Z0X8ji0';
 
-// Pazienti con stato "arrivato" oggi
+// Pazienti con stato "arrivato" (ultimi 2 giorni, gestisce fusi orari)
 app.get('/api/agenda/pazienti-attesa', async (req, res) => {
   try {
-    const r = await fetch(`${AGENDA_API_URL}/appuntamenti/oggi`, {
-      headers: { 'Authorization': `Bearer ${AGENDA_TOKEN}` }
-    });
+    const from = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const to   = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const r = await fetch(
+      `${AGENDA_API_URL}/appuntamenti?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      { headers: { 'Authorization': `Bearer ${AGENDA_TOKEN}` } }
+    );
     if (!r.ok) return res.json([]);
     const lista = await r.json();
     res.json(lista.filter(a => a.stato === 'arrivato'));
