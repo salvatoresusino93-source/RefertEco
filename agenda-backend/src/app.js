@@ -21,7 +21,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // ─── Frontend statico ────────────────────────────────────────────────────
-app.use(express.static(path.join(__dirname, '../../agenda-frontend')));
+// In locale: __dirname = agenda-backend/src → ../../agenda-frontend
+// Su Railway (start da root): __dirname = agenda-backend/src → ../../agenda-frontend ✓
+const FRONTEND_PATH = path.resolve(__dirname, '..', '..', 'agenda-frontend');
+app.use(express.static(FRONTEND_PATH));
 
 // ─── API Routes ───────────────────────────────────────────────────────────
 app.use('/api/auth',          authRoutes);
@@ -37,7 +40,7 @@ app.get('/api/health', (req, res) => {
 
 // ─── Fallback SPA ────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../../agenda-frontend/index.html'));
+  res.sendFile(path.join(FRONTEND_PATH, 'index.html'));
 });
 
 // ─── Error handler ────────────────────────────────────────────────────────
