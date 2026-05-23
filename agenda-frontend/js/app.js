@@ -420,9 +420,11 @@ function selezionaPaz(id, nome) {
 }
 
 async function salvaNuovoPaz() {
-  const cognome = $('np-cognome').value.trim();
-  const nome    = $('np-nome').value.trim();
-  if (!cognome||!nome) { alert('Cognome e nome obbligatori'); return; }
+  const cognome   = $('np-cognome').value.trim();
+  const nome      = $('np-nome').value.trim();
+  const telefono  = $('np-telefono').value.trim();
+  if (!cognome || !nome)    { alert('Cognome e nome obbligatori'); return; }
+  if (!telefono)            { alert('Il numero di telefono è obbligatorio'); $('np-telefono').focus(); return; }
   const btn = $('btn-salva-nuovo-paz');
   btn.textContent = 'Salvataggio…'; btn.disabled = true;
   try {
@@ -430,8 +432,8 @@ async function salvaNuovoPaz() {
       cognome, nome,
       data_nascita:   $('np-nascita').value || null,
       sesso:          $('np-sesso').value   || null,
-      codice_fiscale: $('np-cf').value.trim()       || null,
-      telefono:       $('np-telefono').value.trim() || null,
+      codice_fiscale: $('np-cf').value.trim() || null,
+      telefono,
     });
     selezionaPaz(p.id, `${p.cognome} ${p.nome}`);
     $('nuovo-paz-form').classList.add('hidden');

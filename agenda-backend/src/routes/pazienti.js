@@ -35,6 +35,9 @@ router.post('/', async (req, res) => {
   if (!cognome?.trim() || !nome?.trim()) {
     return res.status(400).json({ error: 'Cognome e nome sono obbligatori' });
   }
+  if (!telefono?.trim()) {
+    return res.status(400).json({ error: 'Il numero di telefono è obbligatorio' });
+  }
 
   const { data, error } = await supabase
     .from('pazienti')
