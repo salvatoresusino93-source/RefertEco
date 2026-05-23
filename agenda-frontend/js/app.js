@@ -95,19 +95,12 @@ async function onLoginOk(user) {
   try { _prestazioni = await api.prestazioni(); } catch { _prestazioni = []; }
   fillPrestazioni();
   _viewStart = getMon(new Date());
-  applyMobileLayout();
   await refreshWeek();
   await refreshSidebar();
   initSocket();
   bindEvents();
   initSwipe();
-  window.addEventListener('resize', () => { applyMobileLayout(); renderCalendar(); renderPeriod(); });
-}
-
-function applyMobileLayout() {
-  const mob = isMobile();
-  $('mobile-day-nav').classList.toggle('hidden', !mob);
-  $('mobile-bottom-bar').classList.toggle('hidden', !mob);
+  window.addEventListener('resize', () => { renderCalendar(); renderPeriod(); });
 }
 
 // ─── Socket.io ────────────────────────────────────────────────────────────

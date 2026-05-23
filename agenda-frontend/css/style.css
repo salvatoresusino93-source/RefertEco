@@ -242,41 +242,52 @@ button { font-family:inherit; }
 .arch-empty { padding:32px; text-align:center; color:var(--muted); font-style:italic; }
 .arch-hint { font-size:12px; color:var(--muted); margin-top:10px; text-align:center; }
 
-/* ─── MOBILE DAY NAV ──────────────────────────────────────────────────── */
+/* ─── MOBILE DAY NAV — nascosta su desktop, visibile su mobile via media query */
 .mobile-day-nav {
-  display:flex; align-items:center; justify-content:space-between;
-  background:var(--surface); border-bottom:1px solid var(--border);
-  padding:0 4px; height:48px; flex-shrink:0; gap:4px;
+  display:none;  /* default: nascosta */
+  align-items:center; justify-content:space-between;
+  background:var(--surface); border-bottom:2px solid var(--border);
+  padding:0 4px; height:50px; flex-shrink:0;
 }
 #mobile-day-label {
-  flex:1; text-align:center; font-size:15px; font-weight:700; color:var(--text);
+  flex:1; text-align:center; font-size:14px; font-weight:700; color:var(--text);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 4px;
 }
 .mobile-nav-btn {
-  background:none; border:none; font-size:30px; color:var(--pri);
-  cursor:pointer; padding:4px 12px; line-height:1; border-radius:var(--radius);
-  min-width:48px; min-height:48px; display:flex; align-items:center; justify-content:center;
+  background:none; border:none; font-size:32px; color:var(--pri);
+  cursor:pointer; padding:0 10px; line-height:1;
+  min-width:52px; min-height:50px;
+  display:flex; align-items:center; justify-content:center;
+  -webkit-tap-highlight-color:transparent;
 }
 .mobile-nav-btn:active { background:var(--pri-bg); }
 
-/* ─── MOBILE BOTTOM BAR ───────────────────────────────────────────────── */
+/* ─── MOBILE BOTTOM BAR — nascosta su desktop, visibile su mobile via media query */
 .mobile-bottom-bar {
-  display:flex; align-items:stretch;
+  display:none;  /* default: nascosta */
   position:fixed; bottom:0; left:0; right:0;
   background:var(--surface); border-top:1px solid var(--border);
-  z-index:50; height:calc(56px + env(safe-area-inset-bottom,0px));
-  padding-bottom:env(safe-area-inset-bottom,0px);
+  z-index:9999;
+  padding-bottom:env(safe-area-inset-bottom, 0px);
+  box-shadow:0 -2px 8px rgba(0,0,0,.08);
 }
 .mobile-bottom-bar button {
   flex:1; background:none; border:none; cursor:pointer;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:3px; color:var(--pri); padding:4px 0;
+  gap:3px; color:var(--pri); padding:10px 0;
+  -webkit-tap-highlight-color:transparent;
+  font-family:inherit;
 }
 .mobile-bottom-bar button:active { background:var(--pri-bg); }
-.mbb-icon { font-size:20px; line-height:1; }
-.mbb-lbl  { font-size:11px; font-weight:600; letter-spacing:.02em; }
+.mbb-icon { font-size:22px; line-height:1; }
+.mbb-lbl  { font-size:11px; font-weight:600; }
 
 /* ─── RESPONSIVE ──────────────────────────────────────────────────────── */
 @media (max-width:768px) {
+  /* Mostra elementi mobile */
+  .mobile-day-nav    { display:flex !important; }
+  .mobile-bottom-bar { display:flex !important; }
+
   /* Header semplificato */
   .hdr-nav    { display:none; }
   .hdr-period { display:none; }
@@ -285,40 +296,54 @@ button { font-family:inherit; }
   .user-badge { display:none; }
 
   /* Sidebar nascosta — accessibile dal menu */
-  .app-sidebar { display:none; }
+  .app-sidebar { display:none !important; }
 
-  /* app-body non deve tagliare lo scroll orizzontale */
-  .app-body { overflow:visible; padding-bottom:calc(56px + env(safe-area-inset-bottom,0px)); }
-  .app-main { overflow:auto; -webkit-overflow-scrolling:touch; }
+  /* RIMUOVE overflow:hidden da #app per far funzionare position:fixed su iOS Safari */
+  .app { overflow:visible; }
 
-  /* Calendario settimanale scrollabile: colonne fisse 68px, tempo 44px */
-  .cal-wrap   { width:calc(44px + 7 * 68px); min-width:0; } /* 520px */
+  /* Scroll orizzontale nel corpo */
+  .app-body { overflow:visible; flex:1; }
+  .app-main {
+    flex:1; overflow:auto;
+    -webkit-overflow-scrolling:touch;
+    /* Spazio per la bottom bar */
+    padding-bottom:calc(58px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Calendario: 7 colonne da 68px + colonna ore 44px = 520px scrollabile */
+  .cal-wrap   { width:calc(44px + 7 * 68px); min-width:0; }
   .cal-header { grid-template-columns:44px repeat(7,68px); }
   .cal-body   { grid-template-columns:44px repeat(7,68px); }
 
-  /* Colonna ore sticky a sinistra */
-  .cal-time-col { position:sticky; left:0; z-index:3; background:var(--surface); }
-  .cal-th-time  { position:sticky; left:0; z-index:7; background:var(--surface); }
+  /* Colonna ore sticky a sinistra (con prefisso webkit per iOS) */
+  .cal-time-col {
+    position:-webkit-sticky; position:sticky;
+    left:0; z-index:3; background:var(--surface);
+  }
+  .cal-th-time {
+    position:-webkit-sticky; position:sticky;
+    left:0; z-index:7; background:var(--surface);
+  }
 
-  /* Intestazioni giorni più compatte */
-  .cal-th-day     { padding:6px 2px; }
+  /* Intestazioni giorni compatte */
+  .cal-th-day     { padding:5px 1px; }
   .cal-th-dayname { font-size:9px; }
-  .cal-th-daynum  { font-size:16px; width:28px; height:28px; margin-top:1px; }
+  .cal-th-daynum  { font-size:15px; width:26px; height:26px; margin-top:1px; }
 
-  /* Etichette ore più compatte */
-  .cal-lbl { font-size:9px; right:3px; }
+  /* Etichette ore compatte */
+  .cal-lbl { font-size:9px; right:2px; }
 
-  /* Appuntamenti: nome visibile, esame nascosto per spazio */
+  /* Appuntamenti compatti */
   .cal-app-nome  { font-size:11px; }
   .cal-app-time  { font-size:10px; }
   .cal-app-esame { display:none; }
 
-  /* Dropdown menu non tagliato */
+  /* Dropdown non tagliato fuori schermo */
   .menu-dropdown { left:0; right:auto; min-width:220px; }
 
-  /* Modal sale dal basso, full-width */
-  .modal-overlay { padding:0; align-items:flex-end; }
-  .modal         { border-radius:16px 16px 0 0; max-height:92vh; width:100%; max-width:100%; }
-  .modal-body    { overflow-y:auto; }
-  .arch-modal    { border-radius:16px 16px 0 0; max-height:92vh; width:100%; max-width:100%; }
+  /* Modal: sale dal basso a schermo pieno */
+  .modal-overlay { padding:0 !important; align-items:flex-end !important; }
+  .modal         { border-radius:16px 16px 0 0; max-height:92vh; width:100% !important; max-width:100% !important; }
+  .modal-body    { overflow-y:auto; max-height:60vh; }
+  .arch-modal    { border-radius:16px 16px 0 0; }
 }

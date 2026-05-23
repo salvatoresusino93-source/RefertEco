@@ -64,8 +64,8 @@
     </div>
   </header>
 
-  <!-- Navigazione giorno (solo mobile) -->
-  <div class="mobile-day-nav hidden" id="mobile-day-nav">
+  <!-- Navigazione settimana (solo mobile, visibile via CSS) -->
+  <div class="mobile-day-nav" id="mobile-day-nav">
     <button class="mobile-nav-btn" onclick="navMobileWeek(-1)">&#8249;</button>
     <span id="mobile-day-label"></span>
     <button class="mobile-nav-btn" onclick="navMobileWeek(1)">&#8250;</button>
@@ -94,23 +94,24 @@
 
   </div>
 
-  <!-- Bottom bar (solo mobile) -->
-  <nav class="mobile-bottom-bar hidden" id="mobile-bottom-bar">
-    <button onclick="openModal({})">
-      <span class="mbb-icon">➕</span>
-      <span class="mbb-lbl">Nuovo</span>
-    </button>
-    <button onclick="goToToday()">
-      <span class="mbb-icon">📅</span>
-      <span class="mbb-lbl">Oggi</span>
-    </button>
-    <button onclick="$('btn-menu').click()">
-      <span class="mbb-icon">☰</span>
-      <span class="mbb-lbl">Menu</span>
-    </button>
-  </nav>
 
 </div>
+
+<!-- Bottom bar mobile — FUORI da #app per evitare bug iOS Safari position:fixed -->
+<nav class="mobile-bottom-bar" id="mobile-bottom-bar">
+  <button onclick="openModal({})">
+    <span class="mbb-icon">➕</span>
+    <span class="mbb-lbl">Nuovo</span>
+  </button>
+  <button onclick="goToToday()">
+    <span class="mbb-icon">📅</span>
+    <span class="mbb-lbl">Oggi</span>
+  </button>
+  <button onclick="document.getElementById('btn-menu').click()">
+    <span class="mbb-icon">☰</span>
+    <span class="mbb-lbl">Menu</span>
+  </button>
+</nav>
 
 <!-- ═══════════════════════════ MODAL APPUNTAMENTO ════════════════════════ -->
 <div id="modal-overlay" class="modal-overlay hidden">
