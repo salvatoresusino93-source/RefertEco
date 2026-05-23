@@ -278,33 +278,47 @@ button { font-family:inherit; }
 /* ─── RESPONSIVE ──────────────────────────────────────────────────────── */
 @media (max-width:768px) {
   /* Header semplificato */
-  .hdr-nav   { display:none; }
+  .hdr-nav    { display:none; }
   .hdr-period { display:none; }
   #btn-stampa { display:none; }
   .app-title  { font-size:15px; }
   .user-badge { display:none; }
 
-  /* Sidebar nascosta su mobile — accessibile dal menu */
+  /* Sidebar nascosta — accessibile dal menu */
   .app-sidebar { display:none; }
 
-  /* Calendario: colonna singola, full-width */
-  .cal-wrap { min-width:0; width:100%; }
+  /* app-body non deve tagliare lo scroll orizzontale */
+  .app-body { overflow:visible; padding-bottom:calc(56px + env(safe-area-inset-bottom,0px)); }
+  .app-main { overflow:auto; -webkit-overflow-scrolling:touch; }
 
-  /* Padding per la bottom bar */
-  .app-body { padding-bottom:calc(56px + env(safe-area-inset-bottom,0px)); }
+  /* Calendario settimanale scrollabile: colonne fisse 68px, tempo 44px */
+  .cal-wrap   { width:calc(44px + 7 * 68px); min-width:0; } /* 520px */
+  .cal-header { grid-template-columns:44px repeat(7,68px); }
+  .cal-body   { grid-template-columns:44px repeat(7,68px); }
 
-  /* Dropdown menu posizionato correttamente su mobile */
+  /* Colonna ore sticky a sinistra */
+  .cal-time-col { position:sticky; left:0; z-index:3; background:var(--surface); }
+  .cal-th-time  { position:sticky; left:0; z-index:7; background:var(--surface); }
+
+  /* Intestazioni giorni più compatte */
+  .cal-th-day     { padding:6px 2px; }
+  .cal-th-dayname { font-size:9px; }
+  .cal-th-daynum  { font-size:16px; width:28px; height:28px; margin-top:1px; }
+
+  /* Etichette ore più compatte */
+  .cal-lbl { font-size:9px; right:3px; }
+
+  /* Appuntamenti: nome visibile, esame nascosto per spazio */
+  .cal-app-nome  { font-size:11px; }
+  .cal-app-time  { font-size:10px; }
+  .cal-app-esame { display:none; }
+
+  /* Dropdown menu non tagliato */
   .menu-dropdown { left:0; right:auto; min-width:220px; }
 
-  /* Appuntamenti più leggibili su mobile */
-  .cal-app { font-size:12px; }
-  .cal-app-nome { font-size:12px; font-weight:700; }
-
-  /* Modal full-screen su mobile */
+  /* Modal sale dal basso, full-width */
   .modal-overlay { padding:0; align-items:flex-end; }
-  .modal { border-radius:16px 16px 0 0; max-height:92vh; width:100%; max-width:100%; }
-  .modal-body { overflow-y:auto; }
-
-  /* Archivio modal full-screen */
-  .arch-modal { border-radius:16px 16px 0 0; max-height:92vh; width:100%; max-width:100%; }
+  .modal         { border-radius:16px 16px 0 0; max-height:92vh; width:100%; max-width:100%; }
+  .modal-body    { overflow-y:auto; }
+  .arch-modal    { border-radius:16px 16px 0 0; max-height:92vh; width:100%; max-width:100%; }
 }
