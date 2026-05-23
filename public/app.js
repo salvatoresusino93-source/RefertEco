@@ -1985,26 +1985,40 @@ async function caricaPazienteDaAgenda(appuntamentoId) {
       document.getElementById('f-nascita').value = p.data_nascita.slice(0, 10);
     }
 
-    // Tipo esame: cerca nel select il valore più simile
+    // Tipo esame: corrispondenza esatta (i nomi sono sincronizzati tra Agenda e RefertEco)
     if (app.tipi_prestazione?.nome) {
-      const esame  = app.tipi_prestazione.nome;
+      const esame  = app.tipi_prestazione.nome.trim();
       const sel    = document.getElementById('f-tipo-sel');
       const custom = document.getElementById('f-tipo-custom');
-      // Cerca corrispondenza esatta o parziale nel select
+
+      // 1. Corrispondenza esatta
       let trovato = false;
       for (const opt of sel.options) {
-        if (opt.value && (opt.value === esame || esame.toLowerCase().includes(opt.value.toLowerCase()))) {
-          sel.value = opt.value;
+        if (opt.value === esame) {
+          sel.value = esame;
           trovato = true;
           break;
         }
       }
-      if (!trovato && custom) {
-        sel.value = '';
-        custom.value = esame;
-      } else if (!trovato) {
-        sel.value = '';
+
+      // 2. Fallback: corrispondenza case-insensitive
+      if (!trovato) {
+        const esameLower = esame.toLowerCase();
+        for (const opt of sel.options) {
+          if (opt.value && opt.value.toLowerCase() === esameLower) {
+            sel.value = opt.value;
+            trovato = true;
+            break;
+          }
+        }
       }
+
+      // 3. Nessuna corrispondenza → campo personalizzato
+      if (!trovato) {
+        sel.value = '__custom__';
+        if (custom) custom.value = esame;
+      }
+
       if (typeof onTipoSelChange === 'function') onTipoSelChange();
     }
 

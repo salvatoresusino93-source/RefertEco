@@ -30,7 +30,13 @@ let _searchTimer  = null;
 const toISO    = d => d.toISOString();
 const toDate   = s => toDateStr(new Date(s));
 const addDays  = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-function toDateStr(d) { return d.toISOString().slice(0,10); }
+function toDateStr(d) {
+  // Usa la data LOCALE (non UTC) per evitare sfasamenti di fuso orario
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const g = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${g}`;
+}
 function getMon(d) {
   const x = new Date(d); x.setHours(0,0,0,0);
   const day = x.getDay(); x.setDate(x.getDate() - (day === 0 ? 6 : day - 1));
