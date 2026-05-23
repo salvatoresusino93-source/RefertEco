@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dist 2/
+dist 3/
+.DS_Store
+referteco.db
+*.log
+.env

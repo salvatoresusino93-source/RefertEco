@@ -1,0 +1,59 @@
+{
+  "referti": [
+    {
+      "id": "1778936732419",
+      "cognome": "Verdi",
+      "nome": "Giuseppe",
+      "nascita": null,
+      "tipo": "Ecografia tiroide",
+      "data": "2026-05-16",
+      "referto": "Tiroide nella norma.",
+      "creato": "2026-05-16T10:00:00Z"
+    }
+  ],
+  "predefiniti": [
+    {
+      "id": 1,
+      "titolo": "Esame negativo (generico)",
+      "testo": "L'esame ecografico non evidenzia alterazioni di rilievo a carico delle strutture esaminate.",
+      "ordine": 0
+    },
+    {
+      "id": 2,
+      "titolo": "Non versamento libero",
+      "testo": "Non si evidenzia versamento libero in cavità.",
+      "ordine": 1
+    },
+    {
+      "id": 3,
+      "titolo": "Linfonodi reattivi",
+      "testo": "In sede si documentano alcune formazioni linfonodali di aspetto reattivo, con morfologia conservata e ilo iperecogeno riconoscibile, di dimensioni massime ___ mm.",
+      "ordine": 2
+    },
+    {
+      "id": 4,
+      "titolo": "Cisti semplice (generica)",
+      "testo": "Si documenta formazione anecogena a margini netti di ___ mm, a contenuto omogeneo, priva di setti interni e componente solida, di tipo cistico semplice.",
+      "ordine": 3
+    },
+    {
+      "id": 5,
+      "titolo": "Formazione solida (generica)",
+      "testo": "Si documenta formazione ___ (ipo/iso/iperecogena), a margini ___, di ___ × ___ mm, in sede ___. Al color Doppler si documenta/non si documenta vascolarizzazione interna. Si consiglia correlazione clinica e approfondimento diagnostico.",
+      "ordine": 4
+    },
+    {
+      "id": 6,
+      "titolo": "Esame limitato da gas",
+      "testo": "L'esame risulta parzialmente limitato dalla presenza di abbondante meteorismo intestinale.",
+      "ordine": 5
+    },
+    {
+      "id": 7,
+      "titolo": "Controllo ecografico consigliato",
+      "testo": "Si consiglia controllo ecografico a distanza di ___ mesi.",
+      "ordine": 6
+    }
+  ],
+  "nextPredefId": 8
+}
