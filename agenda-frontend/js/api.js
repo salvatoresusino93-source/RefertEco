@@ -17,7 +17,12 @@ const api = {
     const res  = await fetch(API_BASE + path, opts);
     if (res.status === 204) return null;
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `Errore ${res.status}`);
+    if (!res.ok) {
+      const err = new Error(data.error || `Errore ${res.status}`);
+      err.status   = res.status;
+      err.paziente = data.paziente || null;   // presente nel 409 duplicato
+      throw err;
+    }
     return data;
   },
 

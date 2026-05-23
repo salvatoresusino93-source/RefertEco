@@ -295,6 +295,7 @@ function bindEvents() {
   $('app-tipo').onchange = () => {
     const p = _prestazioni.find(x => x.id===$('app-tipo').value);
     if (p) $('app-durata').value = p.durata_minuti;
+    checkPreparazione();
   };
   $('paziente-search').addEventListener('input', onPazSearch);
   $('paziente-search').addEventListener('blur', () =>
@@ -328,6 +329,7 @@ function openModal(opts={}) {
   $('app-tipo').value   = '';
   $('app-durata').value = 20;
   $('app-note').value   = '';
+  $('prep-reminder').classList.add('hidden');
   $('field-stato').style.display = 'none';
   $('btn-annulla-app').classList.add('hidden');
   $('nuovo-paz-form').classList.add('hidden');
@@ -355,6 +357,7 @@ async function loadAppInModal(id) {
       showPazSelezionato(`${a.pazienti.cognome} ${a.pazienti.nome}`);
     }
     $('app-tipo').value = a.tipo_id || '';
+    checkPreparazione();
     const t = new Date(a.data_ora_inizio);
     $('app-data').value = toDateStr(t);
     $('app-ora-inizio').value = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
@@ -494,11 +497,70 @@ async function salvaNuovoPaz() {
     selezionaPaz(p.id, `${p.cognome} ${p.nome}`);
     $('nuovo-paz-form').classList.add('hidden');
     $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
-    // Reset campi
     ['np-cognome','np-nome','np-nascita','np-cf','np-telefono'].forEach(id => $(id).value='');
     $('np-sesso').value = '';
   } catch(ex) {
-    alert('Errore: '+ex.message);
+    if (ex.status === 409 && ex.paziente) {
+      const p = ex.paziente;
+      const nascita = p.data_nascita
+        ? new Date(p.data_nascita + 'T12:00:00').toLocaleDateString('it-IT')
+        : 'non inserita';
+
+      const isTelefono = ex.motivo === 'telefono';
+
+      const intestazione = isTelefono
+        ? '⚠️ Attenzione — stesso numero di telefono\n\nEsiste già un paziente con questo numero:'
+        : '⚠️ Attenzione — paziente già presente\n\nEsiste già un paziente con stesso nome e data di nascita:';
+
+      const footer = isTelefono
+        ? '\n\nPotrebbe essere un familiare o parente. Cosa vuoi fare?'
+        : '\n\nCosa vuoi fare?';
+
+      const msg = `${intestazione}\n\n` +
+        `Nome: ${p.cognome} ${p.nome}\n` +
+        `Nato/a il: ${nascita}\n` +
+        `Tel: ${p.telefono || '—'}` +
+        footer;
+
+      // confirm: OK = usa esistente, Annulla = crea comunque (solo per telefono)
+      const scelta = isTelefono
+        ? confirm(msg + '\n\n[OK] Usa paziente esistente\n[Annulla] Crea nuovo paziente')
+        : confirm(msg + '\n\n[OK] Usa paziente esistente\n[Annulla] Annulla operazione');
+
+      if (scelta) {
+        // Usa il paziente esistente
+        selezionaPaz(p.id, `${p.cognome} ${p.nome}`);
+        $('nuovo-paz-form').classList.add('hidden');
+        $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
+        ['np-cognome','np-nome','np-nascita','np-cf','np-telefono'].forEach(id => $(id).value='');
+        $('np-sesso').value = '';
+      } else if (isTelefono) {
+        // Solo per duplicato telefono: permette di creare comunque
+        const btn = $('btn-salva-nuovo-paz');
+        btn.textContent = 'Salvataggio…'; btn.disabled = true;
+        try {
+          const p2 = await api.creaPaziente({
+            cognome, nome,
+            data_nascita:   $('np-nascita').value || null,
+            sesso:          $('np-sesso').value   || null,
+            codice_fiscale: $('np-cf').value.trim() || null,
+            telefono,
+            forza_creazione: true
+          });
+          selezionaPaz(p2.id, `${p2.cognome} ${p2.nome}`);
+          $('nuovo-paz-form').classList.add('hidden');
+          $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
+          ['np-cognome','np-nome','np-nascita','np-cf','np-telefono'].forEach(id => $(id).value='');
+          $('np-sesso').value = '';
+        } catch(ex2) {
+          alert('Errore: ' + ex2.message);
+        } finally {
+          btn.textContent = '✓ Salva paziente'; btn.disabled = false;
+        }
+      }
+    } else {
+      alert('Errore: ' + ex.message);
+    }
   } finally {
     btn.textContent = '✓ Salva paziente'; btn.disabled = false;
   }
@@ -619,6 +681,40 @@ function selezionaPazienteDaArchivio(id, nomeCompleto) {
   $('paz-nome-display').textContent = nomeCompleto;
   $('paz-selezionato').classList.remove('hidden');
   $('btn-nuovo-paz-toggle').style.display = 'none';
+}
+
+// ─── Reminder preparazione ────────────────────────────────────────────────
+// Parole chiave che richiedono digiuno + vescica piena
+const PREP_KEYWORDS = [
+  'addome', 'addominale',
+  'epatica', 'epato', 'fegato',
+  'colecisti', 'colecistopatia', 'biliare',
+  'pancreas', 'pancreatica', 'pancreatico',
+  'splenica', 'milza',
+  'renale', 'rene', 'reni',
+  'urinario', 'urinaria', 'urinari',
+  'vescic',                     // vescica, vescico-prostatico…
+  'surrenal',                   // surrene, surrenalico…
+  'aorta',
+  'portale', 'portali',
+  'mesenter',                   // vasi mesenterici
+  'anse intestinali',
+  'retroperiton',
+  'ceus',
+];
+
+function checkPreparazione() {
+  const selEl = $('app-tipo');
+  const selId  = selEl.value;
+  const reminder = $('prep-reminder');
+  if (!selId) { reminder.classList.add('hidden'); return; }
+
+  // Ottieni il nome dell'esame dall'option selezionata o da _prestazioni
+  const prest = _prestazioni.find(x => String(x.id) === String(selId));
+  const nome  = (prest ? prest.nome : selEl.options[selEl.selectedIndex]?.text || '').toLowerCase();
+
+  const richiede = PREP_KEYWORDS.some(k => nome.includes(k));
+  reminder.classList.toggle('hidden', !richiede);
 }
 
 // ─── Shortcut ─────────────────────────────────────────────────────────────

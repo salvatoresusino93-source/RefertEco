@@ -199,6 +199,22 @@ button { font-family:inherit; }
 .nuovo-paz-form { background:var(--bg); border:1px solid var(--border);
   border-radius:var(--radius); padding:14px; display:flex; flex-direction:column; gap:10px; }
 
+/* ─── PREP REMINDER ──────────────────────────────────────────────────── */
+.prep-reminder {
+  display:flex; align-items:flex-start; gap:10px;
+  background:#fffbeb; border:1px solid #f59e0b;
+  border-left:4px solid #f59e0b;
+  border-radius:var(--radius); padding:12px 14px;
+  animation:prepIn .2s ease;
+}
+@keyframes prepIn {
+  from { opacity:0; transform:translateY(-6px); }
+  to   { opacity:1; transform:none; }
+}
+.prep-icon { font-size:20px; line-height:1.2; flex-shrink:0; }
+.prep-text { font-size:13px; color:#78350f; line-height:1.5; }
+.prep-text strong { color:#92400e; }
+
 /* Stato buttons */
 .stato-btns { display:flex; gap:6px; flex-wrap:wrap; }
 .stato-btn { padding:6px 14px; border-radius:20px; border:2px solid transparent;

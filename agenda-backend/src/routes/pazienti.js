@@ -5,6 +5,12 @@ const { requireAuth } = require('../middleware/auth');
 const router = express.Router();
 router.use(requireAuth);
 
+// Prima lettera maiuscola di ogni parola, resto minuscolo (es. "DE LUCA" → "De Luca")
+function capitalizeWords(s) {
+  if (!s) return s;
+  return s.trim().toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+}
+
 // ─── GET /api/pazienti?q=testo&limit=50&offset=0 ─────────────────────────
 router.get('/', async (req, res) => {
   const { q, limit = 50, offset = 0 } = req.query;
@@ -39,11 +45,56 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Il numero di telefono è obbligatorio' });
   }
 
+  // ── Controllo duplicati (saltato se forza_creazione=true) ───────────────
+  const nomePulito    = capitalizeWords(nome);
+  const cognomePulito = capitalizeWords(cognome);
+  const telPulito     = telefono?.trim() || null;
+
+  if (!req.body.forza_creazione) {
+    // 1. Stesso nome + data di nascita (quasi certamente la stessa persona)
+    if (data_nascita) {
+      const { data: dupNome } = await supabase
+        .from('pazienti')
+        .select('id, cognome, nome, data_nascita, telefono')
+        .ilike('cognome', cognomePulito)
+        .ilike('nome',    nomePulito)
+        .eq('data_nascita', data_nascita)
+        .limit(1)
+        .maybeSingle();
+
+      if (dupNome) {
+        return res.status(409).json({
+          error:   'Paziente già presente in archivio (stesso nome e data di nascita)',
+          motivo:  'nome_nascita',
+          paziente: dupNome
+        });
+      }
+    }
+
+    // 2. Stesso telefono (possibile stessa persona, ma non certo)
+    if (telPulito) {
+      const { data: dupTel } = await supabase
+        .from('pazienti')
+        .select('id, cognome, nome, data_nascita, telefono')
+        .eq('telefono', telPulito)
+        .limit(1)
+        .maybeSingle();
+
+      if (dupTel) {
+        return res.status(409).json({
+          error:   'Esiste già un paziente con questo numero di telefono',
+          motivo:  'telefono',
+          paziente: dupTel
+        });
+      }
+    }
+  }
+
   const { data, error } = await supabase
     .from('pazienti')
     .insert({
-      cognome:        cognome.trim().toUpperCase(),
-      nome:           nome.trim(),
+      cognome:        cognomePulito,
+      nome:           nomePulito,
       data_nascita:   data_nascita || null,
       sesso:          sesso || null,
       codice_fiscale: codice_fiscale?.toUpperCase().trim() || null,
@@ -79,8 +130,8 @@ router.put('/:id', async (req, res) => {
   const { cognome, nome, data_nascita, sesso, codice_fiscale, telefono, email, note } = req.body;
 
   const updates = {};
-  if (cognome   !== undefined) updates.cognome        = cognome.trim().toUpperCase();
-  if (nome      !== undefined) updates.nome           = nome.trim();
+  if (cognome   !== undefined) updates.cognome        = capitalizeWords(cognome);
+  if (nome      !== undefined) updates.nome           = capitalizeWords(nome);
   if (data_nascita !== undefined) updates.data_nascita = data_nascita || null;
   if (sesso     !== undefined) updates.sesso          = sesso || null;
   if (codice_fiscale !== undefined) updates.codice_fiscale = codice_fiscale?.toUpperCase().trim() || null;

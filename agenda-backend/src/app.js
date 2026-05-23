@@ -6,6 +6,7 @@ const cors    = require('cors');
 const path    = require('path');
 
 const { initSocket } = require('./socket');
+const { avviaReminder, inviaPromemoriDomani } = require('./services/reminder');
 const authRoutes         = require('./routes/auth');
 const pazientiRoutes     = require('./routes/pazienti');
 const appuntamentiRoutes = require('./routes/appuntamenti');
@@ -38,6 +39,16 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, service: 'agenda-backend', ts: new Date().toISOString() });
 });
 
+// ─── Test invio SMS manuale (solo in sviluppo o da admin) ────────────────
+app.post('/api/reminder/test', async (req, res) => {
+  try {
+    const result = await inviaPromemoriDomani();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Fallback SPA ────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, 'index.html'));
@@ -51,6 +62,9 @@ app.use((err, req, res, next) => {
 
 // ─── Socket.io ────────────────────────────────────────────────────────────
 initSocket(server);
+
+// ─── SMS Reminder cron job ────────────────────────────────────────────────
+avviaReminder();
 
 // ─── Avvio ────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
