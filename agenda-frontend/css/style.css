@@ -242,11 +242,69 @@ button { font-family:inherit; }
 .arch-empty { padding:32px; text-align:center; color:var(--muted); font-style:italic; }
 .arch-hint { font-size:12px; color:var(--muted); margin-top:10px; text-align:center; }
 
+/* ─── MOBILE DAY NAV ──────────────────────────────────────────────────── */
+.mobile-day-nav {
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--surface); border-bottom:1px solid var(--border);
+  padding:0 4px; height:48px; flex-shrink:0; gap:4px;
+}
+#mobile-day-label {
+  flex:1; text-align:center; font-size:15px; font-weight:700; color:var(--text);
+}
+.mobile-nav-btn {
+  background:none; border:none; font-size:30px; color:var(--pri);
+  cursor:pointer; padding:4px 12px; line-height:1; border-radius:var(--radius);
+  min-width:48px; min-height:48px; display:flex; align-items:center; justify-content:center;
+}
+.mobile-nav-btn:active { background:var(--pri-bg); }
+
+/* ─── MOBILE BOTTOM BAR ───────────────────────────────────────────────── */
+.mobile-bottom-bar {
+  display:flex; align-items:stretch;
+  position:fixed; bottom:0; left:0; right:0;
+  background:var(--surface); border-top:1px solid var(--border);
+  z-index:50; height:calc(56px + env(safe-area-inset-bottom,0px));
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+.mobile-bottom-bar button {
+  flex:1; background:none; border:none; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:3px; color:var(--pri); padding:4px 0;
+}
+.mobile-bottom-bar button:active { background:var(--pri-bg); }
+.mbb-icon { font-size:20px; line-height:1; }
+.mbb-lbl  { font-size:11px; font-weight:600; letter-spacing:.02em; }
+
 /* ─── RESPONSIVE ──────────────────────────────────────────────────────── */
 @media (max-width:768px) {
-  .app-sidebar { display:none; position:fixed; top:var(--header-h); left:0; bottom:0;
-    z-index:20; box-shadow:var(--shadow-lg); }
-  .app-sidebar.open { display:flex; }
+  /* Header semplificato */
+  .hdr-nav   { display:none; }
   .hdr-period { display:none; }
   #btn-stampa { display:none; }
+  .app-title  { font-size:15px; }
+  .user-badge { display:none; }
+
+  /* Sidebar nascosta su mobile — accessibile dal menu */
+  .app-sidebar { display:none; }
+
+  /* Calendario: colonna singola, full-width */
+  .cal-wrap { min-width:0; width:100%; }
+
+  /* Padding per la bottom bar */
+  .app-body { padding-bottom:calc(56px + env(safe-area-inset-bottom,0px)); }
+
+  /* Dropdown menu posizionato correttamente su mobile */
+  .menu-dropdown { left:0; right:auto; min-width:220px; }
+
+  /* Appuntamenti più leggibili su mobile */
+  .cal-app { font-size:12px; }
+  .cal-app-nome { font-size:12px; font-weight:700; }
+
+  /* Modal full-screen su mobile */
+  .modal-overlay { padding:0; align-items:flex-end; }
+  .modal { border-radius:16px 16px 0 0; max-height:92vh; width:100%; max-width:100%; }
+  .modal-body { overflow-y:auto; }
+
+  /* Archivio modal full-screen */
+  .arch-modal { border-radius:16px 16px 0 0; max-height:92vh; width:100%; max-width:100%; }
 }

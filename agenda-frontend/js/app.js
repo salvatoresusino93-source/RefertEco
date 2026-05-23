@@ -20,11 +20,14 @@ const GIORNI = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
 // ─── Stato ────────────────────────────────────────────────────────────────
 let _user         = null;
 let _viewStart    = null;   // lunedì della settimana visualizzata
+let _mobileDay    = null;   // giorno corrente in vista mobile
 let _appointments = [];
 let _prestazioni  = [];
 let _editId       = null;   // id appuntamento in modifica
 let _pazienteId   = null;   // paziente selezionato nel modal
 let _searchTimer  = null;
+
+function isMobile() { return window.innerWidth <= 768; }
 
 // ─── Utils ────────────────────────────────────────────────────────────────
 const toISO    = d => d.toISOString();
@@ -92,10 +95,20 @@ async function onLoginOk(user) {
   try { _prestazioni = await api.prestazioni(); } catch { _prestazioni = []; }
   fillPrestazioni();
   _viewStart = getMon(new Date());
+  _mobileDay = new Date();
+  applyMobileLayout();
   await refreshWeek();
   await refreshSidebar();
   initSocket();
   bindEvents();
+  initSwipe();
+  window.addEventListener('resize', () => { applyMobileLayout(); renderCalendar(); renderPeriod(); });
+}
+
+function applyMobileLayout() {
+  const mob = isMobile();
+  $('mobile-day-nav').classList.toggle('hidden', !mob);
+  $('mobile-bottom-bar').classList.toggle('hidden', !mob);
 }
 
 // ─── Socket.io ────────────────────────────────────────────────────────────
@@ -112,9 +125,10 @@ function initSocket() {
 // ─── Calendar load & render ───────────────────────────────────────────────
 async function refreshWeek() {
   try {
+    const base = isMobile() ? getMon(_mobileDay || new Date()) : _viewStart;
     _appointments = await api.appuntamenti(
-      toISO(_viewStart),
-      toISO(addDays(_viewStart, 7))
+      toISO(base),
+      toISO(addDays(base, 7))
     );
   } catch { _appointments = []; }
   renderCalendar();
@@ -122,11 +136,22 @@ async function refreshWeek() {
 }
 
 function renderPeriod() {
-  $('header-period').textContent =
-    `${fmtDateShort(_viewStart)} — ${fmtDateShort(addDays(_viewStart,6))}`;
+  if (isMobile()) {
+    if (!_mobileDay) return;
+    const d = _mobileDay;
+    const lbl = d.toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long' });
+    const el = $('mobile-day-label');
+    if (el) el.textContent = lbl.charAt(0).toUpperCase() + lbl.slice(1);
+    const todayCls = isToday(d) ? 'color:var(--pri)' : '';
+    if (el) el.style.cssText = todayCls;
+  } else {
+    $('header-period').textContent =
+      `${fmtDateShort(_viewStart)} — ${fmtDateShort(addDays(_viewStart,6))}`;
+  }
 }
 
 function renderCalendar() {
+  if (isMobile()) { renderMobileCalendar(); return; }
   const totalMin = (CAL_END - CAL_START) * 60;
   const totalPx  = totalMin * PX_PER_MIN;
 
@@ -203,6 +228,128 @@ function renderCalendar() {
     <div class="cal-body">${timeLbls}${days}</div>`;
 }
 
+// ─── Mobile calendar (vista giorno singolo) ───────────────────────────────
+function renderMobileCalendar() {
+  if (!_mobileDay) _mobileDay = new Date();
+  const d       = _mobileDay;
+  const dateStr = toDateStr(d);
+  const totalMin = (CAL_END - CAL_START) * 60;
+  const totalPx  = totalMin * PX_PER_MIN;
+
+  // Etichette ore
+  let timeLbls = `<div class="cal-time-col" style="height:${totalPx}px">`;
+  for (let m = 0; m <= totalMin; m += 60) {
+    const h = CAL_START + m/60;
+    timeLbls += `<div class="cal-lbl" style="top:${m*PX_PER_MIN}px">${String(h).padStart(2,'0')}:00</div>`;
+  }
+  timeLbls += `</div>`;
+
+  // Linee orizzontali
+  let lines = '';
+  for (let m = 0; m <= totalMin; m += 20)
+    lines += `<div class="cal-hline${m%60===0?' major':''}" style="top:${m*PX_PER_MIN}px"></div>`;
+
+  // Slot cliccabili
+  let slots = '';
+  for (let m = 0; m < totalMin; m += SLOT_MIN) {
+    const absMin = CAL_START*60 + m;
+    const hh = String(Math.floor(absMin/60)).padStart(2,'0');
+    const mm = String(absMin%60).padStart(2,'0');
+    slots += `<div class="cal-slot" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
+      onclick="onSlotClick('${dateStr}','${hh}:${mm}')"></div>`;
+  }
+
+  // Appuntamenti del giorno
+  let appHtml = '';
+  for (const a of _appointments.filter(x => x.data_ora_inizio.startsWith(dateStr))) {
+    const startM = minFromMidnight(a.data_ora_inizio);
+    const endM   = minFromMidnight(a.data_ora_fine);
+    const top    = (startM - CAL_START*60) * PX_PER_MIN;
+    const height = Math.max((endM - startM) * PX_PER_MIN, 28);
+    if (top < 0 || top >= totalPx) continue;
+    const stato   = a.stato || 'prenotato';
+    const pazNome = a.pazienti ? `${esc(a.pazienti.cognome)} ${esc(a.pazienti.nome)}` : '—';
+    const esame   = esc(a.tipi_prestazione?.nome || '');
+    appHtml += `<div class="cal-app stato-${stato}"
+      style="top:${top}px;height:${height}px;left:4px;right:4px"
+      onclick="onAppClick('${a.id}',event)">
+      <div class="cal-app-time">${fmtTime(a.data_ora_inizio)}</div>
+      <div class="cal-app-nome">${pazNome}</div>
+      ${height>=50?`<div class="cal-app-esame">${esame}</div>`:''}
+    </div>`;
+  }
+
+  const todayCls = isToday(d) ? ' today' : '';
+  $('cal-wrap').innerHTML = `
+    <div class="cal-body" style="display:flex">
+      ${timeLbls}
+      <div class="cal-day${todayCls}" style="flex:1;height:${totalPx}px;position:relative">
+        ${lines}${slots}${appHtml}
+      </div>
+    </div>`;
+}
+
+// ─── Navigazione giorno mobile ────────────────────────────────────────────
+async function navMobileDay(n) {
+  if (!_mobileDay) _mobileDay = new Date();
+  const newDay  = addDays(_mobileDay, n);
+  _mobileDay    = newDay;
+  // Ricarica dati se il giorno è fuori dalla settimana già caricata
+  const weekStart = getMon(_mobileDay);
+  const weekEnd   = addDays(weekStart, 7);
+  const dateStr   = toDateStr(_mobileDay);
+  const inRange   = toDateStr(weekStart) <= dateStr && dateStr < toDateStr(weekEnd);
+  if (!inRange || !_appointments.length) {
+    await refreshWeek();
+  } else {
+    renderCalendar();
+    renderPeriod();
+  }
+}
+
+function goToToday() {
+  if (isMobile()) {
+    _mobileDay = new Date();
+    refreshWeek();
+  } else {
+    _viewStart = getMon(new Date());
+    refreshWeek();
+  }
+}
+
+// ─── Swipe gesture (mobile) + tasto freccia (desktop) ────────────────────
+function initSwipe() {
+  let x0 = 0, y0 = 0, t0 = 0;
+  const el = document.querySelector('.app-main') || document.body;
+
+  el.addEventListener('touchstart', e => {
+    x0 = e.touches[0].clientX;
+    y0 = e.touches[0].clientY;
+    t0 = Date.now();
+  }, { passive: true });
+
+  el.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - x0;
+    const dy = e.changedTouches[0].clientY - y0;
+    const dt = Date.now() - t0;
+    if (dt < 500 && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      if (isMobile()) {
+        if (dx < 0) navMobileDay(1); else navMobileDay(-1);
+      } else {
+        if (dx < 0) { _viewStart = addDays(_viewStart,  7); refreshWeek(); }
+        else        { _viewStart = addDays(_viewStart, -7); refreshWeek(); }
+      }
+    }
+  }, { passive: true });
+
+  // Frecce tastiera (desktop)
+  document.addEventListener('keydown', e => {
+    if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); isMobile() ? navMobileDay(1)  : (() => { _viewStart=addDays(_viewStart, 7); refreshWeek(); })(); }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); isMobile() ? navMobileDay(-1) : (() => { _viewStart=addDays(_viewStart,-7); refreshWeek(); })(); }
+  });
+}
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────
 async function refreshSidebar() {
   try {
@@ -225,7 +372,7 @@ async function refreshSidebar() {
 function bindEvents() {
   $('btn-prev').onclick  = () => { _viewStart = addDays(_viewStart,-7); refreshWeek(); };
   $('btn-next').onclick  = () => { _viewStart = addDays(_viewStart, 7); refreshWeek(); };
-  $('btn-oggi').onclick  = () => { _viewStart = getMon(new Date()); refreshWeek(); };
+  $('btn-oggi').onclick  = () => goToToday();
   $('btn-nuovo').onclick = () => openModal();
   $('btn-stampa').onclick = stampaDiario;
   $('btn-menu').onclick = e => { e.stopPropagation(); $('menu-dropdown').classList.toggle('hidden'); };

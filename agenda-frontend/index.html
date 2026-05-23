@@ -38,7 +38,7 @@
 <div id="app" class="app hidden">
 
   <!-- Header -->
-  <header class="app-header">
+  <header class="app-header" id="app-header">
     <div class="hdr-left">
       <div class="menu-wrap" id="menu-wrap">
         <button class="btn-icon" id="btn-menu" title="Menu">☰</button>
@@ -64,6 +64,13 @@
     </div>
   </header>
 
+  <!-- Navigazione giorno (solo mobile) -->
+  <div class="mobile-day-nav hidden" id="mobile-day-nav">
+    <button class="mobile-nav-btn" onclick="navMobileDay(-1)">&#8249;</button>
+    <span id="mobile-day-label">Oggi</span>
+    <button class="mobile-nav-btn" onclick="navMobileDay(1)">&#8250;</button>
+  </div>
+
   <!-- Body -->
   <div class="app-body">
 
@@ -86,6 +93,23 @@
     </main>
 
   </div>
+
+  <!-- Bottom bar (solo mobile) -->
+  <nav class="mobile-bottom-bar hidden" id="mobile-bottom-bar">
+    <button onclick="openModal({})">
+      <span class="mbb-icon">➕</span>
+      <span class="mbb-lbl">Nuovo</span>
+    </button>
+    <button onclick="goToToday()">
+      <span class="mbb-icon">📅</span>
+      <span class="mbb-lbl">Oggi</span>
+    </button>
+    <button onclick="$('btn-menu').click()">
+      <span class="mbb-icon">☰</span>
+      <span class="mbb-lbl">Menu</span>
+    </button>
+  </nav>
+
 </div>
 
 <!-- ═══════════════════════════ MODAL APPUNTAMENTO ════════════════════════ -->
