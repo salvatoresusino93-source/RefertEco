@@ -268,6 +268,42 @@ app.post('/api/ai/correggi', async (req, res) => {
   }
 });
 
+// ── INTEGRAZIONE AGENDA ──────────────────────────────────────
+// Token di servizio a lunga durata per comunicazione RefertEco → Agenda
+const AGENDA_API_URL = 'https://referteco-production.up.railway.app/api';
+const AGENDA_TOKEN   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRlMzliY2YxLTRjZTctNDdiNy1iMzk2LTgyNmU4MTE1NTI0OSIsInVzZXJuYW1lIjoibWVkaWNvIiwicnVvbG8iOiJtZWRpY28iLCJpYXQiOjE3Nzk1NDMzMDAsImV4cCI6MjA5NTExOTMwMH0.siqAwgLKT7pN9zaGNnP6kcne-3lhEaQBIY30Z0X8ji0';
+
+// Pazienti con stato "arrivato" oggi
+app.get('/api/agenda/pazienti-attesa', async (req, res) => {
+  try {
+    const r = await fetch(`${AGENDA_API_URL}/appuntamenti/oggi`, {
+      headers: { 'Authorization': `Bearer ${AGENDA_TOKEN}` }
+    });
+    if (!r.ok) return res.json([]);
+    const lista = await r.json();
+    res.json(lista.filter(a => a.stato === 'arrivato'));
+  } catch (e) {
+    res.json([]);
+  }
+});
+
+// Segna un appuntamento come "refertato"
+app.post('/api/agenda/marca-refertato/:id', async (req, res) => {
+  try {
+    await fetch(`${AGENDA_API_URL}/appuntamenti/${req.params.id}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${AGENDA_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ stato: 'refertato' })
+    });
+    res.json({ ok: true });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // ── QUIT ─────────────────────────────────────────────────────
 
 app.post('/api/quit', (req, res) => {

@@ -226,6 +226,8 @@ async function salvaReferto() {
   _viewerFiles = []; _viewerIndex = 0; _tempRefertoId = null;
   toast('Referto salvato', 'ok');
   await loadReferti();
+  // Marca l'appuntamento come "refertato" nell'Agenda (se proveniente da Agenda)
+  await marcaRefertato();
   resetForm();
 }
 
@@ -1895,6 +1897,7 @@ async function init() {
   document.getElementById('f-data').value = oggi();
   await loadReferti();
   await loadPredef();
+  loadPazientiAttesa(); // Carica pazienti in attesa dall'Agenda (non bloccante)
   loadTema();
   initResizer();
   initMeasureTool();
@@ -1918,3 +1921,135 @@ async function init() {
 }
 
 init();
+
+// ══════════════════════════════════════════════════════════════
+// INTEGRAZIONE AGENDA — Pazienti in attesa
+// ══════════════════════════════════════════════════════════════
+
+let _attesaAperta = true;
+let _appuntamentoAttivo = null; // id appuntamento corrente
+
+// Carica e mostra i pazienti con stato "arrivato" oggi
+async function loadPazientiAttesa() {
+  try {
+    const lista = await fetch('/api/agenda/pazienti-attesa').then(r => r.json());
+    renderPazientiAttesa(lista);
+  } catch (e) {
+    // Agenda non raggiungibile — pannello nascosto silenziosamente
+    document.getElementById('attesa-panel').style.display = 'none';
+  }
+}
+
+function renderPazientiAttesa(lista) {
+  const panel = document.getElementById('attesa-panel');
+  const listEl = document.getElementById('attesa-list');
+  const countEl = document.getElementById('attesa-count');
+
+  if (!lista.length) {
+    countEl.textContent = '';
+    listEl.innerHTML = '<div class="attesa-empty">Nessun paziente in attesa al momento</div>';
+    return;
+  }
+
+  countEl.textContent = lista.length;
+  listEl.innerHTML = lista.map(a => {
+    const ora   = new Date(a.data_ora_inizio).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+    const nome  = a.pazienti ? `${a.pazienti.cognome} ${a.pazienti.nome}` : '—';
+    const esame = a.tipi_prestazione?.nome || '';
+    return `<div class="attesa-item" onclick="caricaPazienteDaAgenda('${a.id}')">
+      <div class="attesa-ora">${ora}</div>
+      <div class="attesa-info">
+        <div class="attesa-nome">${nome}</div>
+        <div class="attesa-esame">${esame}</div>
+      </div>
+      <button class="attesa-btn" onclick="caricaPazienteDaAgenda('${a.id}');event.stopPropagation()">
+        Avvia referto →
+      </button>
+    </div>`;
+  }).join('');
+}
+
+// Pre-compila il form RefertEco con i dati del paziente dall'Agenda
+async function caricaPazienteDaAgenda(appuntamentoId) {
+  try {
+    const a = await fetch(`/api/agenda/pazienti-attesa`).then(r => r.json());
+    const app = a.find(x => x.id === appuntamentoId);
+    if (!app || !app.pazienti) return;
+
+    const p = app.pazienti;
+
+    // Pre-compila i campi del form
+    document.getElementById('f-cognome').value = p.cognome || '';
+    document.getElementById('f-nome').value    = p.nome    || '';
+    if (p.data_nascita) {
+      document.getElementById('f-nascita').value = p.data_nascita.slice(0, 10);
+    }
+
+    // Tipo esame: cerca nel select il valore più simile
+    if (app.tipi_prestazione?.nome) {
+      const esame  = app.tipi_prestazione.nome;
+      const sel    = document.getElementById('f-tipo-sel');
+      const custom = document.getElementById('f-tipo-custom');
+      // Cerca corrispondenza esatta o parziale nel select
+      let trovato = false;
+      for (const opt of sel.options) {
+        if (opt.value && (opt.value === esame || esame.toLowerCase().includes(opt.value.toLowerCase()))) {
+          sel.value = opt.value;
+          trovato = true;
+          break;
+        }
+      }
+      if (!trovato && custom) {
+        sel.value = '';
+        custom.value = esame;
+      } else if (!trovato) {
+        sel.value = '';
+      }
+      if (typeof onTipoSelChange === 'function') onTipoSelChange();
+    }
+
+    // Data odierna
+    document.getElementById('f-data').value = new Date().toISOString().slice(0,10);
+
+    // Memorizza l'appuntamento attivo per marcarlo "refertato" al salvataggio
+    _appuntamentoAttivo = appuntamentoId;
+
+    // Vai in cima alla pagina e metti il focus sul referto
+    document.getElementById('f-cognome').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => document.getElementById('f-cognome').focus(), 400);
+
+    // Feedback visivo — evidenzia la riga selezionata
+    document.querySelectorAll('.attesa-item').forEach(el => el.style.background = '');
+    const righe = document.querySelectorAll('.attesa-item');
+    righe.forEach(el => {
+      if (el.querySelector('.attesa-btn')?.getAttribute('onclick')?.includes(appuntamentoId)) {
+        el.style.background = '#d4edcc';
+      }
+    });
+  } catch (e) {
+    console.error('Errore caricamento paziente da Agenda:', e);
+  }
+}
+
+// Aggiorna lo stato dell'appuntamento su Agenda dopo salvataggio referto
+async function marcaRefertato() {
+  if (!_appuntamentoAttivo) return;
+  try {
+    await fetch(`/api/agenda/marca-refertato/${_appuntamentoAttivo}`, { method: 'POST' });
+    _appuntamentoAttivo = null;
+    // Aggiorna la lista
+    await loadPazientiAttesa();
+  } catch (e) {}
+}
+
+// Toggle apertura/chiusura pannello
+function toggleAttesa() {
+  _attesaAperta = !_attesaAperta;
+  const list    = document.getElementById('attesa-list');
+  const chevron = document.getElementById('attesa-chevron');
+  list.style.display    = _attesaAperta ? '' : 'none';
+  chevron.classList.toggle('closed', !_attesaAperta);
+}
+
+// Aggiornamento automatico ogni 60 secondi
+setInterval(loadPazientiAttesa, 60000);

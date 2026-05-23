@@ -37,6 +37,18 @@
       <div class="view active" id="view-nuovo">
         <div class="nuovo-layout">
         <div class="nuovo-form">
+
+        <!-- PAZIENTI IN ATTESA (dall'Agenda) -->
+        <div class="attesa-panel" id="attesa-panel">
+          <div class="attesa-hdr" onclick="toggleAttesa()">
+            <span class="attesa-dot" id="attesa-dot">●</span>
+            <span class="attesa-title">Pazienti in attesa</span>
+            <span class="attesa-count" id="attesa-count"></span>
+            <span class="attesa-chevron" id="attesa-chevron">▾</span>
+          </div>
+          <div class="attesa-list" id="attesa-list"></div>
+        </div>
+
         <div class="form-card">
 
           <div class="form-section">
