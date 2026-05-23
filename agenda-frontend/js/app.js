@@ -244,6 +244,18 @@ function bindEvents() {
   $('btn-cambia-paz').onclick = resetPaziente;
 }
 
+// ─── Popola select prestazioni ────────────────────────────────────────────
+function fillPrestazioni() {
+  const sel = $('app-tipo');
+  sel.innerHTML = '<option value="">— seleziona —</option>';
+  for (const p of _prestazioni) {
+    const opt = document.createElement('option');
+    opt.value       = p.id;
+    opt.textContent = `${p.nome} (${p.durata_minuti} min)`;
+    sel.appendChild(opt);
+  }
+}
+
 // ─── Modal ────────────────────────────────────────────────────────────────
 function openModal(opts={}) {
   _editId = opts.id || null;
@@ -292,7 +304,7 @@ async function loadAppInModal(id) {
 function renderStatoBtns(attuale) {
   $('stato-btns').innerHTML = ['prenotato','arrivato','in_corso','refertato'].map(s =>
     `<button class="stato-btn stato-${s}${s===attuale?' active':''}"
-      onclick="clickStato(this,'${s}')">${STATI[s]}</button>`
+      data-stato="${s}" onclick="clickStato(this,'${s}')">${STATI[s]}</button>`
   ).join('');
 }
 
@@ -303,9 +315,7 @@ function clickStato(btn, stato) {
 }
 
 function getStatoAttivo() {
-  const a = document.querySelector('.stato-btn.active');
-  if (!a) return 'prenotato';
-  return a.className.match(/stato-(\w+)/)?.[1] || 'prenotato';
+  return document.querySelector('.stato-btn.active')?.dataset?.stato || 'prenotato';
 }
 
 // ─── Salva appuntamento ───────────────────────────────────────────────────
