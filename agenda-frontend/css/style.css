@@ -298,16 +298,13 @@ button { font-family:inherit; }
   /* Sidebar nascosta — accessibile dal menu */
   .app-sidebar { display:none !important; }
 
-  /* RIMUOVE overflow:hidden da #app per far funzionare position:fixed su iOS Safari */
-  .app { overflow:visible; }
-
-  /* Scroll orizzontale nel corpo */
-  .app-body { overflow:visible; flex:1; }
+  /* .app e .app-body restano overflow:hidden (contenitore 100vh).
+     Il bottom bar e' fuori da #app quindi position:fixed funziona. */
   .app-main {
     flex:1; overflow:auto;
     -webkit-overflow-scrolling:touch;
-    /* Spazio per la bottom bar */
-    padding-bottom:calc(58px + env(safe-area-inset-bottom, 0px));
+    /* Spazio per la bottom bar fissa in fondo */
+    padding-bottom:calc(62px + env(safe-area-inset-bottom, 0px));
   }
 
   /* Calendario: 7 colonne da 68px + colonna ore 44px = 520px scrollabile */
