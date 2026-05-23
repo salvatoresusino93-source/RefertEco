@@ -82,7 +82,7 @@ $('login-form').addEventListener('submit', async e => {
   }
 });
 
-$('btn-logout').onclick = () => { api.setToken(null); _user = null; showLogin(); };
+// Logout gestito dal menu hamburger
 
 async function onLoginOk(user) {
   _user = user;
@@ -228,7 +228,9 @@ function bindEvents() {
   $('btn-oggi').onclick  = () => { _viewStart = getMon(new Date()); refreshWeek(); };
   $('btn-nuovo').onclick = () => openModal();
   $('btn-stampa').onclick = stampaDiario;
-  $('btn-sidebar-toggle').onclick = () => $('app-sidebar').classList.toggle('open');
+  $('btn-menu').onclick = e => { e.stopPropagation(); $('menu-dropdown').classList.toggle('hidden'); };
+  document.addEventListener('click', () => $('menu-dropdown').classList.add('hidden'));
+  $('menu-dropdown').addEventListener('click', e => e.stopPropagation());
   $('modal-overlay').onclick = e => { if (e.target===e.currentTarget) closeModal(); };
   $('modal-close').onclick   = closeModal;
   $('btn-modal-cancel').onclick = closeModal;
@@ -479,6 +481,86 @@ td{padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:13px}
 <tbody>${righe}</tbody></table></body></html>`);
     win.document.close(); win.print();
   } catch(e) { alert('Errore stampa: '+e.message); }
+}
+
+// ─── Menu hamburger ────────────────────────────────────────────────────────
+function chiudiMenu() { $('menu-dropdown').classList.add('hidden'); }
+
+function menuNuovoApp() {
+  chiudiMenu();
+  openModal({});
+}
+
+function menuStampa() {
+  chiudiMenu();
+  stampaDiario();
+}
+
+function menuLogout() {
+  chiudiMenu();
+  api.setToken(null);
+  _user = null;
+  showLogin();
+}
+
+function menuArchivio() {
+  chiudiMenu();
+  apriArchivio();
+}
+
+// ─── Archivio Pazienti ─────────────────────────────────────────────────────
+let _archTimer = null;
+
+async function apriArchivio() {
+  $('arch-overlay').classList.remove('hidden');
+  $('arch-search').value = '';
+  await caricaArchivio('');
+  $('arch-search').focus();
+  $('arch-search').oninput = () => {
+    clearTimeout(_archTimer);
+    _archTimer = setTimeout(() => caricaArchivio($('arch-search').value.trim()), 280);
+  };
+}
+
+function chiudiArchivio() {
+  $('arch-overlay').classList.add('hidden');
+}
+
+async function caricaArchivio(q) {
+  $('arch-tbody').innerHTML = `<tr><td colspan="5" class="arch-empty">Caricamento…</td></tr>`;
+  try {
+    const { data } = await api.pazienti(q);
+    if (!data || data.length === 0) {
+      $('arch-tbody').innerHTML = `<tr><td colspan="5" class="arch-empty">Nessun paziente trovato</td></tr>`;
+      return;
+    }
+    $('arch-tbody').innerHTML = data.map(p => {
+      const nasc = p.data_nascita
+        ? new Date(p.data_nascita + 'T12:00:00').toLocaleDateString('it-IT')
+        : '—';
+      return `<tr onclick="selezionaPazienteDaArchivio('${p.id}','${esc(p.cognome)} ${esc(p.nome)}')">
+        <td><strong>${esc(p.cognome)}</strong></td>
+        <td>${esc(p.nome)}</td>
+        <td>${nasc}</td>
+        <td>${esc(p.telefono || '—')}</td>
+        <td style="font-size:11px;color:var(--muted)">${esc(p.codice_fiscale || '—')}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    $('arch-tbody').innerHTML = `<tr><td colspan="5" class="arch-empty">Errore: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function selezionaPazienteDaArchivio(id, nomeCompleto) {
+  chiudiArchivio();
+  openModal({});
+  // Pre-seleziona il paziente nel modal appuntamento
+  _pazienteId = id;
+  $('paziente-search').style.display = 'none';
+  $('paz-results').classList.add('hidden');
+  $('paz-nome-display').textContent = nomeCompleto;
+  $('paz-selezionato').classList.remove('hidden');
+  $('btn-nuovo-paz-toggle').style.display = 'none';
 }
 
 // ─── Shortcut ─────────────────────────────────────────────────────────────
