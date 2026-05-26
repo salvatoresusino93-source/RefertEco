@@ -227,7 +227,35 @@ Alternativa: DICOM Storage SCP diretto con `dcmjs-dimse` (~30-35 ore sviluppo).
 
 ---
 
-## 8. COME RIPRENDERE SUL NUOVO PC (WORKSTATION IN STUDIO)
+## 8. ⚠️ ATTENZIONE — WORKSTATION IN STUDIO: NON SOVRASCRIVERE LE SUE MODIFICHE
+
+La workstation in studio ha già delle **migliorie proprie** che NON esistono in questa repo.
+In particolare: **formattazione di stampa** e altre personalizzazioni fatte direttamente su quel PC.
+
+**Quando porti gli aggiornamenti di questa sessione sulla workstation, NON fare mai:**
+- `git pull` + sovrascrittura cieca dei file locali
+- Copia e incolla di interi file da questa repo sopra i file della workstation
+- Nessuna operazione che cancelli o rimpiazzi le modifiche già presenti lì
+
+**Come si fa correttamente:**
+1. Prima di tutto, **guarda cosa c'è di diverso** sulla workstation:
+   ```bash
+   git diff HEAD
+   git status
+   ```
+2. Porta solo le modifiche specifiche di questa sessione (slot 30 min, DOB, duplicato telefono)
+   usando `git merge` o applicando manualmente le sole righe cambiate
+3. Se un file è diverso su entrambi i lati, **fai un merge manuale** riga per riga —
+   non scegliere "la versione mia" o "la versione loro" in blocco
+4. Dopo ogni integrazione, **verifica che la stampa e le altre funzioni personalizzate
+   funzionino ancora** prima di considerare il lavoro fatto
+
+**In sintesi**: la workstation è una versione parallela con miglioramenti propri.
+Gli aggiornamenti vanno *integrati*, non *sovrascritti*.
+
+---
+
+## 9. COME RIPRENDERE SUL NUOVO PC (WORKSTATION IN STUDIO)
 
 Se la repo non è ancora clonata:
 ```bash
@@ -246,6 +274,6 @@ Poi crea il file `agenda-backend/.env` con le credenziali Supabase/Twilio/JWT
 
 ---
 
-## 9. CONTATTO
+## 10. CONTATTO
 
 Repository: https://github.com/salvatoresusino93-source/RefertEco
