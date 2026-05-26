@@ -81,9 +81,9 @@ async function inviaPromemoria(appuntamento) {
   const nome  = `${p.nome} ${p.cognome}`;
 
   const testo =
-    `Gentile ${nome}, le ricordiamo il suo appuntamento ` +
+    `PROMEMORIA: Gentile ${nome}, le ricordiamo il suo appuntamento ` +
     `di domani ${data} alle ore ${ora} ` +
-    `(${esame}) presso il ${STUDIO}.` +
+    `per ${esame} presso il ${STUDIO}.` +
     (TEL ? ` Per info: ${TEL}.` : '');
 
   const result = await inviaSms(numero, testo);

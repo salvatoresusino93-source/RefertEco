@@ -109,9 +109,6 @@ router.post('/', async (req, res) => {
   // Notifica email al medico
   notificaNuovoAppuntamento(data).catch(() => {});
 
-  // SMS di conferma al paziente
-  inviaSmsConferma(data).catch(e => console.error('[SMS] Conferma:', e.message));
-
   res.status(201).json(data);
 });
 
