@@ -507,38 +507,13 @@ async function salvaNuovoPaz() {
         ? new Date(p.data_nascita + 'T12:00:00').toLocaleDateString('it-IT')
         : 'non inserita';
 
-      const isTelefono = ex.motivo === 'telefono';
-
-      const intestazione = isTelefono
-        ? '⚠️ Attenzione — stesso numero di telefono\n\nEsiste già un paziente con questo numero:'
-        : '⚠️ Attenzione — paziente già presente\n\nEsiste già un paziente con stesso nome e data di nascita:';
-
-      const footer = isTelefono
-        ? '\n\nPotrebbe essere un familiare o parente. Cosa vuoi fare?'
-        : '\n\nCosa vuoi fare?';
-
-      const msg = `${intestazione}\n\n` +
-        `Nome: ${p.cognome} ${p.nome}\n` +
-        `Nato/a il: ${nascita}\n` +
-        `Tel: ${p.telefono || '—'}` +
-        footer;
-
-      // confirm: OK = usa esistente, Annulla = crea comunque (solo per telefono)
-      const scelta = isTelefono
-        ? confirm(msg + '\n\n[OK] Usa paziente esistente\n[Annulla] Crea nuovo paziente')
-        : confirm(msg + '\n\n[OK] Usa paziente esistente\n[Annulla] Annulla operazione');
-
-      if (scelta) {
-        // Usa il paziente esistente
-        selezionaPaz(p.id, `${p.cognome} ${p.nome}`);
-        $('nuovo-paz-form').classList.add('hidden');
-        $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
-        ['np-cognome','np-nome','np-nascita','np-cf','np-telefono'].forEach(id => $(id).value='');
-        $('np-sesso').value = '';
-      } else if (isTelefono) {
-        // Solo per duplicato telefono: permette di creare comunque
-        const btn = $('btn-salva-nuovo-paz');
-        btn.textContent = 'Salvataggio…'; btn.disabled = true;
+      if (ex.motivo === 'telefono') {
+        // Solo avviso — salva comunque il nuovo paziente
+        alert(
+          `⚠️ Attenzione: il numero ${p.telefono} è già associato al paziente:\n\n` +
+          `${p.cognome} ${p.nome} (nato/a il ${nascita})\n\n` +
+          `Il nuovo paziente verrà salvato ugualmente.`
+        );
         try {
           const p2 = await api.creaPaziente({
             cognome, nome,
@@ -555,8 +530,20 @@ async function salvaNuovoPaz() {
           $('np-sesso').value = '';
         } catch(ex2) {
           alert('Errore: ' + ex2.message);
-        } finally {
-          btn.textContent = '✓ Salva paziente'; btn.disabled = false;
+        }
+      } else {
+        // Nome+nascita: chiedi conferma uso paziente esistente
+        const msg = `⚠️ Attenzione — paziente già presente\n\nEsiste già un paziente con stesso nome e data di nascita:\n\n` +
+          `Nome: ${p.cognome} ${p.nome}\n` +
+          `Nato/a il: ${nascita}\n` +
+          `Tel: ${p.telefono || '—'}` +
+          `\n\nPremi OK per usare il paziente esistente, oppure Annulla per tornare al form.`;
+        if (confirm(msg)) {
+          selezionaPaz(p.id, `${p.cognome} ${p.nome}`);
+          $('nuovo-paz-form').classList.add('hidden');
+          $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
+          ['np-cognome','np-nome','np-nascita','np-cf','np-telefono'].forEach(id => $(id).value='');
+          $('np-sesso').value = '';
         }
       }
     } else {
