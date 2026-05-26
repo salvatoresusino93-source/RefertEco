@@ -4,8 +4,8 @@
 > fare qualsiasi modifica. Contiene il contesto delle conversazioni precedenti, le
 > decisioni prese, e i prossimi passi.
 
-Ultimo aggiornamento: **2026-05-26**, sessione workstation studio (Orthanc su Windows,
-integrazione Agenda in RefertEco, notifica email Resend su nuovo appuntamento).
+Ultimo aggiornamento: **2026-05-26**, sessione pomeriggio/sera (notifiche email+SMS,
+SMS Hosting, pulsanti modal in alto, form referto espandibile, F8 dettatura, pulizia repo).
 
 ---
 
@@ -242,6 +242,50 @@ Contiene: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `TWILIO_*`, `JWT_SECRET`, `POR
 ### Roadmap Orthanc (da fare quando ecografo configurato)
 - Matching automatico paziente: cerca studi Orthanc di oggi con nome = paziente nel form
 - Import automatico senza selezione manuale
+
+## 9b. SESSIONE 2026-05-26 — POMERIGGIO/SERA
+
+### Notifiche email (Agenda → Medico)
+- Email su **nuovo appuntamento**: verde, oggetto `📅 Nome — Esame — Data ore Ora`
+- Email su **annullamento**: rossa, oggetto `❌ ANNULLATO: ...`
+- Fix orario: tutte le email usano `timeZone: 'Europe/Rome'` (non più UTC)
+- Servizio: **Resend** — file `agenda-backend/src/services/email.js`
+- Variabile Railway: `RESEND_API_KEY`
+- Endpoint debug: `POST /api/test-email`
+
+### SMS al paziente (SMS Hosting)
+- **Promemoria serale**: cron ogni giorno alle 19:00 → SMS per appuntamenti del giorno dopo
+- **Promemoria 1 ora prima**: cron ogni minuto controlla appuntamenti tra 59–61 minuti
+- **Caso edge**: se prenotazione dopo le 19:00 per domani → SMS immediato
+- **Annullamento**: SMS al paziente quando appuntamento viene cancellato
+- Servizio: **SMS Hosting** (smshosting.it) — file `agenda-backend/src/services/sms.js`
+- Variabili Railway: `SMSHOSTING_API_KEY`, `SMSHOSTING_API_SECRET`, `SMS_SENDER`, `STUDIO_NOME`
+- Credenziali SMS Hosting nel pannello: Sviluppatori → Gestione sicurezza API
+
+### Fix UI RefertEco
+- **Pulsanti modal archivio in alto**: Elimina/Chiudi/Modifica/Solo referto/Referto+img
+  spostati da `.m-ft` in fondo a sopra `.m-body`, con `position:sticky;top:0`
+- **Form referto espandibile**: rimosso `max-width:820px` da `.nuovo-form .form-card`,
+  MIN_VIEWER ridotto da 180px a 60px, pulsante ◀/▶ per collassare viewer immagini
+- **F8 per dettatura**: premi F8 sul form nuovo referto per avviare/fermare il microfono
+
+### Pulizia repository
+- Rimossi da git: `referteco_data.json`, `config.json` (dati locali)
+- Eliminati: `node_modules/` (root+agenda), `RefertEco_prototipo.html`, `RefertEco.icns`,
+  `make_icon.py`, `BRIEFING_ClaudeCode.md`
+- `.gitignore` aggiornato con tutte le esclusioni corrette
+- Progetto da 66 MB → 2 MB
+
+### Railway — variabili attuali (oltre a quelle precedenti)
+```
+RESEND_API_KEY         = re_hGzWNiTr_...        (non committare)
+SMSHOSTING_API_KEY     = SMSHNJ6I5RWQUJ2CMFJKU  (non committare)
+SMSHOSTING_API_SECRET  = KUC3IOCRIMN2328R61Z0XOQ4DWGUD0UG (non committare)
+SMS_SENDER             = StudioSusin
+STUDIO_NOME            = Studio Dr. Susino
+```
+
+---
 
 ## 8. PROGETTO IN SOSPESO: INTEGRAZIONE ORTHANC
 
