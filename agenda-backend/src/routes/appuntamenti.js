@@ -2,6 +2,7 @@ const express  = require('express');
 const supabase  = require('../services/supabase');
 const { requireAuth, requireMedico } = require('../middleware/auth');
 const { getIO }  = require('../socket');
+const { notificaNuovoAppuntamento } = require('../services/email');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -103,6 +104,9 @@ router.post('/', async (req, res) => {
 
   // Notifica tutti i client connessi via Socket.io
   try { getIO().emit('appuntamento:nuovo', data); } catch (e) {}
+
+  // Notifica email al medico
+  notificaNuovoAppuntamento(data).catch(() => {});
 
   res.status(201).json(data);
 });

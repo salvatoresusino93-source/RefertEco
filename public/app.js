@@ -85,7 +85,21 @@ function initTopbar() {
 
 // ── API ───────────────────────────────────────────────────────
 async function apiGet(url) {
-  const r = await fetch(url); return r.json();
+  try {
+    const r = await fetch(url);
+    if (!r.ok) {
+      const errBody = await r.text().catch(() => '');
+      console.error('[apiGet] HTTP ' + r.status + ' su ' + url + ' → ' + errBody);
+      const err = new Error('HTTP ' + r.status);
+      err.status = r.status;
+      err.body = errBody;
+      throw err;
+    }
+    return await r.json();
+  } catch(e) {
+    console.error('[apiGet] errore fetch ' + url, e);
+    throw e;
+  }
 }
 async function apiPost(url, body) {
   const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
@@ -226,7 +240,6 @@ async function salvaReferto() {
   _viewerFiles = []; _viewerIndex = 0; _tempRefertoId = null;
   toast('Referto salvato', 'ok');
   await loadReferti();
-  // Marca l'appuntamento come "refertato" nell'Agenda (se proveniente da Agenda)
   await marcaRefertato();
   resetForm();
 }
@@ -254,6 +267,7 @@ let _tempRefertoId = null;
 
 // ── ZOOM / PAN ────────────────────────────────────────────────
 let _zoomLevel  = 1;
+let _zoomMode   = false; // false = rotella scorre immagini; true = rotella zooma
 let _panX       = 0;
 let _panY       = 0;
 let _isPanning  = false;
@@ -342,21 +356,74 @@ async function caricaImmaginiViewer(e) {
   e.target.value = '';
 }
 
+// Verifica se un file è un DICOM leggendo la magic "DICM" all'offset 128
+async function _isFileDicom(file) {
+  try {
+    if (file.size < 132) return false;
+    const slice = file.slice(128, 132);
+    const buf = await slice.arrayBuffer();
+    const v = new Uint8Array(buf);
+    return v[0] === 0x44 && v[1] === 0x49 && v[2] === 0x43 && v[3] === 0x4D; // "DICM"
+  } catch(e) { return false; }
+}
+
 async function processaFilesViewer(files) {
-  const supportati = files.filter(f => /\.(jpe?g|png|dcm)$/i.test(f.name));
-  if (!supportati.length) return;
+  // Estensioni note: accettazione immediata (con rinomina univoca per path)
+  const noti = [];
+  const daControllare = [];
+  for (const f of files) {
+    if (/\.(jpe?g|png|dcm|dicom)$/i.test(f.name)) {
+      const ext = /\.dicom$/i.test(f.name) ? '.dcm' : null;
+      const nuovoNome = _nomeFileUnivoco(f, ext);
+      if (nuovoNome !== f.name || ext) {
+        noti.push(new File([f], nuovoNome, { type: f.type }));
+      } else {
+        noti.push(f);
+      }
+    } else {
+      daControllare.push(f);
+    }
+  }
+  // File senza estensione nota: controlla magic DICM
+  const dicomDetected = await Promise.all(daControllare.map(async f => {
+    const ok = await _isFileDicom(f);
+    if (!ok) return null;
+    const nuovoNome = _nomeFileUnivoco(f, '.dcm');
+    return new File([f], nuovoNome, { type: 'application/dicom' });
+  }));
+  const supportati = noti.concat(dicomDetected.filter(Boolean));
+
+  console.log('[Import] File ricevuti: ' + files.length + ', noti per estensione: ' + noti.length + ', DICOM rilevati: ' + dicomDetected.filter(Boolean).length);
+
+  if (!supportati.length) {
+    toast('Nessun file immagine/DICOM valido trovato', 'err');
+    return;
+  }
   if (!_tempRefertoId) _tempRefertoId = Date.now().toString();
 
   document.getElementById('viewer-empty').style.display   = 'none';
   document.getElementById('viewer-display').style.display = 'none';
   document.getElementById('viewer-loading').style.display = 'flex';
 
-  // Upload sul server
-  const formData = new FormData();
-  supportati.forEach(f => formData.append('files', f));
-  try {
-    await fetch('/api/referti/' + _tempRefertoId + '/immagini', { method:'POST', body:formData });
-  } catch(e) { toast('Errore caricamento immagini', 'err'); }
+  // Upload in batch per evitare limiti server / timeout
+  const BATCH = 30;
+  let importatiOk = 0;
+  for (let i = 0; i < supportati.length; i += BATCH) {
+    const slice = supportati.slice(i, i + BATCH);
+    const formData = new FormData();
+    slice.forEach(f => formData.append('files', f));
+    try {
+      const resp = await fetch('/api/referti/' + _tempRefertoId + '/immagini', { method:'POST', body:formData });
+      if (!resp.ok) { console.error('[Import] Batch ' + (i / BATCH + 1) + ' fallito: HTTP ' + resp.status); }
+      else {
+        const j = await resp.json().catch(() => ({}));
+        importatiOk += (j.importate || slice.length);
+        console.log('[Import] Batch ' + (i / BATCH + 1) + ': ' + (j.importate || slice.length) + ' file caricati');
+      }
+    } catch(e) { console.error('[Import] Errore batch ' + (i / BATCH + 1), e); }
+  }
+  console.log('[Import] Totale caricati: ' + importatiOk + '/' + supportati.length);
+  if (importatiOk === 0) toast('Errore caricamento immagini', 'err');
 
   // Ricarica lista dal server e genera displayUrl localmente
   await ricaricaViewer(supportati);
@@ -426,13 +493,23 @@ function viewerNav(dir) {
 function viewerScroll(e) {
   if (_viewerFiles.length === 0) return;
   e.preventDefault();
-  // Scroll sopra l'area immagine → zoom centrato sul cursore
-  if (e.target.closest && e.target.closest('#viewer-display')) {
+  if (_zoomMode && e.target.closest && e.target.closest('#viewer-display')) {
     const wrap = document.getElementById('viewer-img-wrap');
     const rect = wrap.getBoundingClientRect();
     zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - rect.left, e.clientY - rect.top);
   } else {
     viewerNav(e.deltaY > 0 ? 1 : -1);
+  }
+}
+
+function toggleZoomMode() {
+  _zoomMode = !_zoomMode;
+  const btn = document.getElementById('viewer-zoom-mode-btn');
+  if (btn) {
+    btn.classList.toggle('active', _zoomMode);
+    btn.title = _zoomMode
+      ? 'Rotella: ZOOM — clicca per tornare a scorrere immagini'
+      : 'Rotella: SCORRE immagini — clicca per passare allo zoom';
   }
 }
 
@@ -443,12 +520,17 @@ function viewerDragOver(e) {
 function viewerDragLeave() {
   document.getElementById('nuovo-viewer').classList.remove('drag-over');
 }
-// Legge ricorsivamente file da una FileSystemEntry (file o directory)
+// Legge ricorsivamente file da una FileSystemEntry (file o directory).
+// Attacca il fullPath sul File per evitare collisioni di nome tra sottocartelle.
 async function leggiEntry(entry) {
   if (entry.isFile) {
-    return new Promise(resolve => entry.file(f => resolve([f]), () => resolve([])));
+    return new Promise(resolve => entry.file(f => {
+      try { Object.defineProperty(f, '_fullPath', { value: entry.fullPath, writable: false }); } catch(e) {}
+      resolve([f]);
+    }, err => { console.warn('[Import] errore lettura file', entry.fullPath, err); resolve([]); }));
   }
   if (entry.isDirectory) {
+    console.log('[Import] Entro in directory:', entry.fullPath);
     const reader = entry.createReader();
     const tutteLeEntries = [];
     await new Promise(resolve => {
@@ -457,14 +539,33 @@ async function leggiEntry(entry) {
           if (!lotto.length) { resolve(); return; }
           tutteLeEntries.push(...lotto);
           leggiLotto(); // readEntries restituisce max 100 voci alla volta
-        }, resolve);
+        }, err => { console.warn('[Import] errore lettura directory', entry.fullPath, err); resolve(); });
       };
       leggiLotto();
     });
+    console.log('[Import] Directory', entry.fullPath, 'contiene', tutteLeEntries.length, 'voci');
     const nested = await Promise.all(tutteLeEntries.map(leggiEntry));
     return nested.flat();
   }
   return [];
+}
+
+// Genera un nome univoco basato sul path della sottocartella per evitare collisioni
+function _nomeFileUnivoco(file, estensione) {
+  // webkitRelativePath: presente con <input webkitdirectory>; _fullPath: presente da drag-and-drop
+  const rel = file.webkitRelativePath || file._fullPath || file.name;
+  const parts = rel.split(/[\/\\]/).filter(Boolean);
+  let base = file.name;
+  if (estensione) {
+    const cleanName = file.name.replace(/\.[^.]+$/, '') || ('dicom_' + Date.now());
+    base = cleanName + estensione;
+  }
+  // Se ci sono sottocartelle nel path, prefissa il basename con esse
+  if (parts.length > 1) {
+    const dirParts = parts.slice(0, -1).map(p => p.replace(/[^a-zA-Z0-9._-]/g, '_'));
+    return dirParts.join('__') + '__' + base;
+  }
+  return base;
 }
 
 async function viewerDrop(e) {
@@ -473,7 +574,6 @@ async function viewerDrop(e) {
 
   let files = [];
   if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
-    // Usa l'API FileSystem per leggere anche le cartelle trascinate
     const entries = Array.from(e.dataTransfer.items)
       .filter(item => item.kind === 'file')
       .map(item => item.webkitGetAsEntry())
@@ -715,7 +815,10 @@ async function toggleDictation(taId, btnId, barId) {
   const bar = document.getElementById(barId);
   btn.classList.add('rec');
   bar.classList.add('show');
-  let baseText = ta.value;
+  const cursorStart = ta.selectionStart;
+  const cursorEnd   = ta.selectionEnd;
+  let baseText = ta.value.substring(0, cursorStart);
+  const afterCursor = ta.value.substring(cursorEnd);
   if (baseText && !baseText.endsWith(' ') && !baseText.endsWith('\n')) baseText += ' ';
   r.onresult = e => {
     let interim = '', final = '';
@@ -739,7 +842,7 @@ async function toggleDictation(taId, btnId, barId) {
       baseText += elaborato;
       if (!baseText.endsWith('\n')) baseText += ' ';
     }
-    ta.value = baseText + interim;
+    ta.value = baseText + interim + afterCursor;
   };
   r.onerror = e => {
     stopDictation(taId, btnId, barId);
@@ -847,7 +950,8 @@ function openModal(id) {
     '<div class="ii"><label>Età</label><span>' + etaLabel(r.nascita, r.data) + '</span></div>';
   document.getElementById('m-referto').textContent = r.referto || '—';
   document.getElementById('m-del').onclick = () => confermaElimina(id);
-  document.getElementById('m-pdf').onclick = () => esportaPDF(id);
+  document.getElementById('m-pdf-solo').onclick = () => esportaPDF(id, false);
+  document.getElementById('m-pdf-img').onclick  = () => esportaPDF(id, true);
   document.getElementById('modal-ov').classList.add('open');
   loadImmagini(id);
 }
@@ -881,7 +985,8 @@ function apriModificaReferto() {
     </div>`;
   editSec.style.display = 'block';
   document.getElementById('m-btn-modifica').style.display = 'none';
-  document.getElementById('m-pdf').style.display = 'none';
+  document.getElementById('m-pdf-solo').style.display = 'none';
+  document.getElementById('m-pdf-img').style.display  = 'none';
   document.getElementById('m-del').style.display = 'none';
   document.getElementById('m-btn-salva-mod').style.display = '';
   document.getElementById('m-btn-annulla-mod').style.display = '';
@@ -892,7 +997,8 @@ function annullaModificaReferto() {
   document.getElementById('m-edit-section').style.display = 'none';
   document.getElementById('m-edit-section').innerHTML = '';
   document.getElementById('m-btn-modifica').style.display = '';
-  document.getElementById('m-pdf').style.display = '';
+  document.getElementById('m-pdf-solo').style.display = '';
+  document.getElementById('m-pdf-img').style.display  = '';
   document.getElementById('m-del').style.display = '';
   document.getElementById('m-btn-salva-mod').style.display = 'none';
   document.getElementById('m-btn-annulla-mod').style.display = 'none';
@@ -928,9 +1034,37 @@ function closeModalOv(e) { if (e.target === document.getElementById('modal-ov'))
 async function loadImmagini(refertoId) {
   const grid = document.getElementById('m-img-grid');
   grid.innerHTML = '<div class="img-loading">Caricamento…</div>';
-  const files = await apiGet('/api/referti/' + refertoId + '/immagini');
-  renderImmagini(refertoId, files);
+  try {
+    const resp = await fetch('/api/referti/' + refertoId + '/immagini');
+    if (!resp.ok) { const err = new Error('HTTP ' + resp.status); err.status = resp.status; throw err; }
+    const files = await resp.json();
+    if (!Array.isArray(files)) {
+      grid.innerHTML = '<div class="img-empty" style="color:#dc2626">Risposta server non valida</div>';
+      return;
+    }
+    const hasCustomOrder = resp.headers.get('X-Custom-Order') === 'true';
+    if (!hasCustomOrder && files.filter(f => /\.dcm$/i.test(f)).length > 1) {
+      const sorted = await _sortDicomByInstance(refertoId, files);
+      if (sorted.some((f, i) => f !== files[i])) {
+        apiPost('/api/referti/' + refertoId + '/immagini/ordine', { ordine: sorted }).catch(() => {});
+        renderImmagini(refertoId, sorted);
+        return;
+      }
+    }
+    renderImmagini(refertoId, files);
+  } catch(e) {
+    console.error('[loadImmagini] errore per referto ' + refertoId, e);
+    const msg = e.status === 404 ? 'Cartella immagini non trovata'
+              : e.status ? ('Errore server HTTP ' + e.status)
+              : 'Impossibile leggere immagini (server non risponde o cartella inaccessibile)';
+    grid.innerHTML = '<div class="img-empty" style="color:#dc2626">' +
+      '⚠️ ' + msg + '<br><small style="opacity:.7">Referto ID: ' + refertoId + '</small>' +
+      '<br><button onclick="loadImmagini(\'' + refertoId + '\')" style="margin-top:8px;padding:4px 10px;cursor:pointer">Riprova</button>' +
+      '</div>';
+  }
 }
+
+let _dragImgSrc = null;
 
 function renderImmagini(refertoId, files) {
   const grid = document.getElementById('m-img-grid');
@@ -941,7 +1075,7 @@ function renderImmagini(refertoId, files) {
   grid.innerHTML = files.map((f, i) => {
     const url = '/immagini/' + refertoId + '/' + encodeURIComponent(f);
     const isDcm = /\.dcm$/i.test(f);
-    return `<div class="img-thumb" id="thumb-${i}">
+    return `<div class="img-thumb" id="thumb-${i}" draggable="true" data-i="${i}" data-name="${esc(f)}">
       ${isDcm
         ? `<div class="dcm-hold" data-url="${url}" data-i="${i}"><div class="dcm-ico">DICOM</div><div class="dcm-name">${esc(f)}</div></div>`
         : `<img src="${url}" alt="${esc(f)}" onclick="apriImmagine('${url}')" loading="lazy">`
@@ -949,6 +1083,45 @@ function renderImmagini(refertoId, files) {
       <button class="img-del" onclick="eliminaImmagine('${esc(refertoId)}','${esc(f)}')" title="Elimina">×</button>
     </div>`;
   }).join('');
+
+  // Drag-and-drop riordinamento
+  const imgFiles = [...files];
+  grid.querySelectorAll('.img-thumb').forEach(thumb => {
+    thumb.addEventListener('dragstart', e => {
+      _dragImgSrc = parseInt(thumb.dataset.i);
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', 'reorder');
+      setTimeout(() => thumb.classList.add('dragging'), 0);
+    });
+    thumb.addEventListener('dragend', () => {
+      _dragImgSrc = null;
+      grid.querySelectorAll('.img-thumb').forEach(t => t.classList.remove('dragging', 'drag-over-thumb'));
+    });
+    thumb.addEventListener('dragover', e => {
+      if (_dragImgSrc === null) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'move';
+      if (parseInt(thumb.dataset.i) !== _dragImgSrc) {
+        grid.querySelectorAll('.img-thumb').forEach(t => t.classList.remove('drag-over-thumb'));
+        thumb.classList.add('drag-over-thumb');
+      }
+    });
+    thumb.addEventListener('dragleave', e => {
+      if (!thumb.contains(e.relatedTarget)) thumb.classList.remove('drag-over-thumb');
+    });
+    thumb.addEventListener('drop', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const destI = parseInt(thumb.dataset.i);
+      if (_dragImgSrc === null || _dragImgSrc === destI) return;
+      const moved = imgFiles.splice(_dragImgSrc, 1)[0];
+      imgFiles.splice(destI, 0, moved);
+      apiPost('/api/referti/' + refertoId + '/immagini/ordine', { ordine: imgFiles })
+        .catch(() => toast('Errore salvataggio ordine', 'err'));
+      renderImmagini(refertoId, imgFiles);
+    });
+  });
 
   // Rendering asincrono dei DICOM
   grid.querySelectorAll('.dcm-hold').forEach(el => {
@@ -960,65 +1133,14 @@ async function renderDicomThumb(url, placeholder) {
   try {
     const resp = await fetch(url);
     const buf = await resp.arrayBuffer();
-    const bytes = new Uint8Array(buf);
-    const ds = dicomParser.parseDicom(bytes);
-    const el = ds.elements.x7fe00010;
-    if (!el) throw new Error('no pixel data');
-
-    let imgUrl = null;
-
-    // Encapsulated (JPEG pixel data)
-    if (el.items && el.items.length) {
-      for (const item of el.items) {
-        if (item.length < 4) continue;
-        const d = new Uint8Array(buf, item.dataOffset, item.length);
-        if (d[0] === 0xFF && d[1] === 0xD8) {
-          imgUrl = URL.createObjectURL(new Blob([d], { type: 'image/jpeg' }));
-          break;
-        }
-      }
-    }
-
-    // Unencapsulated pixel data
-    if (!imgUrl && el.length > 2) {
-      const off = el.dataOffset, len = el.length;
-      const d2 = new Uint8Array(buf, off, Math.min(4, len));
-      if (d2[0] === 0xFF && d2[1] === 0xD8) {
-        imgUrl = URL.createObjectURL(new Blob([new Uint8Array(buf, off, len)], { type: 'image/jpeg' }));
-      } else {
-        // Greyscale uncompressed → canvas
-        const rows = ds.uint16('x00280010'), cols = ds.uint16('x00280011');
-        const bpp = ds.uint16('x00280100') || 8, spp = ds.uint16('x00280002') || 1;
-        if (rows && cols) {
-          const canvas = document.createElement('canvas');
-          canvas.width = cols; canvas.height = rows;
-          const ctx = canvas.getContext('2d');
-          const imgData = ctx.createImageData(cols, rows);
-          const px = bpp === 16 ? new Uint16Array(buf, off, len / 2) : new Uint8Array(buf, off, len);
-          let mn = Infinity, mx = -Infinity;
-          for (let i = 0; i < px.length; i++) { if (px[i] < mn) mn = px[i]; if (px[i] > mx) mx = px[i]; }
-          const rng = mx - mn || 1;
-          if (spp === 3) {
-            for (let i = 0; i < rows * cols; i++) {
-              imgData.data[i*4]=px[i*3]; imgData.data[i*4+1]=px[i*3+1]; imgData.data[i*4+2]=px[i*3+2]; imgData.data[i*4+3]=255;
-            }
-          } else {
-            for (let i = 0; i < rows * cols; i++) {
-              const v = Math.round((px[i]-mn)/rng*255);
-              imgData.data[i*4]=imgData.data[i*4+1]=imgData.data[i*4+2]=v; imgData.data[i*4+3]=255;
-            }
-          }
-          ctx.putImageData(imgData, 0, 0);
-          imgUrl = canvas.toDataURL('image/jpeg', 0.85);
-        }
-      }
-    }
-
-    if (imgUrl) {
+    const ds = dicomParser.parseDicom(new Uint8Array(buf));
+    const pixelSpacing = extractDicomPixelSpacing(ds);
+    const dataUrl = await dicomDsToDataUrl(ds, buf);
+    if (dataUrl) {
       const img = document.createElement('img');
-      img.src = imgUrl;
+      img.src = dataUrl;
       img.alt = 'DICOM';
-      img.onclick = () => apriImmagine(imgUrl);
+      img.onclick = () => apriImmagine(dataUrl);
       placeholder.replaceWith(img);
     }
   } catch (e) {
@@ -1028,6 +1150,169 @@ async function renderDicomThumb(url, placeholder) {
 
 function apriImmagine(url) {
   window.open(url, '_blank');
+}
+
+// Estrae Instance Number e Series Number da un DICOM via Range request (primi 8KB)
+async function _dicomSortKey(url) {
+  try {
+    const resp = await fetch(url, { headers: { Range: 'bytes=0-8191' } });
+    const buf  = await resp.arrayBuffer();
+    const ds   = dicomParser.parseDicom(new Uint8Array(buf));
+    const series = parseInt(ds.string('x00200011') || '0') || 0;
+    const inst   = parseInt(ds.string('x00200013') || '0') || 0;
+    return { series, inst };
+  } catch { return { series: 0, inst: 0 }; }
+}
+
+async function _sortDicomByInstance(refertoId, files) {
+  const withKey = await Promise.all(files.map(async (f, origIdx) => {
+    if (!/\.dcm$/i.test(f)) return { name: f, series: 999, inst: origIdx };
+    const url = '/immagini/' + refertoId + '/' + encodeURIComponent(f);
+    const key = await _dicomSortKey(url);
+    return { name: f, ...key };
+  }));
+  withKey.sort((a, b) => a.series !== b.series ? a.series - b.series : a.inst - b.inst);
+  return withKey.map(x => x.name);
+}
+
+async function ordinaPerAcquisizione(refertoId) {
+  const grid = document.getElementById('m-img-grid');
+  const files = Array.from(grid.querySelectorAll('.img-thumb')).map(t => t.dataset.name);
+  if (!files.length) return;
+  grid.innerHTML = '<div class="img-loading">Analisi DICOM in corso…</div>';
+  try {
+    const sorted = await _sortDicomByInstance(refertoId, files);
+    await apiPost('/api/referti/' + refertoId + '/immagini/ordine', { ordine: sorted });
+    renderImmagini(refertoId, sorted);
+    toast('Immagini ordinate per acquisizione', 'ok');
+  } catch { toast('Errore ordinamento', 'err'); await loadImmagini(refertoId); }
+}
+
+let _printPerPage = parseInt(localStorage.getItem('print_per_page') || '4');
+
+function setPrintPerPage(n) {
+  _printPerPage = n;
+  localStorage.setItem('print_per_page', n);
+  document.querySelectorAll('.pp-btn').forEach(b => b.classList.toggle('active', +b.dataset.n === n));
+}
+
+// Estrae info paziente/esame da un dataset DICOM per l'intestazione di stampa
+function _dicomPatientInfo(ds) {
+  const rawName = (ds.string('x00100010') || '').trim();
+  let patientName = '';
+  if (rawName) {
+    // Formato DICOM: COGNOME^NOME^... — teniamo solo i primi due componenti
+    const parts = rawName.split('^').map(s => s.trim()).filter(Boolean);
+    patientName = parts.slice(0, 2).join(' ');
+  }
+  const rawBirth = (ds.string('x00100030') || '').replace(/\D/g, '');
+  const birthDate = rawBirth.length === 8
+    ? rawBirth.slice(6) + '/' + rawBirth.slice(4, 6) + '/' + rawBirth.slice(0, 4) : '';
+  const rawStudy = (ds.string('x00080020') || '').replace(/\D/g, '');
+  const studyDate = rawStudy.length === 8
+    ? rawStudy.slice(6) + '/' + rawStudy.slice(4, 6) + '/' + rawStudy.slice(0, 4) : '';
+  const description = (ds.string('x00081030') || ds.string('x0008103e') || '').trim();
+  return { patientName, birthDate, studyDate, description };
+}
+
+// Funzione comune per la stampa immagini — usata sia dal viewer che dall'archivio
+function _stampaImmaginiComune(srcList, perPage, headerText) {
+  const rows = perPage / 2; // sempre 2 colonne: 4→2 righe, 6→3, 8→4
+  let pagesHtml = '';
+  for (let p = 0; p * perPage < srcList.length; p++) {
+    const batch = srcList.slice(p * perPage, (p + 1) * perPage);
+    while (batch.length < perPage) batch.push(null);
+    const hdrHtml = headerText ? `<div class="pg-hdr">${headerText}</div>` : '';
+    pagesHtml += `<div class="pg">${hdrHtml}<div class="grid">${
+      batch.map((src, i) => `<div class="cell">${
+        src ? `<img src="${src}"><span class="n">${p * perPage + i + 1}</span>` : ''
+      }</div>`).join('')
+    }</div></div>`;
+  }
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Stampa immagini</title>
+<style>
+@page{size:A4 portrait;margin:8mm}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:194mm;background:#fff}
+.pg{width:194mm;height:281mm;display:flex;flex-direction:column;page-break-after:always;break-after:page;}
+.pg-hdr{font-size:7.5pt;color:#555;font-family:sans-serif;padding-bottom:3mm;border-bottom:1px solid #ccc;margin-bottom:3mm;flex-shrink:0;}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(${rows},1fr);gap:4mm;flex:1;min-height:0;}
+.cell{border:1px solid #ccc;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;background:#fff;min-height:0;}
+.cell:not(:has(img)){background:#fff;border:none}
+.cell img{max-width:100%;max-height:100%;object-fit:contain;display:block;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+.n{position:absolute;bottom:2px;right:4px;font:7.5px/1 monospace;color:rgba(0,0,0,.3);}
+</style></head><body>
+${pagesHtml}
+<script>window.onload=function(){window.print()}<\/script>
+</body></html>`);
+  win.document.close();
+}
+
+async function stampaImmagini() {
+  if (_viewerFiles.length === 0) { toast('Nessuna immagine da stampare', 'err'); return; }
+  toast('Preparazione stampa…', 'ok');
+  let _dicomInfo = null; // estratto dal primo DICOM trovato
+  const srcList = await Promise.all(_viewerFiles.map(async f => {
+    if (/\.dcm$/i.test(f.filename) && _tempRefertoId) {
+      try {
+        const url = '/immagini/' + _tempRefertoId + '/' + encodeURIComponent(f.filename);
+        const resp = await fetch(url);
+        const buf = await resp.arrayBuffer();
+        const ds = dicomParser.parseDicom(new Uint8Array(buf));
+        if (!_dicomInfo) _dicomInfo = _dicomPatientInfo(ds);
+        return await dicomDsToDataUrl(ds, buf, 'png') || f.displayUrl;
+      } catch { return f.displayUrl; }
+    }
+    if (_tempRefertoId && f.filename)
+      return '/immagini/' + _tempRefertoId + '/' + encodeURIComponent(f.filename);
+    return f.displayUrl;
+  }));
+
+  // Costruisci intestazione da DICOM; fallback ai campi del form se DICOM non ha dati
+  let headerText = '';
+  if (_dicomInfo) {
+    const parts = [];
+    if (_dicomInfo.patientName) parts.push(_dicomInfo.patientName);
+    if (_dicomInfo.birthDate)   parts.push('n. ' + _dicomInfo.birthDate);
+    if (_dicomInfo.description) parts.push(_dicomInfo.description);
+    if (_dicomInfo.studyDate)   parts.push(_dicomInfo.studyDate);
+    headerText = parts.join(' — ');
+  }
+  if (!headerText) {
+    // Fallback: leggi i campi form già compilati
+    const cognome = (document.getElementById('f-cognome')?.value || '').trim();
+    const nome    = (document.getElementById('f-nome')?.value    || '').trim();
+    const data    = (document.getElementById('f-data')?.value    || '').trim();
+    const selTipo = document.getElementById('f-tipo-sel');
+    const tipo    = (selTipo?.value === '__custom__'
+      ? document.getElementById('f-tipo-custom')?.value
+      : selTipo?.value || '').trim();
+    const parts = [];
+    if (cognome || nome) parts.push([cognome, nome].filter(Boolean).join(' '));
+    if (tipo)   parts.push(tipo);
+    if (data)   parts.push(data.split('-').reverse().join('/'));
+    headerText = parts.join(' — ');
+  }
+
+  _stampaImmaginiComune(srcList, _printPerPage, headerText);
+}
+
+async function stampaImmaginiArchivio(refertoId) {
+  const r = referti.find(x => x.id === refertoId);
+  toast('Preparazione stampa…', 'ok');
+  const imgFiles = await apiGet('/api/referti/' + refertoId + '/immagini');
+  if (!imgFiles || imgFiles.length === 0) { toast('Nessuna immagine da stampare', 'err'); return; }
+  const srcList = [];
+  for (const f of imgFiles) {
+    const url = '/immagini/' + refertoId + '/' + encodeURIComponent(f);
+    const isDcm = /\.dcm$/i.test(f);
+    const dataUrl = isDcm ? await dicomToDataUrl(url, 'png') : await imgToDataUrl(url);
+    if (dataUrl) srcList.push(dataUrl);
+  }
+  if (srcList.length === 0) { toast('Nessuna immagine da stampare', 'err'); return; }
+  const headerText = r ? `${esc(r.cognome)} ${esc(r.nome)} — ${esc(r.tipo)} — ${fmt(r.data)}` : '';
+  _stampaImmaginiComune(srcList, _printPerPage, headerText);
 }
 
 async function eliminaImmagine(refertoId, filename) {
@@ -1044,19 +1329,90 @@ async function estraiNomeDicom(file) {
   } catch (e) { return null; }
 }
 
+// Handler per il pulsante "Importa immagini" nell'archivio (sia singoli che cartella con sottocartelle)
 async function importaImmagini(event) {
-  const files = Array.from(event.target.files);
-  if (!files.length || !_modalRefertoId) return;
+  let files = Array.from(event.target.files);
+  if (!files.length || !_modalRefertoId) { event.target.value = ''; return; }
+  await _processaImmaginiArchivio(files);
+  event.target.value = '';
+}
 
+// Drop di file/cartelle direttamente sulla griglia immagini dell'archivio
+async function importaImmaginiDrop(e) {
+  e.preventDefault();
+  if (!_modalRefertoId) return;
+  const dz = document.getElementById('m-img-grid');
+  if (dz) dz.classList.remove('drag-over');
+
+  let files = [];
+  if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+    const entries = Array.from(e.dataTransfer.items)
+      .filter(item => item.kind === 'file')
+      .map(item => item.webkitGetAsEntry())
+      .filter(Boolean);
+    const nested = await Promise.all(entries.map(leggiEntry));
+    files = nested.flat();
+  } else {
+    files = Array.from(e.dataTransfer.files);
+  }
+  if (!files.length) return;
+  await _processaImmaginiArchivio(files);
+}
+
+function importaImmaginiDragOver(e) {
+  e.preventDefault();
+  const dz = document.getElementById('m-img-grid');
+  if (dz) dz.classList.add('drag-over');
+}
+function importaImmaginiDragLeave(e) {
+  const dz = document.getElementById('m-img-grid');
+  if (dz) dz.classList.remove('drag-over');
+}
+
+// Logica condivisa per processare immagini in modalità archivio (referto già salvato).
+// Stessa robustezza di processaFilesViewer (rilevamento DICOM via magic byte, nomi univoci,
+// batch upload, gestione errori dettagliata).
+async function _processaImmaginiArchivio(files) {
+  if (!_modalRefertoId) return;
   const r = referti.find(x => x.id === _modalRefertoId);
   if (!r) return;
 
-  // Controllo nome per i file DICOM
-  const dicomFiles = files.filter(f => /\.dcm$/i.test(f.name));
-  for (const file of dicomFiles) {
+  // 1) Filtra e prepara i file con nomi univoci basati sul path
+  const noti = [];
+  const daControllare = [];
+  for (const f of files) {
+    if (/\.(jpe?g|png|dcm|dicom)$/i.test(f.name)) {
+      const ext = /\.dicom$/i.test(f.name) ? '.dcm' : null;
+      const nuovoNome = _nomeFileUnivoco(f, ext);
+      if (nuovoNome !== f.name || ext) {
+        noti.push(new File([f], nuovoNome, { type: f.type }));
+      } else {
+        noti.push(f);
+      }
+    } else {
+      daControllare.push(f);
+    }
+  }
+  // 2) File senza estensione nota: rileva DICOM dalla magic
+  const dicomDetected = await Promise.all(daControllare.map(async f => {
+    const ok = await _isFileDicom(f);
+    if (!ok) return null;
+    const nuovoNome = _nomeFileUnivoco(f, '.dcm');
+    return new File([f], nuovoNome, { type: 'application/dicom' });
+  }));
+  const supportati = noti.concat(dicomDetected.filter(Boolean));
+
+  console.log('[Import-Archivio] referto ' + _modalRefertoId + ': ricevuti=' + files.length + ' validi=' + supportati.length);
+  if (!supportati.length) {
+    toast('Nessun file immagine/DICOM valido trovato', 'err');
+    return;
+  }
+
+  // 3) Controllo nome paziente sui file DICOM (warning una sola volta)
+  const dicomCheck = supportati.filter(f => /\.dcm$/i.test(f.name)).slice(0, 5); // max 5 controlli
+  for (const file of dicomCheck) {
     const nomeDicom = await estraiNomeDicom(file);
     if (nomeDicom) {
-      // I DICOM usano formato COGNOME^NOME o varianti
       const normalizzato = nomeDicom.replace(/\^/g, ' ').trim().toLowerCase();
       const cognomeRef = r.cognome.toLowerCase();
       const nomeRef = r.nome.toLowerCase();
@@ -1068,27 +1424,40 @@ async function importaImmagini(event) {
           `Referto: "${r.cognome} ${r.nome}"\n\n` +
           `Importare comunque?`
         );
-        if (!ok) { event.target.value = ''; return; }
+        if (!ok) return;
         break;
       }
     }
   }
 
-  const formData = new FormData();
-  files.forEach(f => formData.append('files', f));
+  // 4) Upload in batch (evita limiti server / timeout)
+  toast('Caricamento in corso… (' + supportati.length + ' file)', '');
+  const BATCH = 30;
+  let importatiOk = 0;
+  for (let i = 0; i < supportati.length; i += BATCH) {
+    const slice = supportati.slice(i, i + BATCH);
+    const formData = new FormData();
+    slice.forEach(f => formData.append('files', f));
+    try {
+      const resp = await fetch('/api/referti/' + _modalRefertoId + '/immagini', { method: 'POST', body: formData });
+      if (!resp.ok) {
+        console.error('[Import-Archivio] batch ' + (i / BATCH + 1) + ' HTTP ' + resp.status);
+        continue;
+      }
+      const j = await resp.json().catch(() => ({}));
+      importatiOk += (j.importate || slice.length);
+      console.log('[Import-Archivio] batch ' + (i / BATCH + 1) + ': ' + (j.importate || slice.length) + ' file');
+    } catch(e) {
+      console.error('[Import-Archivio] errore batch ' + (i / BATCH + 1), e);
+    }
+  }
 
-  try {
-    toast('Caricamento in corso…', '');
-    const resp = await fetch('/api/referti/' + _modalRefertoId + '/immagini', {
-      method: 'POST', body: formData,
-    });
-    const res = await resp.json();
-    await loadImmagini(_modalRefertoId);
-    toast('Importate ' + res.importate + ' immagini', 'ok');
-  } catch (e) {
+  await loadImmagini(_modalRefertoId);
+  if (importatiOk > 0) {
+    toast('Importate ' + importatiOk + ' immagini su Google Drive (sync in corso…)', 'ok');
+  } else {
     toast('Errore durante il caricamento', 'err');
   }
-  event.target.value = '';
 }
 
 // Converte URL immagine in data URL (per stampa offline)
@@ -1104,54 +1473,236 @@ async function imgToDataUrl(url) {
   } catch (e) { return null; }
 }
 
+function _jpegIsBaseline(d) {
+  let i = 2;
+  while (i + 3 < d.length) {
+    if (d[i] !== 0xFF) break;
+    const m = d[i + 1];
+    if (m === 0xC0 || m === 0xC1 || m === 0xC2) return true;
+    if (m === 0xC3 || (m >= 0xC5 && m <= 0xC7)) return false;
+    if (m === 0xD9) break;
+    if (i + 3 >= d.length) break;
+    const segLen = (d[i + 2] << 8) | d[i + 3];
+    if (segLen < 2) break;
+    i += 2 + segLen;
+  }
+  return true;
+}
+
+function _renderJpegLossless(d, rows, cols, bpp, spp, photometric) {
+  try {
+    console.log('[DICOM] _renderJpegLossless: rows=' + rows + ' cols=' + cols + ' bpp=' + bpp + ' spp=' + spp + ' photometric=' + photometric + ' dataLen=' + d.byteLength);
+    console.log('[DICOM] jpeg global:', typeof jpeg, typeof jpeg !== 'undefined' ? Object.keys(jpeg) : 'N/A');
+    const decoder = new jpeg.lossless.Decoder();
+    const ab = d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength);
+    const numBytes = Math.ceil(bpp / 8);
+    console.log('[DICOM] Calling decoder.decode, numBytes=' + numBytes);
+    const output = decoder.decode(ab, 0, d.byteLength, numBytes);
+    console.log('[DICOM] Decoder output type=' + (output ? output.constructor.name : 'null') + ' length=' + (output ? output.length : 0) + ' expected=' + (rows * cols * spp));
+    if (!output || output.length === 0) { console.error('[DICOM] Decoder returned empty output'); return null; }
+    const n = rows * cols;
+    const cv = document.createElement('canvas');
+    cv.width = cols; cv.height = rows;
+    const ctx = cv.getContext('2d');
+    const imgData = ctx.createImageData(cols, rows);
+    const invert = photometric === 'MONOCHROME1';
+    if (spp === 1) {
+      let mn = Infinity, mx = -Infinity;
+      for (let i = 0; i < n; i++) { if (output[i] < mn) mn = output[i]; if (output[i] > mx) mx = output[i]; }
+      const rng = mx - mn || 1;
+      console.log('[DICOM] Grayscale range: min=' + mn + ' max=' + mx + ' invert=' + invert);
+      for (let i = 0; i < n; i++) {
+        let v = Math.round((output[i] - mn) / rng * 255);
+        if (invert) v = 255 - v;
+        imgData.data[i*4] = imgData.data[i*4+1] = imgData.data[i*4+2] = v;
+        imgData.data[i*4+3] = 255;
+      }
+    } else {
+      for (let i = 0; i < n; i++) {
+        imgData.data[i*4]   = output[i*spp];
+        imgData.data[i*4+1] = output[i*spp + 1];
+        imgData.data[i*4+2] = output[i*spp + 2];
+        imgData.data[i*4+3] = 255;
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+    console.log('[DICOM] _renderJpegLossless: OK');
+    return cv.toDataURL('image/jpeg', 0.85);
+  } catch(e) { console.error('[DICOM] _renderJpegLossless ERRORE:', e); return null; }
+}
+
 // Converte pixel data DICOM (già parsato) in data URL
-async function dicomDsToDataUrl(ds, buf) {
+async function dicomDsToDataUrl(ds, buf, fmt) {
+  // fmt: 'jpeg' (default, 0.85 qualità) | 'png' (lossless, per stampa)
   try {
     const el = ds.elements.x7fe00010;
-    if (!el) return null;
+    if (!el) { console.warn('[DICOM] Nessun elemento pixel data (7FE00010)'); return null; }
+
+    const rows = ds.uint16('x00280010') || 0;
+    const cols = ds.uint16('x00280011') || 0;
+    const bpp  = ds.uint16('x00280100') || 8;
+    const spp  = ds.uint16('x00280002') || 1;
+    let photometric = 'MONOCHROME2';
+    try { photometric = (ds.string('x00280004') || 'MONOCHROME2').trim().toUpperCase(); } catch(e) {}
+
+    console.log('[DICOM] dicomDsToDataUrl: rows=' + rows + ' cols=' + cols + ' bpp=' + bpp + ' spp=' + spp + ' photometric=' + photometric);
+    console.log('[DICOM] el.items:', el.items ? el.items.length + ' items' : 'nessuno', '| el.length:', el.length, '| el.dataOffset:', el.dataOffset);
+
+    // Pixel data encapsulati (JPEG / PNG / JPEG-Lossless compressi)
     if (el.items && el.items.length) {
-      for (const item of el.items) {
-        if (item.length < 4) continue;
+      console.log('[DICOM] Modalità encapsulata, scansiono ' + el.items.length + ' item(s)');
+      for (let idx = 0; idx < el.items.length; idx++) {
+        const item = el.items[idx];
+        console.log('[DICOM] Item ' + idx + ': length=' + item.length + ' dataOffset=' + item.dataOffset);
+        if (item.length < 4) { console.log('[DICOM] Item ' + idx + ' troppo piccolo, salto'); continue; }
         const d = new Uint8Array(buf, item.dataOffset, item.length);
-        if (d[0] === 0xFF && d[1] === 0xD8) {
-          const blob = new Blob([d], { type: 'image/jpeg' });
+        console.log('[DICOM] Item ' + idx + ' magic: ' + d[0].toString(16) + ' ' + d[1].toString(16) + ' ' + d[2].toString(16) + ' ' + d[3].toString(16));
+
+        // PNG
+        if (d[0] === 0x89 && d[1] === 0x50 && d[2] === 0x4E && d[3] === 0x47) {
+          console.log('[DICOM] Item ' + idx + ': PNG trovato');
+          const blob = new Blob([d], { type: 'image/png' });
           return await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
         }
-      }
-    }
-    const off = el.dataOffset, len = el.length;
-    if (len > 2) {
-      const d2 = new Uint8Array(buf, off, Math.min(4, len));
-      if (d2[0] === 0xFF && d2[1] === 0xD8) {
-        const blob = new Blob([new Uint8Array(buf, off, len)], { type: 'image/jpeg' });
-        return await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
-      }
-      const rows = ds.uint16('x00280010'), cols = ds.uint16('x00280011');
-      const bpp = ds.uint16('x00280100') || 8, spp = ds.uint16('x00280002') || 1;
-      if (rows && cols) {
-        const cv = document.createElement('canvas');
-        cv.width = cols; cv.height = rows;
-        const ctx = cv.getContext('2d');
-        const imgData = ctx.createImageData(cols, rows);
-        const px = bpp === 16 ? new Uint16Array(buf, off, len/2) : new Uint8Array(buf, off, len);
-        let mn = Infinity, mx = -Infinity;
-        for (let i = 0; i < px.length; i++) { if (px[i] < mn) mn = px[i]; if (px[i] > mx) mx = px[i]; }
-        const rng = mx - mn || 1;
-        if (spp === 3) {
-          for (let i = 0; i < rows*cols; i++) {
-            imgData.data[i*4]=px[i*3]; imgData.data[i*4+1]=px[i*3+1]; imgData.data[i*4+2]=px[i*3+2]; imgData.data[i*4+3]=255;
+
+        // JPEG (baseline o lossless)
+        if (d[0] === 0xFF && d[1] === 0xD8) {
+          const isBaseline = _jpegIsBaseline(d);
+          console.log('[DICOM] Item ' + idx + ': JPEG trovato, isBaseline=' + isBaseline);
+          if (isBaseline) {
+            const blob = new Blob([d], { type: 'image/jpeg' });
+            return await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
           }
-        } else {
-          for (let i = 0; i < rows*cols; i++) {
-            const v = Math.round((px[i]-mn)/rng*255);
-            imgData.data[i*4]=imgData.data[i*4+1]=imgData.data[i*4+2]=v; imgData.data[i*4+3]=255;
+          // JPEG Lossless
+          const jpegLibOk = typeof jpeg !== 'undefined' && jpeg && jpeg.lossless;
+          console.log('[DICOM] JPEG Lossless: lib disponibile=' + jpegLibOk + ', rows=' + rows + ', cols=' + cols);
+          if (rows && cols && jpegLibOk) {
+            const url = _renderJpegLossless(d, rows, cols, bpp, spp, photometric);
+            if (url) return url;
+            console.warn('[DICOM] _renderJpegLossless ha restituito null per item ' + idx);
+          } else {
+            console.warn('[DICOM] Impossibile decodificare JPEG Lossless: lib=' + jpegLibOk + ' rows=' + rows + ' cols=' + cols);
           }
         }
-        ctx.putImageData(imgData, 0, 0);
-        return cv.toDataURL('image/jpeg', 0.85);
+      }
+      console.warn('[DICOM] Nessun item decodificato → restituisco null');
+      return null;
+    }
+
+    const off = el.dataOffset, len = el.length;
+    console.log('[DICOM] Path non-encapsulato: off=' + off + ' len=' + len + ' (0xFFFFFFFF=' + (len === 0xFFFFFFFF) + ')');
+
+    // Rileva encapsulamento: lunghezza undefined OPPURE i primi 4 byte sono un item delimiter (FE FF 00 E0)
+    const view8probe = new Uint8Array(buf, off, Math.min(4, buf.byteLength - off));
+    const startsWithItem = view8probe.length >= 4 && view8probe[0] === 0xFE && view8probe[1] === 0xFF && view8probe[2] === 0x00 && view8probe[3] === 0xE0;
+    const isEncapsulated = len === 0xFFFFFFFF || len === 4294967295 || startsWithItem;
+    console.log('[DICOM] Rilevazione encapsulamento: startsWithItem=' + startsWithItem + ' isEncapsulated=' + isEncapsulated);
+
+    // Fallback: dati encapsulati senza el.items (es. dicom-parser non ha parsato l'incapsulamento)
+    if (isEncapsulated) {
+      console.log('[DICOM] Fallback: scansione manuale item encapsulati da offset ' + off);
+      const view8 = new Uint8Array(buf);
+      let pos = off;
+      const limit = Math.min(buf.byteLength - 8, off + 10 * 1024 * 1024); // max 10 MB
+      while (pos < limit) {
+        // Leggo tag item: FE FF 00 E0 (little-endian)
+        if (view8[pos] === 0xFE && view8[pos+1] === 0xFF && view8[pos+2] === 0x00 && view8[pos+3] === 0xE0) {
+          const itemLen = view8[pos+4] | (view8[pos+5] << 8) | (view8[pos+6] << 16) | (view8[pos+7] << 24);
+          const frameOff = pos + 8;
+          console.log('[DICOM] Fallback item trovato: pos=' + pos + ' itemLen=' + itemLen);
+          if (itemLen > 4 && frameOff + itemLen <= buf.byteLength) {
+            const d = new Uint8Array(buf, frameOff, itemLen);
+            if (d[0] === 0xFF && d[1] === 0xD8) {
+              const isBase = _jpegIsBaseline(d);
+              console.log('[DICOM] Fallback JPEG trovato: baseline=' + isBase);
+              if (isBase) {
+                const blob = new Blob([d], { type: 'image/jpeg' });
+                return await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
+              }
+              if (rows && cols && typeof jpeg !== 'undefined' && jpeg.lossless) {
+                const url = _renderJpegLossless(d, rows, cols, bpp, spp, photometric);
+                if (url) return url;
+              }
+            }
+          }
+          if (itemLen === 0) { pos += 8; continue; }
+          pos += 8 + Math.max(0, itemLen);
+        } else if (view8[pos] === 0xFE && view8[pos+1] === 0xFF && view8[pos+2] === 0xDD && view8[pos+3] === 0xE0) {
+          console.log('[DICOM] Fallback: sequence delimiter a pos=' + pos);
+          break; // sequence delimiter
+        } else {
+          pos++;
+        }
+      }
+      console.warn('[DICOM] Fallback: nessun frame trovato');
+      return null;
+    }
+
+    if (len <= 2) return null;
+
+    // JPEG grezzo nel pixel data (non encapsulato)
+    const hdr = new Uint8Array(buf, off, Math.min(4, len));
+    if (hdr[0] === 0xFF && hdr[1] === 0xD8) {
+      const d = new Uint8Array(buf, off, len);
+      if (_jpegIsBaseline(d)) {
+        const blob = new Blob([d], { type: 'image/jpeg' });
+        return await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
+      }
+      if (rows && cols && typeof jpeg !== 'undefined' && jpeg.lossless) {
+        const url = _renderJpegLossless(d, rows, cols, bpp, spp, photometric);
+        if (url) return url;
       }
     }
-  } catch(e) {}
+
+    // Pixel data non compressi (raw)
+    if (!rows || !cols) return null;
+    const planarConfig = ds.uint16('x00280006') || 0;
+    const n = rows * cols;
+    const cv = document.createElement('canvas');
+    cv.width = cols; cv.height = rows;
+    const ctx = cv.getContext('2d');
+    const imgData = ctx.createImageData(cols, rows);
+
+    if (spp === 1) {
+      const px = bpp === 16
+        ? new Uint16Array(buf.slice(off, off + n * 2))
+        : new Uint8Array(buf, off, n);
+      let mn = Infinity, mx = -Infinity;
+      for (let i = 0; i < n; i++) { if (px[i] < mn) mn = px[i]; if (px[i] > mx) mx = px[i]; }
+      const rng = mx - mn || 1;
+      const invert = photometric === 'MONOCHROME1';
+      for (let i = 0; i < n; i++) {
+        let v = Math.round((px[i] - mn) / rng * 255);
+        if (invert) v = 255 - v;
+        imgData.data[i*4] = imgData.data[i*4+1] = imgData.data[i*4+2] = v;
+        imgData.data[i*4+3] = 255;
+      }
+    } else if (spp === 3) {
+      const px = new Uint8Array(buf, off, n * 3);
+      const isYbr = photometric.startsWith('YBR');
+      for (let i = 0; i < n; i++) {
+        let r, g, b;
+        if (planarConfig === 0) {
+          r = px[i*3]; g = px[i*3+1]; b = px[i*3+2];
+        } else {
+          r = px[i]; g = px[i + n]; b = px[i + n*2];
+        }
+        if (isYbr) {
+          const Y = r, Cb = g, Cr = b;
+          r = Math.max(0, Math.min(255, Math.round(Y + 1.402   * (Cr - 128))));
+          g = Math.max(0, Math.min(255, Math.round(Y - 0.34414 * (Cb - 128) - 0.71414 * (Cr - 128))));
+          b = Math.max(0, Math.min(255, Math.round(Y + 1.772   * (Cb - 128))));
+        }
+        imgData.data[i*4]   = r;
+        imgData.data[i*4+1] = g;
+        imgData.data[i*4+2] = b;
+        imgData.data[i*4+3] = 255;
+      }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+    return fmt === 'png' ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', 0.85);
+  } catch(e) { console.error('dicomDsToDataUrl:', e); }
   return null;
 }
 
@@ -1229,10 +1780,14 @@ async function dicomLoadFull(url) {
   } catch(e) { return { dataUrl: null, pixelSpacing: null }; }
 }
 
-// Wrapper retrocompatibile (usato per PDF export)
-async function dicomToDataUrl(url) {
-  const { dataUrl } = await dicomLoadFull(url);
-  return dataUrl;
+// Wrapper (usato per PDF export e stampa archivio). fmt: undefined→jpeg, 'png'→lossless
+async function dicomToDataUrl(url, fmt) {
+  try {
+    const resp = await fetch(url);
+    const buf  = await resp.arrayBuffer();
+    const ds   = dicomParser.parseDicom(new Uint8Array(buf));
+    return await dicomDsToDataUrl(ds, buf, fmt);
+  } catch(e) { return null; }
 }
 
 // ── MISURAZIONI ───────────────────────────────────────────────
@@ -1596,43 +2151,51 @@ function initMeasureTool() {
 function confermaElimina(id) {
   const r = referti.find(x => x.id === id); if (!r) return;
   document.getElementById('conf-msg').textContent =
-    'Stai per eliminare il referto di ' + r.cognome + ' ' + r.nome + ' del ' + fmt(r.data) + '. Questa azione è irreversibile.';
+    'Stai per eliminare il referto di ' + r.cognome + ' ' + r.nome + ' del ' + fmt(r.data) +
+    '. Verranno rimosse anche tutte le immagini associate (anche dal Google Drive se configurato). Questa azione è irreversibile.';
   document.getElementById('conf-ok').onclick = async () => {
-    await apiDelete('/api/referti/' + id);
+    const res = await apiDelete('/api/referti/' + id);
     await loadReferti();
     closeConfirm(); closeModal();
     populateAnni(); renderArchivio();
-    toast('Referto eliminato', 'ok');
+    if (res && res.error) {
+      toast('Referto rimosso dal DB ma errore immagini: ' + res.error, 'err');
+    } else {
+      const imgCount = res && res.immaginiEliminate ? res.immaginiEliminate : 0;
+      const msg = imgCount > 0 ? ('Referto eliminato (' + imgCount + ' immagini rimosse)') : 'Referto eliminato';
+      toast(msg, 'ok');
+    }
   };
   document.getElementById('conf-ov').classList.add('open');
 }
 function closeConfirm() { document.getElementById('conf-ov').classList.remove('open'); }
 
 // ── EXPORT PDF ────────────────────────────────────────────────
-async function esportaPDF(id) {
+async function esportaPDF(id, conImmagini = true) {
   const r = referti.find(x => x.id === id); if (!r) return;
 
-  // Carica immagini e convertile in data URL per stampa offline
-  const imgFiles = await apiGet('/api/referti/' + id + '/immagini');
-  const imgDataUrls = [];
-  for (const f of imgFiles) {
-    const url = '/immagini/' + id + '/' + encodeURIComponent(f);
-    const isDcm = /\.dcm$/i.test(f);
-    const dataUrl = isDcm ? await dicomToDataUrl(url) : await imgToDataUrl(url);
-    if (dataUrl) imgDataUrls.push(dataUrl);
-  }
-
-  // Pagine immagini (2×3 per pagina)
+  // Carica immagini solo se richiesto
   let paginaImmagini = '';
-  for (let p = 0; p * 6 < imgDataUrls.length; p++) {
-    const batch = imgDataUrls.slice(p * 6, p * 6 + 6);
-    paginaImmagini += `
-    <div class="img-page">
-      <div class="img-hdr">${esc(r.cognome)} ${esc(r.nome)} — ${esc(r.tipo)} — ${fmt(r.data)}</div>
-      <div class="img-grid-print">
-        ${batch.map(src => `<div class="img-cell"><img src="${src}"></div>`).join('')}
-      </div>
-    </div>`;
+  if (conImmagini) {
+    const imgFiles = await apiGet('/api/referti/' + id + '/immagini');
+    const imgDataUrls = [];
+    for (const f of imgFiles) {
+      const url = '/immagini/' + id + '/' + encodeURIComponent(f);
+      const isDcm = /\.dcm$/i.test(f);
+      const dataUrl = isDcm ? await dicomToDataUrl(url) : await imgToDataUrl(url);
+      if (dataUrl) imgDataUrls.push(dataUrl);
+    }
+    const pdfPP = _printPerPage;
+    for (let p = 0; p * pdfPP < imgDataUrls.length; p++) {
+      const batch = imgDataUrls.slice(p * pdfPP, p * pdfPP + pdfPP);
+      paginaImmagini += `
+      <div class="img-page">
+        <div class="img-hdr">${esc(r.cognome)} ${esc(r.nome)} — ${esc(r.tipo)} — ${fmt(r.data)}</div>
+        <div class="img-grid-print" style="grid-template-rows:repeat(${pdfPP/2},1fr)">
+          ${batch.map(src => `<div class="img-cell"><img src="${src}"></div>`).join('')}
+        </div>
+      </div>`;
+    }
   }
   const dataStampa = new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
   const etaStr = etaLabel(r.nascita, r.data);
@@ -1669,7 +2232,7 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
 @media print{.page{padding:20px 30px;}body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
 .img-page{page-break-before:always;padding:14px 20px;height:100vh;box-sizing:border-box;display:flex;flex-direction:column;}
 .img-hdr{font-size:8pt;color:#888;margin-bottom:8px;border-bottom:1px solid #ddd;padding-bottom:5px;flex-shrink:0;}
-.img-grid-print{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,1fr);gap:8px;flex:1;min-height:0;}
+.img-grid-print{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1;min-height:0;}
 .img-cell{border:1px solid #ddd;padding:4px;background:#fff;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;}
 .img-cell img{width:100%;height:100%;object-fit:contain;display:block;}
 </style></head><body>
@@ -1775,13 +2338,28 @@ function renderConfig() {
   document.getElementById('path-locale-display').textContent = currentDir + '/referteco_data.json';
   document.getElementById('config-status').textContent = '';
 
+  // Mostra path attivo in alto
+  const curDisplay = document.getElementById('current-datadir-display');
+  if (curDisplay) curDisplay.textContent = currentDir;
+
+  // Riempi i nuovi box (auto-rilevato / manuale)
+  const autoBox = document.getElementById('gdrive-auto-box');
+  const manualBox = document.getElementById('gdrive-manual-box');
+  const autoPath = document.getElementById('gdrive-detected-path');
   if (detectedGoogleDrive) {
-    document.getElementById('gdrive-detected').style.display = 'block';
+    if (autoBox)  autoBox.style.display = 'block';
+    if (manualBox) manualBox.style.display = 'none';
+    if (autoPath) autoPath.textContent = detectedGoogleDrive;
+  } else {
+    if (autoBox)  autoBox.style.display = 'none';
+    if (manualBox) manualBox.style.display = 'block';
   }
-  if (isGdrive) {
-    document.getElementById('gdrive-path').value = dataDir;
-  } else if (detectedGoogleDrive && !document.getElementById('gdrive-path').value) {
-    document.getElementById('gdrive-path').value = detectedGoogleDrive;
+
+  // Input personalizzato (dentro details)
+  const pathInput = document.getElementById('gdrive-path');
+  if (pathInput) {
+    if (isGdrive) pathInput.value = dataDir;
+    else if (detectedGoogleDrive && !pathInput.value) pathInput.value = detectedGoogleDrive;
   }
 
   const keyStatus = document.getElementById('ai-key-status');
@@ -1795,12 +2373,34 @@ function onModalitaChange() {
   // nessuna logica extra necessaria, la UI si aggiorna via CSS :has()
 }
 
+// Imposta + salva Google Drive in un solo click
+async function usaGoogleDrive() {
+  const detected = _configData.detectedGoogleDrive;
+  if (!detected) {
+    toast('Google Drive non rilevato. Installa Google Drive per Desktop o inserisci il percorso manualmente.', 'err');
+    return;
+  }
+  // Seleziona il radio Google Drive e mette il path
+  document.getElementById('r-gdrive').checked = true;
+  const pathInput = document.getElementById('gdrive-path');
+  if (pathInput) pathInput.value = detected;
+  // Salva immediatamente
+  try {
+    const res = await apiPost('/api/config', { dataDir: detected });
+    if (res.error) { toast('Errore: ' + res.error, 'err'); return; }
+    toast('✓ Google Drive attivato! Riavvia il programma per applicare.', 'ok');
+    document.getElementById('config-status').textContent = '✓ Salvato — riavvia per applicare';
+    await loadConfig();
+  } catch(e) {
+    toast('Errore salvataggio: ' + e.message, 'err');
+  }
+}
+
 function rilevaDrive() {
   const detected = _configData.detectedGoogleDrive;
   if (detected) {
     document.getElementById('gdrive-path').value = detected;
     document.getElementById('r-gdrive').checked = true;
-    document.getElementById('gdrive-detected').style.display = 'block';
     toast('Google Drive rilevato: ' + detected, 'ok');
   } else {
     toast('Google Drive non trovato. Inserisci il percorso manualmente.', 'err');
@@ -1828,6 +2428,29 @@ async function salvaConfig() {
   toast('Impostazioni salvate', 'ok');
   _configData.dataDir = dataDir;
   await loadConfig();
+}
+
+// ── PULIZIA CARTELLE ORFANE ───────────────────────────────────
+async function pulisciOrfane() {
+  const out = document.getElementById('pulisci-result');
+  if (!confirm('Cercare e cancellare cartelle di immagini SENZA referto associato?\n\nLe cartelle dei referti esistenti NON verranno toccate.')) return;
+  if (out) { out.textContent = '🔄 Scansione in corso…'; out.style.color = 'var(--text-muted)'; }
+  try {
+    const res = await apiPost('/api/referti/pulisci-orfane', {});
+    if (res.error) {
+      if (out) { out.textContent = '❌ ' + res.error; out.style.color = '#dc2626'; }
+      toast('Errore: ' + res.error, 'err');
+      return;
+    }
+    const msg = res.orfane === 0
+      ? '✓ Nessuna cartella orfana trovata.'
+      : '✓ Eliminate ' + res.orfane + ' cartelle orfane (' + res.spazioMB + ' MB liberati)';
+    if (out) { out.textContent = msg; out.style.color = res.orfane > 0 ? 'var(--accent-mid)' : 'var(--text-muted)'; }
+    toast(msg, 'ok');
+  } catch(e) {
+    if (out) { out.textContent = '❌ Errore: ' + e.message; out.style.color = '#dc2626'; }
+    toast('Errore: ' + e.message, 'err');
+  }
 }
 
 // ── QUIT ──────────────────────────────────────────────────────
@@ -1897,11 +2520,15 @@ async function init() {
   document.getElementById('f-data').value = oggi();
   await loadReferti();
   await loadPredef();
-  loadPazientiAttesa(); // Carica pazienti in attesa dall'Agenda (non bloccante)
   loadTema();
   initResizer();
   initMeasureTool();
+  setPrintPerPage(_printPerPage);
+  loadPazientiAttesa();
   document.addEventListener('keydown', e => {
+    // F5 e Ctrl+R: ricarica pagina (necessario in modalità --app senza chrome del browser)
+    if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) { e.preventDefault(); window.location.reload(); return; }
+
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     const inNuovo = document.getElementById('view-nuovo').classList.contains('active');
@@ -1920,41 +2547,37 @@ async function init() {
   });
 }
 
-init();
-
 // ══════════════════════════════════════════════════════════════
 // INTEGRAZIONE AGENDA — Pazienti in attesa
 // ══════════════════════════════════════════════════════════════
 
 let _attesaAperta = true;
-let _appuntamentoAttivo = null; // id appuntamento corrente
+let _appuntamentoAttivo = null;
 
-// Carica e mostra i pazienti con stato "arrivato" oggi
 async function loadPazientiAttesa() {
   try {
     const lista = await fetch('/api/agenda/pazienti-attesa').then(r => r.json());
     renderPazientiAttesa(lista);
   } catch (e) {
-    // Agenda non raggiungibile — pannello nascosto silenziosamente
-    document.getElementById('attesa-panel').style.display = 'none';
+    const panel = document.getElementById('attesa-panel');
+    if (panel) panel.style.display = 'none';
   }
 }
 
 function renderPazientiAttesa(lista) {
-  const panel = document.getElementById('attesa-panel');
-  const listEl = document.getElementById('attesa-list');
+  const panel   = document.getElementById('attesa-panel');
+  const listEl  = document.getElementById('attesa-list');
   const countEl = document.getElementById('attesa-count');
-
-  if (!lista.length) {
+  if (!panel || !listEl) return;
+  if (!lista || !lista.length) {
     countEl.textContent = '';
     listEl.innerHTML = '<div class="attesa-empty">Nessun paziente in attesa al momento</div>';
     return;
   }
-
   countEl.textContent = lista.length;
   listEl.innerHTML = lista.map(a => {
-    const ora   = new Date(a.data_ora_inizio).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
-    const nome  = a.pazienti ? `${a.pazienti.cognome} ${a.pazienti.nome}` : '—';
+    const ora  = new Date(a.data_ora_inizio).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'});
+    const nome = a.pazienti ? `${a.pazienti.cognome} ${a.pazienti.nome}` : '—';
     const esame = a.tipi_prestazione?.nome || '';
     return `<div class="attesa-item" onclick="caricaPazienteDaAgenda('${a.id}')">
       <div class="attesa-ora">${ora}</div>
@@ -1969,101 +2592,149 @@ function renderPazientiAttesa(lista) {
   }).join('');
 }
 
-// Pre-compila il form RefertEco con i dati del paziente dall'Agenda
 async function caricaPazienteDaAgenda(appuntamentoId) {
   try {
-    const a = await fetch(`/api/agenda/pazienti-attesa`).then(r => r.json());
+    const a = await fetch('/api/agenda/pazienti-attesa').then(r => r.json());
     const app = a.find(x => x.id === appuntamentoId);
     if (!app || !app.pazienti) return;
-
     const p = app.pazienti;
-
-    // Pre-compila i campi del form
     document.getElementById('f-cognome').value = p.cognome || '';
     document.getElementById('f-nome').value    = p.nome    || '';
-    if (p.data_nascita) {
-      document.getElementById('f-nascita').value = p.data_nascita.slice(0, 10);
-    }
-
-    // Tipo esame: corrispondenza esatta (i nomi sono sincronizzati tra Agenda e RefertEco)
+    if (p.data_nascita) document.getElementById('f-nascita').value = p.data_nascita.slice(0, 10);
     if (app.tipi_prestazione?.nome) {
-      const esame  = app.tipi_prestazione.nome.trim();
-      const sel    = document.getElementById('f-tipo-sel');
-      const custom = document.getElementById('f-tipo-custom');
-
-      // 1. Corrispondenza esatta
+      const esame = app.tipi_prestazione.nome.trim();
+      const sel   = document.getElementById('f-tipo-sel');
       let trovato = false;
       for (const opt of sel.options) {
-        if (opt.value === esame) {
-          sel.value = esame;
-          trovato = true;
-          break;
-        }
+        if (opt.value === esame) { sel.value = esame; trovato = true; break; }
       }
-
-      // 2. Fallback: corrispondenza case-insensitive
       if (!trovato) {
-        const esameLower = esame.toLowerCase();
+        const low = esame.toLowerCase();
         for (const opt of sel.options) {
-          if (opt.value && opt.value.toLowerCase() === esameLower) {
-            sel.value = opt.value;
-            trovato = true;
-            break;
-          }
+          if (opt.value && opt.value.toLowerCase() === low) { sel.value = opt.value; trovato = true; break; }
         }
       }
-
-      // 3. Nessuna corrispondenza → campo personalizzato
       if (!trovato) {
         sel.value = '__custom__';
+        const custom = document.getElementById('f-tipo-custom');
         if (custom) custom.value = esame;
       }
-
       if (typeof onTipoSelChange === 'function') onTipoSelChange();
     }
-
-    // Data odierna
-    document.getElementById('f-data').value = new Date().toISOString().slice(0,10);
-
-    // Memorizza l'appuntamento attivo per marcarlo "refertato" al salvataggio
+    document.getElementById('f-data').value = new Date().toISOString().slice(0, 10);
     _appuntamentoAttivo = appuntamentoId;
-
-    // Vai in cima alla pagina e metti il focus sul referto
     document.getElementById('f-cognome').scrollIntoView({ behavior: 'smooth', block: 'center' });
     setTimeout(() => document.getElementById('f-cognome').focus(), 400);
-
-    // Feedback visivo — evidenzia la riga selezionata
     document.querySelectorAll('.attesa-item').forEach(el => el.style.background = '');
-    const righe = document.querySelectorAll('.attesa-item');
-    righe.forEach(el => {
-      if (el.querySelector('.attesa-btn')?.getAttribute('onclick')?.includes(appuntamentoId)) {
+    document.querySelectorAll('.attesa-item').forEach(el => {
+      if (el.querySelector('.attesa-btn')?.getAttribute('onclick')?.includes(appuntamentoId))
         el.style.background = '#d4edcc';
-      }
     });
-  } catch (e) {
-    console.error('Errore caricamento paziente da Agenda:', e);
-  }
+  } catch (e) { console.error('Errore caricamento paziente da Agenda:', e); }
 }
 
-// Aggiorna lo stato dell'appuntamento su Agenda dopo salvataggio referto
 async function marcaRefertato() {
   if (!_appuntamentoAttivo) return;
   try {
     await fetch(`/api/agenda/marca-refertato/${_appuntamentoAttivo}`, { method: 'POST' });
     _appuntamentoAttivo = null;
-    // Aggiorna la lista
     await loadPazientiAttesa();
   } catch (e) {}
 }
 
-// Toggle apertura/chiusura pannello
 function toggleAttesa() {
   _attesaAperta = !_attesaAperta;
   const list    = document.getElementById('attesa-list');
   const chevron = document.getElementById('attesa-chevron');
-  list.style.display    = _attesaAperta ? '' : 'none';
-  chevron.classList.toggle('closed', !_attesaAperta);
+  if (list)    list.style.display = _attesaAperta ? '' : 'none';
+  if (chevron) chevron.classList.toggle('closed', !_attesaAperta);
 }
 
-// Aggiornamento automatico ogni 60 secondi
 setInterval(loadPazientiAttesa, 60000);
+
+// ── ORTHANC PANEL ─────────────────────────────────────────────
+
+async function apriPanelOrthanc() {
+  const overlay = document.getElementById('orthanc-overlay');
+  const statusEl = document.getElementById('orthanc-status');
+  const listEl = document.getElementById('orthanc-list');
+  overlay.classList.add('open');
+  statusEl.className = 'orthanc-status';
+  statusEl.textContent = 'Connessione a Orthanc…';
+  listEl.innerHTML = '<div class="orthanc-loading">Caricamento studi…</div>';
+
+  const status = await apiGet('/api/orthanc/status');
+  if (!status || !status.online) {
+    statusEl.className = 'orthanc-status err';
+    statusEl.textContent = '● Orthanc non raggiungibile — verificare che il servizio sia attivo';
+    listEl.innerHTML = '<div class="orthanc-empty">Nessuno studio disponibile.<br>Assicurarsi che Orthanc sia in esecuzione.</div>';
+    return;
+  }
+  statusEl.className = 'orthanc-status ok';
+  statusEl.textContent = '● Orthanc online — AET: ' + (status.aet || 'ORTHANC') + '  v' + (status.version || '');
+
+  const studi = await apiGet('/api/orthanc/studi');
+  if (!studi || studi.length === 0) {
+    listEl.innerHTML = '<div class="orthanc-empty">Nessuno studio presente.<br>L\'ecografo deve inviare le immagini a questo PC<br>(IP: 192.168.1.17, porta: 4242, AET: ORTHANC)</div>';
+    return;
+  }
+  listEl.innerHTML = studi.map(s => `
+    <div class="orthanc-card">
+      <div class="orthanc-card-name">${esc(s.patientName || '(paziente sconosciuto)')}</div>
+      <div class="orthanc-card-meta">
+        ${s.birthDate ? 'Nato/a: ' + esc(s.birthDate) + '<br>' : ''}
+        ${s.studyDate ? 'Esame: ' + esc(s.studyDate) + '<br>' : ''}
+        ${s.description ? esc(s.description) + '<br>' : ''}
+        ${s.modality ? 'Modalità: ' + esc(s.modality) : ''}
+      </div>
+      <div class="orthanc-card-foot">
+        <span class="orthanc-badge">${s.nInstances} immagini</span>
+        <button class="btn btn-primary orthanc-importa-btn" onclick="importaDaOrthanc('${s.id}')">
+          📥 Importa
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+function chiudiPanelOrthanc(e) {
+  if (e && e.target !== document.getElementById('orthanc-overlay')) return;
+  document.getElementById('orthanc-overlay').classList.remove('open');
+}
+
+async function importaDaOrthanc(studyId) {
+  if (!_tempRefertoId) _tempRefertoId = Date.now().toString();
+  const btn = event.target.closest('button');
+  if (btn) { btn.disabled = true; btn.textContent = 'Importazione…'; }
+  toast('Importazione immagini da Orthanc…', 'ok');
+
+  const res = await apiPost('/api/orthanc/importa/' + studyId, { refertoId: _tempRefertoId });
+  if (!res || res.error) {
+    toast('Errore: ' + (res?.error || 'sconosciuto'), 'err');
+    if (btn) { btn.disabled = false; btn.textContent = '📥 Importa'; }
+    return;
+  }
+
+  // Auto-fill campi paziente
+  const p = res.paziente || {};
+  if (p.cognome) { const el = document.getElementById('f-cognome'); if (el && !el.value) el.value = p.cognome; }
+  if (p.nome)    { const el = document.getElementById('f-nome');    if (el && !el.value) el.value = p.nome; }
+  if (p.nascita) { const el = document.getElementById('f-nascita'); if (el && !el.value) el.value = p.nascita; }
+  if (p.data)    { const el = document.getElementById('f-data');    if (el && !el.value) el.value = p.data; }
+  if (p.tipo) {
+    const sel = document.getElementById('f-tipo-sel');
+    if (sel) {
+      const opt = Array.from(sel.options).find(o => o.value.toLowerCase() === p.tipo.toLowerCase());
+      if (opt) { sel.value = opt.value; sel.dispatchEvent(new Event('change')); }
+      else {
+        sel.value = '__custom__'; sel.dispatchEvent(new Event('change'));
+        const custom = document.getElementById('f-tipo-custom'); if (custom) custom.value = p.tipo;
+      }
+    }
+  }
+
+  document.getElementById('orthanc-overlay').classList.remove('open');
+  await ricaricaViewer(res.files);
+  toast(`Importate ${res.importati} immagini da Orthanc`, 'ok');
+}
+
+init();
