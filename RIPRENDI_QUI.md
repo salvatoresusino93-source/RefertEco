@@ -4,8 +4,8 @@
 > fare qualsiasi modifica. Contiene il contesto delle conversazioni precedenti, le
 > decisioni prese, e i prossimi passi.
 
-Ultimo aggiornamento: **2026-05-26**, sessione con Salvatore (agenda: slot 30 min,
-DOB obbligatoria, fix Railway build, duplicato telefono).
+Ultimo aggiornamento: **2026-05-26**, sessione workstation studio (Orthanc su Windows,
+integrazione Agenda in RefertEco, notifica email Resend su nuovo appuntamento).
 
 ---
 
@@ -207,7 +207,43 @@ Contiene: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `TWILIO_*`, `JWT_SECRET`, `POR
 
 ---
 
-## 7. PROGETTO IN SOSPESO: INTEGRAZIONE ORTHANC
+## 7. SESSIONE 2026-05-26 — WORKSTATION IN STUDIO
+
+### Orthanc su Windows (nuovo)
+- Il server Linux originale (192.168.1.77) era irraggiungibile (btrfs corrotto, no monitor/tastiera)
+- Installato **Orthanc 1.12.11** direttamente su questa workstation (`C:\Program Files\Orthanc Server`)
+- Storage DICOM: `F:\OrthancStorage`
+- AET: `ORTHANC`, HTTP: 8042, DICOM: 4242
+- Gira come servizio Windows (avvio automatico)
+- Config: `C:\Program Files\Orthanc Server\Configuration\orthanc.json`
+- Ecografo Samsung Medison V5 da configurare: IP .50, inviare a 192.168.1.17:4242 AET ORTHANC
+
+### Integrazione Orthanc → RefertEco
+- Pulsante 🏥 nel viewer "Nuovo Referto" apre pannello studi recenti
+- `GET /api/orthanc/studi` → lista studi da Orthanc
+- `POST /api/orthanc/importa/:studyId` → scarica DICOM nella cartella temp del referto
+- Auto-fill nome/nascita/data/tipo dal DICOM
+
+### Integrazione Agenda → RefertEco (questa workstation)
+- Pannello verde "Pazienti in attesa" in cima al form (da Agenda Railway)
+- Click "Avvia referto →" pre-compila tutti i campi
+- Al salvataggio referto → segna appuntamento come "refertato" su Agenda
+- Proxy in server.js: `/api/agenda/pazienti-attesa` e `/api/agenda/marca-refertato/:id`
+
+### Notifica email su nuovo appuntamento
+- Servizio: **Resend** (`resend` npm package)
+- File: `agenda-backend/src/services/email.js`
+- Trigger: POST `/api/appuntamenti` → `notificaNuovoAppuntamento(data)`
+- Destinatario: `salvatore.susino93@gmail.com`
+- Mittente: `onboarding@resend.dev` (free tier Resend)
+- Variabile Railway: `RESEND_API_KEY` = `re_hGzWNiTr_...` (non committare)
+- ⚠️ La chiave NON è nel .env committato — solo su Railway Variables
+
+### Roadmap Orthanc (da fare quando ecografo configurato)
+- Matching automatico paziente: cerca studi Orthanc di oggi con nome = paziente nel form
+- Import automatico senza selezione manuale
+
+## 8. PROGETTO IN SOSPESO: INTEGRAZIONE ORTHANC
 
 L'utente ha un sistema Orthanc (PACS) configurato da un ingegnere ora irreperibile.
 Non funziona da tempo. Da affrontare quando si lavora sulla workstation in studio.
