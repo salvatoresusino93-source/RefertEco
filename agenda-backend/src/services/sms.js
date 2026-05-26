@@ -90,6 +90,28 @@ async function inviaPromemoria(appuntamento) {
   return { sid: result.id || 'ok', numero, testo };
 }
 
+// ─── SMS promemoria 1 ora prima ───────────────────────────────────────────
+async function inviaPromemoria1Ora(appuntamento) {
+  const p = appuntamento.pazienti;
+  if (!p) throw new Error('Dati paziente mancanti');
+
+  const numero = normalizzaNumero(p.telefono);
+  if (!numero) throw new Error(`Numero non valido: "${p.telefono}"`);
+
+  const ora   = fmtOra(appuntamento.data_ora_inizio);
+  const esame = appuntamento.tipi_prestazione?.nome || 'visita';
+  const nome  = `${p.nome} ${p.cognome}`;
+
+  const testo =
+    `PROMEMORIA: Gentile ${nome}, il suo appuntamento per ${esame} ` +
+    `è tra un'ora, alle ore ${ora} ` +
+    `presso il ${STUDIO}.` +
+    (TEL ? ` Per info: ${TEL}.` : '');
+
+  const result = await inviaSms(numero, testo);
+  return { sid: result.id || 'ok', numero, testo };
+}
+
 // ─── SMS conferma prenotazione ────────────────────────────────────────────
 async function inviaSmsConferma(appuntamento) {
   const p = appuntamento.pazienti;
@@ -134,4 +156,4 @@ async function inviaSmsAnnullamento(appuntamento) {
   return { sid: result.id || 'ok', numero, testo };
 }
 
-module.exports = { inviaPromemoria, inviaSmsConferma, inviaSmsAnnullamento, normalizzaNumero };
+module.exports = { inviaPromemoria, inviaPromemoria1Ora, inviaSmsConferma, inviaSmsAnnullamento, normalizzaNumero };

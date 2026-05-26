@@ -6,7 +6,7 @@
 
 const cron    = require('node-cron');
 const supabase = require('./supabase');
-const { inviaPromemoria } = require('./sms');
+const { inviaPromemoria, inviaPromemoria1Ora } = require('./sms');
 
 // ─── Carica appuntamenti di domani da Supabase ────────────────────────────
 async function appuntamentiDomani() {
@@ -74,14 +74,48 @@ async function inviaPromemoriDomani() {
   return { ok: true, inviati, saltati, errori, totale: lista.length };
 }
 
-// ─── Avvia il cron job ───────────────────────────────────────────────────
+// ─── Invia promemoria 1 ora prima dell'appuntamento ──────────────────────
+async function controllaSmsUnaOra() {
+  const ora = new Date();
+
+  // Finestra: appuntamenti che iniziano tra 59 e 61 minuti da adesso
+  const da = new Date(ora.getTime() + 59 * 60 * 1000);
+  const a  = new Date(ora.getTime() + 61 * 60 * 1000);
+
+  const { data, error } = await supabase
+    .from('appuntamenti')
+    .select('*, pazienti(*), tipi_prestazione(*)')
+    .neq('stato', 'annullato')
+    .gte('data_ora_inizio', da.toISOString())
+    .lte('data_ora_inizio', a.toISOString());
+
+  if (error || !data || data.length === 0) return;
+
+  for (const app of data) {
+    const telefono = app.pazienti?.telefono;
+    const nome     = app.pazienti ? `${app.pazienti.nome} ${app.pazienti.cognome}` : app.id;
+    if (!telefono) continue;
+
+    try {
+      await inviaPromemoria1Ora(app);
+      console.log(`[SMS 1h] Inviato a ${nome}`);
+    } catch (e) {
+      console.error(`[SMS 1h] Errore ${nome}: ${e.message}`);
+    }
+  }
+}
+
+// ─── Avvia i cron job ────────────────────────────────────────────────────
 function avviaReminder() {
-  // Ogni giorno alle 19:00 ora italiana (Europe/Rome)
+  // Ogni giorno alle 19:00 ora italiana → promemoria per domani
   cron.schedule('0 19 * * *', inviaPromemoriDomani, {
     timezone: 'Europe/Rome'
   });
 
-  console.log('[SMS Reminder] Cron job attivo — invio SMS ogni giorno alle 19:00 (Europe/Rome)');
+  // Ogni minuto → controlla appuntamenti tra 1 ora
+  cron.schedule('* * * * *', controllaSmsUnaOra);
+
+  console.log('[SMS Reminder] Cron job attivi — 19:00 serale + 1 ora prima (Europe/Rome)');
 }
 
 module.exports = { avviaReminder, inviaPromemoriDomani };
