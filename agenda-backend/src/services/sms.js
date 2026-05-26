@@ -1,42 +1,24 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// SERVIZIO SMS — Twilio
+// SERVIZIO SMS — Skebby REST API v2
 // ═══════════════════════════════════════════════════════════════════════════
 
-const twilio = require('twilio');
-
-const SID    = process.env.TWILIO_ACCOUNT_SID;
-const TOKEN  = process.env.TWILIO_AUTH_TOKEN;
-const FROM   = process.env.TWILIO_PHONE_NUMBER;
-const STUDIO = process.env.STUDIO_NOME  || 'Studio Medico';
-const TEL    = process.env.STUDIO_TELEFONO || '';
-
-let client = null;
-
-function getClient() {
-  if (!client && SID && TOKEN) {
-    client = twilio(SID, TOKEN);
-  }
-  return client;
-}
+const STUDIO = process.env.STUDIO_NOME      || 'Studio Medico';
+const TEL    = process.env.STUDIO_TELEFONO  || '';
 
 // ─── Normalizza numero italiano → formato E.164 (+39XXXXXXXXXX) ───────────
 function normalizzaNumero(tel) {
   if (!tel) return null;
-  // Rimuovi spazi, trattini, punti
   let n = tel.replace(/[\s\-\.]/g, '');
-  // Già in formato internazionale
-  if (n.startsWith('+39')) return n;
+  if (n.startsWith('+39'))  return n;
   if (n.startsWith('0039')) return '+39' + n.slice(4);
-  // Numero mobile italiano (inizia con 3) o fisso (0...)
   if (n.startsWith('3') && n.length >= 9) return '+39' + n;
-  if (n.startsWith('0') && n.length >= 8)  return '+39' + n;
+  if (n.startsWith('0') && n.length >= 8) return '+39' + n;
   return null;
 }
 
 // ─── Formatta data in italiano (es. "sabato 24 maggio") ──────────────────
 function fmtData(iso) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('it-IT', {
+  return new Date(iso).toLocaleDateString('it-IT', {
     weekday: 'long', day: 'numeric', month: 'long',
     timeZone: 'Europe/Rome'
   });
@@ -50,11 +32,57 @@ function fmtOra(iso) {
   });
 }
 
-// ─── Invia un singolo SMS di promemoria ──────────────────────────────────
-async function inviaPromemoria(appuntamento) {
-  const c = getClient();
-  if (!c) throw new Error('Twilio non configurato (credenziali mancanti)');
+// ─── Autenticazione Skebby → restituisce { userKey, sessionKey } ──────────
+async function skebbyAuth() {
+  const username = process.env.SKEBBY_USERNAME;
+  const password = process.env.SKEBBY_PASSWORD;
+  if (!username || !password) throw new Error('SKEBBY_USERNAME o SKEBBY_PASSWORD non impostati');
 
+  const url = `https://api.skebby.it/API/send/smseasy/advanced/json` +
+              `?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+
+  const res = await fetch(url);
+  const txt = await res.text();
+  if (!res.ok || !txt.includes(';')) {
+    throw new Error(`Skebby auth fallita: ${txt}`);
+  }
+
+  const [userKey, sessionKey] = txt.split(';');
+  return { userKey: userKey.trim(), sessionKey: sessionKey.trim() };
+}
+
+// ─── Invia SMS tramite Skebby ─────────────────────────────────────────────
+async function inviaSms(numero, testo) {
+  const { userKey, sessionKey } = await skebbyAuth();
+
+  const sender = (process.env.SKEBBY_SENDER || 'Studio').slice(0, 11);
+
+  const body = {
+    message:      testo,
+    message_type: 'SI',   // Smart Info — permette mittente alfanumerico
+    sender,
+    recipient: [numero],
+  };
+
+  const res = await fetch('https://api.skebby.it/API/send/smseasy/advanced/json', {
+    method:  'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'user_key':     userKey,
+      'Session_key':  sessionKey,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json.result === 'KO') {
+    throw new Error(`Skebby invio fallito: ${JSON.stringify(json)}`);
+  }
+  return json;
+}
+
+// ─── SMS promemoria (inviato la sera prima dall'appuntamento) ────────────
+async function inviaPromemoria(appuntamento) {
   const p = appuntamento.pazienti;
   if (!p) throw new Error('Dati paziente mancanti');
 
@@ -73,20 +101,12 @@ async function inviaPromemoria(appuntamento) {
     `presso il ${STUDIO}.` +
     (TEL ? ` Per info: ${TEL}.` : '');
 
-  const msg = await c.messages.create({
-    body: testo,
-    from: FROM,
-    to:   numero,
-  });
-
-  return { sid: msg.sid, numero, testo };
+  const result = await inviaSms(numero, testo);
+  return { sid: result.order_id || 'ok', numero, testo };
 }
 
-// ─── SMS conferma prenotazione (inviato subito al momento della prenotazione) ─
+// ─── SMS conferma prenotazione ────────────────────────────────────────────
 async function inviaSmsConferma(appuntamento) {
-  const c = getClient();
-  if (!c) throw new Error('Twilio non configurato (credenziali mancanti)');
-
   const p = appuntamento.pazienti;
   if (!p) throw new Error('Dati paziente mancanti');
 
@@ -104,15 +124,12 @@ async function inviaSmsConferma(appuntamento) {
     `presso il ${STUDIO}.` +
     (TEL ? ` Per info: ${TEL}.` : '');
 
-  const msg = await c.messages.create({ body: testo, from: FROM, to: numero });
-  return { sid: msg.sid, numero, testo };
+  const result = await inviaSms(numero, testo);
+  return { sid: result.order_id || 'ok', numero, testo };
 }
 
-// ─── SMS annullamento appuntamento ───────────────────────────────────────
+// ─── SMS annullamento appuntamento ────────────────────────────────────────
 async function inviaSmsAnnullamento(appuntamento) {
-  const c = getClient();
-  if (!c) throw new Error('Twilio non configurato (credenziali mancanti)');
-
   const p = appuntamento.pazienti;
   if (!p) throw new Error('Dati paziente mancanti');
 
@@ -128,8 +145,8 @@ async function inviaSmsAnnullamento(appuntamento) {
     `è stato annullato.` +
     (TEL ? ` Per info o nuova prenotazione: ${TEL}.` : '');
 
-  const msg = await c.messages.create({ body: testo, from: FROM, to: numero });
-  return { sid: msg.sid, numero, testo };
+  const result = await inviaSms(numero, testo);
+  return { sid: result.order_id || 'ok', numero, testo };
 }
 
 module.exports = { inviaPromemoria, inviaSmsConferma, inviaSmsAnnullamento, normalizzaNumero };

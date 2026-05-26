@@ -17,8 +17,7 @@
     "node-cron": "^4.2.1",
     "resend": "^6.12.4",
     "socket.io": "^4.6.1",
-    "twilio": "^6.0.2",
-    "ws": "^8.21.0"
+"ws": "^8.21.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
