@@ -3,7 +3,7 @@ const supabase  = require('../services/supabase');
 const { requireAuth, requireMedico } = require('../middleware/auth');
 const { getIO }  = require('../socket');
 const { notificaNuovoAppuntamento, notificaAppuntamentoAnnullato } = require('../services/email');
-const { inviaSmsConferma, inviaSmsAnnullamento } = require('../services/sms');
+const { inviaPromemoria, inviaSmsAnnullamento } = require('../services/sms');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -108,6 +108,27 @@ router.post('/', async (req, res) => {
 
   // Notifica email al medico
   notificaNuovoAppuntamento(data).catch(() => {});
+
+  // SMS promemoria immediato se l'appuntamento è domani e siamo già oltre le 19:00
+  // (il cron serale è già passato e non lo manderebbe più)
+  try {
+    const ora_it = new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' });
+    const adesso = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+    const domani = new Date(adesso);
+    domani.setDate(domani.getDate() + 1);
+
+    const appData = new Date(new Date(data_ora_inizio).toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+    const eDopoMezzogiorno = adesso.getHours() >= 19;
+    const eDomani = appData.getFullYear() === domani.getFullYear() &&
+                    appData.getMonth()     === domani.getMonth()    &&
+                    appData.getDate()      === domani.getDate();
+
+    if (eDomani && eDopoMezzogiorno) {
+      inviaPromemoria(data).catch(e => console.error('[SMS] Promemoria immediato:', e.message));
+    }
+  } catch (e) {
+    console.error('[SMS] Controllo promemoria immediato:', e.message);
+  }
 
   res.status(201).json(data);
 });
