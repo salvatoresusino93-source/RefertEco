@@ -483,6 +483,7 @@ async function salvaNuovoPaz() {
   const nome      = $('np-nome').value.trim();
   const telefono  = $('np-telefono').value.trim();
   if (!cognome || !nome)    { alert('Cognome e nome obbligatori'); return; }
+  if (!$('np-nascita').value) { alert('La data di nascita è obbligatoria'); $('np-nascita').focus(); return; }
   if (!telefono)            { alert('Il numero di telefono è obbligatorio'); $('np-telefono').focus(); return; }
   const btn = $('btn-salva-nuovo-paz');
   btn.textContent = 'Salvataggio…'; btn.disabled = true;

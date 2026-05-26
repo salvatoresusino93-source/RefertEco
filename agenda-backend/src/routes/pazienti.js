@@ -41,6 +41,9 @@ router.post('/', async (req, res) => {
   if (!cognome?.trim() || !nome?.trim()) {
     return res.status(400).json({ error: 'Cognome e nome sono obbligatori' });
   }
+  if (!data_nascita) {
+    return res.status(400).json({ error: 'La data di nascita è obbligatoria' });
+  }
   if (!telefono?.trim()) {
     return res.status(400).json({ error: 'Il numero di telefono è obbligatorio' });
   }
