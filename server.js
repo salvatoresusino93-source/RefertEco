@@ -412,6 +412,7 @@ app.post('/api/agenda/marca-refertato/:id', async (req, res) => {
 // ── ORTHANC PROXY ────────────────────────────────────────────
 
 const ORTHANC_BASE = 'http://localhost:8042';
+const WORKLIST_DIR = 'K:\\OrthancWorklists';
 
 async function orthancFetch(path, opts) {
   return fetch(ORTHANC_BASE + path, opts);
@@ -505,6 +506,230 @@ app.post('/api/orthanc/importa/:studyId', async (req, res) => {
   } catch (e) {
     console.error('[orthanc importa]', e);
     res.status(500).json({ error: 'Errore importazione: ' + e.message });
+  }
+});
+
+// ── WORKLIST DICOM (paziente arrivato → ecografo) ────────────
+// Crea una voce di worklist DICOM che il Samsung V5 vedrà al prossimo
+// "DICOM Worklist Query". Usa /tools/create-dicom di Orthanc per generare il file
+// DICOM con i tag corretti, poi lo salva in K:\OrthancWorklists.
+app.post('/api/worklist/crea', async (req, res) => {
+  const {
+    paziente_cognome,
+    paziente_nome,
+    paziente_data_nascita,
+    accession_number,
+    tipo_esame,
+    data_ora_inizio,
+  } = req.body;
+
+  if (!paziente_cognome || !paziente_nome || !accession_number) {
+    return res.status(400).json({ error: 'Mancano campi: cognome, nome, accession_number' });
+  }
+
+  const patientName = `${paziente_cognome.toUpperCase()}^${paziente_nome}`;
+  const patientId   = String(accession_number); // riusa accession come PatientID per ora
+  const dob         = (paziente_data_nascita || '').replace(/-/g, '');
+  const startDate   = data_ora_inizio
+    ? new Date(data_ora_inizio).toISOString().slice(0, 10).replace(/-/g, '')
+    : new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const startTime   = data_ora_inizio
+    ? new Date(data_ora_inizio).toTimeString().slice(0, 8).replace(/:/g, '')
+    : '090000';
+
+  try {
+    // Crea un'istanza DICOM minimale tramite Orthanc /tools/create-dicom
+    const tags = {
+      PatientName:               patientName,
+      PatientID:                 patientId,
+      PatientBirthDate:          dob,
+      AccessionNumber:           accession_number,
+      RequestedProcedureID:      accession_number,
+      RequestedProcedureDescription: tipo_esame || 'Ecografia',
+      // Scheduled Procedure Step Sequence — è una sequence DICOM
+      ScheduledProcedureStepSequence: [{
+        ScheduledStationAETitle:           'MEDISON',
+        ScheduledProcedureStepStartDate:   startDate,
+        ScheduledProcedureStepStartTime:   startTime,
+        Modality:                          'US',
+        ScheduledPerformingPhysicianName:  'SUSINO^SALVATORE',
+        ScheduledProcedureStepDescription: tipo_esame || 'Ecografia',
+        ScheduledProcedureStepID:          accession_number,
+      }],
+    };
+
+    const orthancRes = await orthancFetch('/tools/create-dicom', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ Tags: tags }),
+    });
+
+    if (!orthancRes.ok) {
+      const err = await orthancRes.text();
+      return res.status(500).json({ error: 'Orthanc create-dicom fallito: ' + err });
+    }
+
+    // L'istanza è stata creata; per la worklist serve il FILE DICOM raw
+    // Lo recupero e lo salvo come .wl nella cartella worklist
+    const json = await orthancRes.json();
+    const instanceId = json.ID;
+    const fileRes = await orthancFetch('/instances/' + instanceId + '/file');
+    if (!fileRes.ok) {
+      return res.status(500).json({ error: 'Impossibile recuperare il file DICOM' });
+    }
+    const buf = Buffer.from(await fileRes.arrayBuffer());
+
+    fs.mkdirSync(WORKLIST_DIR, { recursive: true });
+    const wlFile = path.join(WORKLIST_DIR, accession_number + '.wl');
+    fs.writeFileSync(wlFile, buf);
+
+    // Rimuovi l'istanza temporanea da Orthanc (era solo per generare il file)
+    await orthancFetch('/instances/' + instanceId, { method: 'DELETE' }).catch(() => {});
+
+    res.json({ ok: true, accession_number, file: wlFile });
+  } catch (e) {
+    console.error('[worklist crea]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Cerca studi Orthanc per AccessionNumber
+app.get('/api/orthanc/cerca-accession', async (req, res) => {
+  const n = req.query.n;
+  if (!n) return res.status(400).json({ error: 'Manca parametro n (accession number)' });
+  try {
+    const r = await orthancFetch('/tools/find', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        Level: 'Study',
+        Query: { AccessionNumber: n },
+      }),
+    });
+    if (!r.ok) return res.json([]);
+    const ids = await r.json();
+    res.json(ids || []);
+  } catch (e) {
+    res.json([]);
+  }
+});
+
+// Lista worklist attive
+app.get('/api/worklist', (req, res) => {
+  try {
+    if (!fs.existsSync(WORKLIST_DIR)) return res.json([]);
+    const files = fs.readdirSync(WORKLIST_DIR).filter(f => f.endsWith('.wl'));
+    res.json(files.map(f => ({
+      accession_number: f.replace(/\.wl$/, ''),
+      file: f,
+    })));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Rimuovi una worklist (es. quando esame completato o annullato)
+app.delete('/api/worklist/:accession', (req, res) => {
+  try {
+    const file = path.join(WORKLIST_DIR, req.params.accession + '.wl');
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── ORTHANC ARCHIVIA REFERTO ─────────────────────────────────
+// Invia le immagini del referto a Orthanc con i dati del paziente
+app.post('/api/orthanc/archivia/:refertoId', async (req, res) => {
+  const { refertoId } = req.params;
+  try {
+    // Leggi dati referto dal database
+    const referti = db.getReferti();
+    const referto = referti.find(r => String(r.id) === String(refertoId));
+    if (!referto) return res.status(404).json({ error: 'Referto non trovato' });
+
+    const imgDir = getImgDir(refertoId);
+    if (!fs.existsSync(imgDir)) return res.json({ archiviati: 0, msg: 'Nessuna immagine da archiviare' });
+
+    const files = fs.readdirSync(imgDir).filter(f =>
+      /\.(dcm|DCM|jpg|jpeg|png|JPG|PNG)$/i.test(f)
+    );
+    if (files.length === 0) return res.json({ archiviati: 0, msg: 'Nessuna immagine da archiviare' });
+
+    // Dati paziente per i tag DICOM
+    const patientName = `${(referto.cognome || '').toUpperCase()}^${referto.nome || ''}`;
+    const patientDob  = (referto.nascita || '').replace(/-/g, '');  // YYYYMMDD
+    const studyDate   = (referto.data    || '').replace(/-/g, '');
+    const studyDesc   = referto.tipo || 'Ecografia';
+    const studyUID    = `2.25.${refertoId}`;
+
+    let archiviati = 0;
+    const errori = [];
+
+    for (const fname of files) {
+      const fpath = path.join(imgDir, fname);
+      const isDicom = /\.dcm$/i.test(fname);
+
+      try {
+        let dicomBuffer;
+
+        if (isDicom) {
+          // File DICOM: invia direttamente aggiornando solo i tag paziente
+          dicomBuffer = fs.readFileSync(fpath);
+        } else {
+          // JPEG/PNG: crea DICOM Secondary Capture minimale
+          const imgData = fs.readFileSync(fpath);
+          const base64  = imgData.toString('base64');
+
+          // Usa l'API /tools/create-dicom di Orthanc per creare DICOM da immagine
+          const createRes = await orthancFetch('/tools/create-dicom', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              Tags: {
+                PatientName:      patientName,
+                PatientID:        String(refertoId),
+                PatientBirthDate: patientDob,
+                StudyDate:        studyDate,
+                StudyDescription: studyDesc,
+                StudyInstanceUID: studyUID,
+                Modality:         'OT',
+                SOPClassUID:      '1.2.840.10008.5.1.4.1.1.7', // Secondary Capture
+              },
+              Content: `data:image/${isDicom ? 'dcm' : fname.match(/\.(\w+)$/)?.[1] || 'jpeg'};base64,${base64}`,
+            }),
+          });
+
+          if (!createRes.ok) {
+            errori.push(`${fname}: create-dicom fallito (${createRes.status})`);
+            continue;
+          }
+          archiviati++;
+          continue; // create-dicom salva direttamente in Orthanc, non serve upload separato
+        }
+
+        // Upload DICOM direttamente
+        const uploadRes = await orthancFetch('/instances', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/dicom' },
+          body: dicomBuffer,
+        });
+
+        if (uploadRes.ok) {
+          archiviati++;
+        } else {
+          errori.push(`${fname}: upload fallito (${uploadRes.status})`);
+        }
+      } catch (e) {
+        errori.push(`${fname}: ${e.message}`);
+      }
+    }
+
+    res.json({ ok: true, archiviati, totale: files.length, errori });
+  } catch (e) {
+    console.error('[orthanc archivia]', e);
+    res.status(500).json({ error: e.message });
   }
 });
 

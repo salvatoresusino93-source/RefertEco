@@ -218,6 +218,8 @@
 
           <div class="form-actions">
             <button class="btn btn-primary" onclick="salvaReferto()">💾 Salva referto</button>
+            <button class="btn btn-primary" onclick="salvaEdEsporta(false)">📄 Solo referto</button>
+            <button class="btn btn-primary" onclick="salvaEdEsporta(true)">🖼 Referto + immagini</button>
             <button class="btn btn-secondary" onclick="resetForm()">Reset</button>
             <span style="flex:1"></span>
             <span style="font-size:11px;color:var(--text-muted);font-family:'DM Mono',monospace;">Dati salvati su database locale · SQLite</span>
@@ -263,6 +265,7 @@
               <input type="file" webkitdirectory multiple style="display:none" onchange="caricaImmaginiViewer(event)">
             </label>
             <button class="viewer-clear-btn" onclick="svuotaViewer()" title="Rimuovi immagini">✕</button>
+            <button class="viewer-measure-btn" id="viewer-collapse-btn" onclick="toggleViewerCollapse()" title="Nascondi/mostra pannello immagini">◀</button>
           </div>
 
           <div class="viewer-empty" id="viewer-empty">
@@ -406,6 +409,65 @@
             <div class="empty-title">Nessun referto trovato</div>
             <div style="font-size:13px;color:var(--text-muted)">Crea il primo referto dalla sezione "Nuovo referto"</div>
           </div>
+        </div>
+      </div>
+
+      <!-- ═══ VIEW EDIT REFERTO (sotto-pagina dell'archivio) ═══ -->
+      <div class="view" id="view-edit-referto">
+        <div class="edit-topbar">
+          <button class="btn btn-secondary btn-sm" onclick="tornaAdArchivio()">← Torna all'archivio</button>
+          <span class="edit-title" id="edit-title">Modifica referto</span>
+          <span style="flex:1"></span>
+          <button class="btn btn-primary btn-sm" onclick="salvaModifiche()">💾 Salva</button>
+          <button class="btn btn-primary btn-sm" onclick="esportaDaEdit(false)">📄 Solo referto</button>
+          <button class="btn btn-primary btn-sm" onclick="esportaDaEdit(true)">🖼 Referto + immagini</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminaDaEdit()">🗑 Elimina</button>
+        </div>
+
+        <div class="nuovo-layout" id="edit-layout">
+          <div class="nuovo-form">
+            <div class="form-card">
+
+              <div class="form-section">
+                <div class="sec-lbl">Dati paziente</div>
+                <div class="form-row c3">
+                  <div class="fg"><label>Cognome *</label><input type="text" id="e-cognome" autocomplete="off"></div>
+                  <div class="fg"><label>Nome *</label><input type="text" id="e-nome" autocomplete="off"></div>
+                  <div class="fg"><label>Data di nascita</label><input type="date" id="e-nascita"></div>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <div class="sec-lbl">Esame</div>
+                <div class="form-row c2">
+                  <div class="fg">
+                    <label>Tipo di esame *</label>
+                    <div class="tipo-wrap">
+                      <select id="e-tipo-sel"></select>
+                      <input type="text" id="e-tipo-custom" placeholder="...oppure digita un tipo personalizzato">
+                    </div>
+                  </div>
+                  <div class="fg"><label>Data esame *</label><input type="date" id="e-data"></div>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <div class="sec-lbl">Referto</div>
+                <div class="fg">
+                  <div class="ta-wrap">
+                    <textarea id="e-referto" placeholder="Testo del referto…"></textarea>
+                    <button class="mic-btn" id="mic-e-referto" title="Dettatura vocale" onclick="toggleDictation('e-referto','mic-e-referto','db-e-referto')">🎤</button>
+                  </div>
+                  <div class="dict-bar" id="db-e-referto">
+                    <div class="dict-dot"></div>
+                    <span>Dettatura in corso — parla in italiano. Clicca 🎤 per fermare.</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+          <!-- Resizer e viewer vengono spostati qui dinamicamente quando si entra in edit -->
         </div>
       </div>
 
@@ -561,6 +623,15 @@
       <div><div class="m-title" id="m-title"></div><div class="m-meta" id="m-meta"></div></div>
       <button class="m-close" onclick="closeModal()">✕</button>
     </div>
+    <div class="m-ft">
+      <button class="btn btn-danger btn-sm" id="m-del">🗑 Elimina</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeModal()">Chiudi</button>
+      <button class="btn btn-secondary btn-sm" id="m-btn-annulla-mod" style="display:none" onclick="annullaModificaReferto()">Annulla</button>
+      <button class="btn btn-primary btn-sm" id="m-btn-modifica" onclick="apriModificaReferto()">✏ Modifica</button>
+      <button class="btn btn-primary btn-sm" id="m-btn-salva-mod" style="display:none" onclick="salvaModificaReferto()">💾 Salva modifiche</button>
+      <button class="btn btn-primary btn-sm" id="m-pdf-solo" title="PDF solo testo del referto, senza immagini">📄 Solo referto</button>
+      <button class="btn btn-primary btn-sm" id="m-pdf-img"  title="PDF con testo e tutte le immagini allegate">🖼 Referto + immagini</button>
+    </div>
     <div class="m-body">
       <div id="m-view-section">
         <div class="info-grid" id="m-info"></div>
@@ -589,15 +660,6 @@
         <div class="img-grid" id="m-img-grid" ondrop="importaImmaginiDrop(event)" ondragover="importaImmaginiDragOver(event)" ondragleave="importaImmaginiDragLeave(event)"></div>
       </div>
       <div id="m-edit-section" style="display:none"></div>
-    </div>
-    <div class="m-ft">
-      <button class="btn btn-danger btn-sm" id="m-del">🗑 Elimina</button>
-      <button class="btn btn-secondary btn-sm" onclick="closeModal()">Chiudi</button>
-      <button class="btn btn-secondary btn-sm" id="m-btn-annulla-mod" style="display:none" onclick="annullaModificaReferto()">Annulla</button>
-      <button class="btn btn-primary btn-sm" id="m-btn-modifica" onclick="apriModificaReferto()">✏ Modifica</button>
-      <button class="btn btn-primary btn-sm" id="m-btn-salva-mod" style="display:none" onclick="salvaModificaReferto()">💾 Salva modifiche</button>
-      <button class="btn btn-primary btn-sm" id="m-pdf-solo" title="PDF solo testo del referto, senza immagini">📄 Solo referto</button>
-      <button class="btn btn-primary btn-sm" id="m-pdf-img"  title="PDF con testo e tutte le immagini allegate">🖼 Referto + immagini</button>
     </div>
   </div>
 </div>
@@ -632,6 +694,6 @@
   </div>
 </div>
 
-<script src="app.js?v=20260526a"></script>
+<script src="app.js?v=20260526g"></script>
 </body>
 </html>

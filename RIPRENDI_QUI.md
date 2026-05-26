@@ -243,6 +243,45 @@ Contiene: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `TWILIO_*`, `JWT_SECRET`, `POR
 - Matching automatico paziente: cerca studi Orthanc di oggi con nome = paziente nel form
 - Import automatico senza selezione manuale
 
+## 9c. SESSIONE 2026-05-26 — SERA: ORTHANC PROFESSIONALE
+
+### Storage spostato su disco esterno
+- Orthanc: `F:\OrthancStorage` → **`K:\OrthancStorage`**
+- RefertEco dati pazienti: Google Drive → **`K:\RefertEco Dati Pazienti`**
+- Google Drive ora opzionale (backup, non default)
+
+### Workflow professionale DICOM Worklist
+Architettura completa:
+```
+1. Segretaria → Agenda → click "Arrivato"
+2. RefertEco (workstation) polla Agenda ogni 10s
+3. Quando vede paziente "arrivato" → genera file .wl in K:\OrthancWorklists
+4. Samsung V5 fa query Worklist DICOM su 192.168.1.17:4242 AET ORTHANC
+5. Operatore seleziona paziente sull'ecografo → dati pre-compilati
+6. Ecografia → immagini partono con AccessionNumber
+7. Immagini arrivano in Orthanc K:\OrthancStorage
+8. RefertEco (mentre il paziente è "attivo") fa watch ogni 5s sull'AccessionNumber
+9. Match → auto-import nel referto in corso
+```
+
+### Configurazione Orthanc
+- `worklists.json`: `Enable=true`, `Database=K:\OrthancWorklists`, `FilterIssuerAet=false`
+- `orthanc.json`: `Plugins: ["...\\OrthancWorklists.dll"]`, storage su `K:\OrthancStorage`
+- Plugin `orthanc-worklists 0.9.2` caricato e attivo (verificabile su `/plugins`)
+
+### Endpoint RefertEco aggiunti
+- `POST /api/worklist/crea` — crea voce worklist DICOM via `/tools/create-dicom` di Orthanc
+- `GET /api/worklist` — lista worklist attive
+- `DELETE /api/worklist/:accession` — rimuove worklist (es. esame completato)
+- `GET /api/orthanc/cerca-accession?n=...` — query Orthanc per studi con accession_number
+
+### Da fare in studio (Samsung V5)
+- Configurare DICOM Storage SCU: server 192.168.1.17, port 4242, AET ORTHANC
+- Configurare DICOM Modality Worklist SCU: stesso server
+- Test: cliccare "Arrivato" in Agenda → entro ~10s la voce appare sull'ecografo
+
+---
+
 ## 9b. SESSIONE 2026-05-26 — POMERIGGIO/SERA
 
 ### Notifiche email (Agenda → Medico)

@@ -155,7 +155,7 @@ tr:hover td{background:var(--accent-light);}
 .m-close:hover{color:var(--text);}
 .m-body{padding:18px 22px;}
 .m-edit-form{display:flex;flex-direction:column;gap:10px;}
-.m-ft{padding:12px 22px;border-top:1px solid var(--border);background:var(--surface2);display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap;}
+.m-ft{padding:12px 22px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:10;}
 .info-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;}
 .ii label{font-size:9.5px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-family:'DM Mono',monospace;display:block;margin-bottom:2px;}
 .ii span{font-size:13.5px;font-weight:500;}
@@ -163,7 +163,10 @@ tr:hover td{background:var(--accent-light);}
 
 /* VIEWER IMMAGINI (layout nuovo referto) */
 .nuovo-layout{display:flex;gap:0;align-items:flex-start;}
-.nuovo-form{flex:1;min-width:300px;}
+.nuovo-form{flex:1;min-width:300px;overflow:hidden;}
+.nuovo-form .form-card{max-width:none;}
+.edit-topbar{display:flex;align-items:center;gap:10px;padding:14px 18px;margin-bottom:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--shadow);}
+.edit-title{font-family:'DM Serif Display',serif;font-size:17px;color:var(--text);}
 .nuovo-resizer{
   width:12px;flex-shrink:0;
   align-self:stretch;
@@ -204,6 +207,10 @@ tr:hover td{background:var(--accent-light);}
   transition:border-color 0.15s,background 0.15s;
 }
 .nuovo-viewer.drag-over{border-color:var(--accent-mid);background:var(--accent-light);}
+.nuovo-viewer.viewer-collapsed{width:36px!important;flex-basis:36px!important;min-width:36px;overflow:hidden;}
+.nuovo-viewer.viewer-collapsed > *:not(.viewer-topbar){display:none!important;}
+.nuovo-viewer.viewer-collapsed .viewer-topbar{padding:10px 6px;flex-direction:column;gap:8px;border-bottom:none;}
+.nuovo-viewer.viewer-collapsed .viewer-topbar > *:not(#viewer-collapse-btn){display:none!important;}
 .viewer-topbar{display:flex;align-items:center;gap:6px;padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0;}
 .viewer-title{font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);font-family:'DM Mono',monospace;flex:1;}
 .viewer-import-btn{cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;border-radius:var(--r);transition:background 0.15s;}

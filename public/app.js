@@ -123,13 +123,36 @@ function updateCount() {
 const TITOLI = { nuovo: 'Nuovo referto', archivio: 'Archivio referti', impostazioni: 'Impostazioni' };
 
 function showView(n) {
+  // Se stiamo lasciando l'edit-view, riporta il viewer in view-nuovo
+  const editView = document.getElementById('view-edit-referto');
+  if (editView && editView.classList.contains('active') && n !== 'edit-referto') {
+    _ripristinaViewerInNuovo();
+    _editingId = null;
+  }
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('view-' + n).classList.add('active');
-  document.getElementById('nav-' + n).classList.add('active');
+  const navBtn = document.getElementById('nav-' + n);
+  if (navBtn) navBtn.classList.add('active');
   document.getElementById('topbar-title').textContent = TITOLI[n] || n;
   if (n === 'archivio') { populateAnni(); renderArchivio(); }
   if (n === 'impostazioni') { loadConfig(); loadTema(); }
+}
+
+function _ripristinaViewerInNuovo() {
+  const viewer  = document.getElementById('nuovo-viewer');
+  const resizer = document.getElementById('nuovo-resizer');
+  const nuovoLayout = document.querySelector('#view-nuovo .nuovo-layout');
+  if (!nuovoLayout) return;
+  // Rimetti il resizer prima del viewer, nell'ordine corretto
+  if (resizer && resizer.parentNode !== nuovoLayout) {
+    nuovoLayout.appendChild(resizer);
+  }
+  if (viewer && viewer.parentNode !== nuovoLayout) {
+    nuovoLayout.appendChild(viewer);
+    _viewerFiles = []; _viewerIndex = 0;
+    renderViewer();
+  }
 }
 
 // ── TIPO ESAME ────────────────────────────────────────────────
@@ -237,10 +260,16 @@ async function salvaReferto() {
   const res = await apiPost('/api/referti', r);
   if (res.error) { toast('Errore: ' + res.error, 'err'); return; }
   // Le immagini sono già sul server con _tempRefertoId, ora associato all'id salvato
+  const savedId = res.id || r.id;
   _viewerFiles = []; _viewerIndex = 0; _tempRefertoId = null;
   toast('Referto salvato', 'ok');
   await loadReferti();
   await marcaRefertato();
+  // Archivia immagini su Orthanc in background (non blocca il salvataggio)
+  fetch(`/api/orthanc/archivia/${savedId}`, { method: 'POST' })
+    .then(r => r.json())
+    .then(d => { if (d.archiviati > 0) toast(`📦 ${d.archiviati} immagini archiviate su Orthanc`, 'ok'); })
+    .catch(() => {}); // Orthanc offline → silenzioso
   resetForm();
 }
 
@@ -926,7 +955,7 @@ function renderArchivio() {
       <td><span class="badge ${bc(r.tipo)}">${esc(r.tipo)}</span></td>
       <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-muted)">${etaLabel(r.nascita, r.data)}</td>
       <td><div class="td-act">
-        <button class="btn btn-secondary btn-sm" onclick="openModal('${r.id}')">Visualizza</button>
+        <button class="btn btn-secondary btn-sm" onclick="apriDettaglioArchivio('${r.id}')">Visualizza</button>
       </div></td>
     </tr>`).join('');
 }
@@ -2331,7 +2360,11 @@ async function loadConfig() {
 
 function renderConfig() {
   const { dataDir, currentDir, detectedGoogleDrive, hasApiKey } = _configData;
-  const isGdrive = !!dataDir;
+  // È Google Drive solo se il path corrente contiene "Drive" o coincide con quello rilevato
+  const isGdrive = !!dataDir && (
+    /drive|cloudstorage|il mio drive|my drive/i.test(dataDir) ||
+    (detectedGoogleDrive && dataDir === detectedGoogleDrive)
+  );
 
   document.getElementById('r-locale').checked = !isGdrive;
   document.getElementById('r-gdrive').checked = isGdrive;
@@ -2465,7 +2498,7 @@ function initResizer() {
   const resizer = document.getElementById('nuovo-resizer');
   const viewer  = document.getElementById('nuovo-viewer');
   const DEFAULT_W = 360;
-  const MIN_VIEWER = 180;
+  const MIN_VIEWER = 60;
   const MIN_FORM   = 300;
 
   // Ripristina larghezza salvata
@@ -2475,9 +2508,15 @@ function initResizer() {
     viewer.style.flexBasis = saved + 'px';
   }
 
+  // Ripristina stato collassato
+  if (localStorage.getItem('viewer_collapsed') === '1') {
+    _setViewerCollapsed(true);
+  }
+
   let dragging = false, startX = 0, startW = 0;
 
   resizer.addEventListener('mousedown', e => {
+    if (viewer.classList.contains('viewer-collapsed')) return;
     dragging = true;
     startX = e.clientX;
     startW = viewer.getBoundingClientRect().width;
@@ -2489,7 +2528,7 @@ function initResizer() {
 
   document.addEventListener('mousemove', e => {
     if (!dragging) return;
-    const dx   = startX - e.clientX;           // muovi sx → viewer cresce
+    const dx   = startX - e.clientX;
     const layout = resizer.closest('.nuovo-layout');
     const maxViewer = layout.getBoundingClientRect().width - MIN_FORM - 12;
     const newW = Math.max(MIN_VIEWER, Math.min(startW + dx, maxViewer));
@@ -2508,10 +2547,242 @@ function initResizer() {
 
   // Doppio clic → reset dimensioni di default
   resizer.addEventListener('dblclick', () => {
+    _setViewerCollapsed(false);
     viewer.style.width     = DEFAULT_W + 'px';
     viewer.style.flexBasis = DEFAULT_W + 'px';
     localStorage.setItem('viewer_panel_w', DEFAULT_W);
+    localStorage.removeItem('viewer_collapsed');
   });
+}
+
+function _setViewerCollapsed(collapse) {
+  const viewer  = document.getElementById('nuovo-viewer');
+  const resizer = document.getElementById('nuovo-resizer');
+  const btn     = document.getElementById('viewer-collapse-btn');
+  if (collapse) {
+    viewer.classList.add('viewer-collapsed');
+    resizer.style.display = 'none';
+    if (btn) btn.textContent = '▶';
+    if (btn) btn.title = 'Mostra pannello immagini';
+  } else {
+    viewer.classList.remove('viewer-collapsed');
+    resizer.style.display = '';
+    if (btn) btn.textContent = '◀';
+    if (btn) btn.title = 'Nascondi pannello immagini';
+  }
+}
+
+function toggleViewerCollapse() {
+  const viewer = document.getElementById('nuovo-viewer');
+  const collapsed = viewer.classList.contains('viewer-collapsed');
+  _setViewerCollapsed(!collapsed);
+  localStorage.setItem('viewer_collapsed', collapsed ? '0' : '1');
+}
+
+// ══════════════════════════════════════════════════════════════
+// VISUALIZZAZIONE / MODIFICA REFERTO (sotto-pagina archivio)
+// ══════════════════════════════════════════════════════════════
+
+let _editingId = null;     // id del referto in modifica
+let _viewerHome = null;    // dove tornare il viewer quando si chiude l'edit
+
+// Clona gli optgroup del select tipo esame nel select dell'edit
+function _cloneTipiInEdit() {
+  const src = document.getElementById('f-tipo-sel');
+  const dst = document.getElementById('e-tipo-sel');
+  if (!src || !dst || dst.options.length > 1) return;
+  dst.innerHTML = src.innerHTML;
+  // Aggiungi opzione custom
+  const optCustom = document.createElement('option');
+  optCustom.value = '__custom__';
+  optCustom.textContent = '— Tipo personalizzato —';
+  dst.appendChild(optCustom);
+  dst.addEventListener('change', () => {
+    const v = dst.value;
+    const cust = document.getElementById('e-tipo-custom');
+    cust.style.display = v === '__custom__' ? 'block' : 'none';
+    if (v === '__custom__') cust.focus();
+  });
+}
+
+function _getTipoEdit() {
+  const sel  = document.getElementById('e-tipo-sel').value;
+  const cust = document.getElementById('e-tipo-custom').value.trim();
+  if (sel === '__custom__') return cust;
+  return sel || cust;
+}
+
+async function apriDettaglioArchivio(id) {
+  const r = referti.find(x => x.id === id);
+  if (!r) { toast('Referto non trovato', 'err'); return; }
+  _editingId = id;
+  _cloneTipiInEdit();
+
+  // Carica dati nel form
+  document.getElementById('e-cognome').value = r.cognome || '';
+  document.getElementById('e-nome').value    = r.nome    || '';
+  document.getElementById('e-nascita').value = r.nascita || '';
+  document.getElementById('e-data').value    = r.data    || '';
+  document.getElementById('e-referto').value = r.referto || '';
+
+  const sel = document.getElementById('e-tipo-sel');
+  const cust = document.getElementById('e-tipo-custom');
+  cust.style.display = 'none';
+  cust.value = '';
+  // Cerca il tipo tra le opzioni
+  const found = Array.from(sel.options).find(o => o.value === r.tipo);
+  if (found) {
+    sel.value = r.tipo;
+  } else {
+    sel.value = '__custom__';
+    cust.style.display = 'block';
+    cust.value = r.tipo || '';
+  }
+
+  document.getElementById('edit-title').textContent =
+    `Modifica referto — ${r.cognome} ${r.nome}`;
+
+  // Sposta resizer + viewer dalla view nuovo a edit
+  const viewer  = document.getElementById('nuovo-viewer');
+  const resizer = document.getElementById('nuovo-resizer');
+  const editLayout = document.getElementById('edit-layout');
+  if (viewer && !_viewerHome) {
+    _viewerHome = viewer.parentNode;
+  }
+  if (editLayout && resizer && resizer.parentNode !== editLayout) {
+    editLayout.appendChild(resizer);
+  }
+  if (editLayout && viewer && viewer.parentNode !== editLayout) {
+    editLayout.appendChild(viewer);
+  }
+
+  // Cambia view
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-edit-referto').classList.add('active');
+  document.getElementById('topbar-title').textContent = 'Modifica referto';
+
+  // Carica le immagini del referto nel viewer (riusa logica esistente)
+  await _caricaImmaginiInViewer(id);
+}
+
+function tornaAdArchivio() {
+  showView('archivio'); // showView gestisce automaticamente il ripristino del viewer
+}
+
+async function _caricaImmaginiInViewer(refertoId) {
+  try {
+    const resp = await fetch('/api/referti/' + refertoId + '/immagini');
+    if (!resp.ok) { _viewerFiles = []; renderViewer(); return; }
+    const filenames = await resp.json();
+    if (!Array.isArray(filenames)) { _viewerFiles = []; renderViewer(); return; }
+
+    _viewerFiles = [];
+    for (const fname of filenames) {
+      const url = '/immagini/' + refertoId + '/' + encodeURIComponent(fname);
+      const isDcm = /\.dcm$/i.test(fname);
+      if (isDcm) {
+        try {
+          const { dataUrl, pixelSpacing } = await dicomLoadFull(url);
+          _viewerFiles.push({ filename: fname, displayUrl: dataUrl || url, pixelSpacing });
+        } catch {
+          _viewerFiles.push({ filename: fname, displayUrl: url, pixelSpacing: null });
+        }
+      } else {
+        const displayUrl = await imgToDataUrl(url).catch(() => url);
+        _viewerFiles.push({ filename: fname, displayUrl: displayUrl || url, pixelSpacing: null });
+      }
+    }
+    _viewerIndex = 0;
+    renderViewer();
+  } catch (e) {
+    console.error('Errore caricamento immagini:', e);
+    _viewerFiles = []; renderViewer();
+  }
+}
+
+async function salvaModifiche() {
+  if (!_editingId) return;
+  const cognome = capitalizeWords(document.getElementById('e-cognome').value);
+  const nome    = capitalizeWords(document.getElementById('e-nome').value);
+  const tipo    = _getTipoEdit();
+  const data    = document.getElementById('e-data').value;
+  if (!cognome || !nome) { toast('Inserire cognome e nome', 'err'); return; }
+  if (!tipo) { toast('Selezionare o digitare il tipo di esame', 'err'); return; }
+  if (!data) { toast("Inserire la data dell'esame", 'err'); return; }
+
+  const aggiornato = {
+    cognome, nome,
+    nascita: document.getElementById('e-nascita').value || null,
+    tipo, data,
+    referto: document.getElementById('e-referto').value.trim() || null,
+  };
+
+  const res = await fetch('/api/referti/' + _editingId, {
+    method:  'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(aggiornato),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    toast('Errore: ' + (err.error || res.statusText), 'err');
+    return;
+  }
+
+  toast('Modifiche salvate', 'ok');
+  await loadReferti();
+  // Aggiorna titolo
+  document.getElementById('edit-title').textContent =
+    `Modifica referto — ${cognome} ${nome}`;
+}
+
+async function esportaDaEdit(conImmagini) {
+  if (!_editingId) return;
+  // Salva prima, poi esporta
+  await salvaModifiche();
+  await esportaPDF(_editingId, conImmagini);
+}
+
+async function eliminaDaEdit() {
+  if (!_editingId) return;
+  if (!confirm('Eliminare definitivamente questo referto? Verranno cancellate anche tutte le immagini associate.')) return;
+  const res = await fetch('/api/referti/' + _editingId, { method: 'DELETE' });
+  if (!res.ok) { toast('Errore eliminazione', 'err'); return; }
+  toast('Referto eliminato', 'ok');
+  await loadReferti();
+  tornaAdArchivio();
+}
+
+// ── EXPORT IN NUOVO REFERTO (salva poi esporta) ───────────────
+async function salvaEdEsporta(conImmagini) {
+  // Verifica campi minimi
+  const cognome = document.getElementById('f-cognome').value.trim();
+  const nome    = document.getElementById('f-nome').value.trim();
+  const tipo    = getTipoAttivo();
+  const data    = document.getElementById('f-data').value;
+  if (!cognome || !nome || !tipo || !data) {
+    toast('Compila prima cognome, nome, tipo e data', 'err'); return;
+  }
+
+  // Salva (la funzione esistente svuota il form dopo, quindi ricavo l'id prima)
+  const id = _tempRefertoId || Date.now().toString();
+  const r = {
+    id, cognome: capitalizeWords(cognome), nome: capitalizeWords(nome),
+    nascita: document.getElementById('f-nascita').value || null,
+    tipo, data,
+    referto: document.getElementById('f-referto').value.trim() || null,
+    creato: new Date().toISOString(),
+  };
+  const res = await apiPost('/api/referti', r);
+  if (res.error) { toast('Errore: ' + res.error, 'err'); return; }
+  toast('Referto salvato — esporto PDF…', 'ok');
+  // Archivia su Orthanc in background
+  fetch(`/api/orthanc/archivia/${id}`, { method: 'POST' }).catch(() => {});
+  await loadReferti();
+  await esportaPDF(id, conImmagini);
+  _viewerFiles = []; _viewerIndex = 0; _tempRefertoId = null;
+  renderViewer();
+  resetForm();
 }
 
 // ── INIT ──────────────────────────────────────────────────────
@@ -2545,6 +2816,16 @@ async function init() {
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); viewerNav(1); }
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); viewerNav(-1); }
   });
+
+  // ── Tasto cuffiette (Play/Pausa) → avvia/ferma dettatura ──────
+  // Approccio 1: keydown (funziona se il browser riceve l'evento)
+  document.addEventListener('keydown', e => {
+    if (e.key === 'MediaPlayPause' || e.key === 'MediaPlay' || e.key === 'MediaPause' || e.key === 'F8') {
+      e.preventDefault();
+      const inNuovo = document.getElementById('view-nuovo').classList.contains('active');
+      if (inNuovo) toggleDictation('f-referto', 'mic-referto', 'db-referto');
+    }
+  });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2554,10 +2835,35 @@ async function init() {
 let _attesaAperta = true;
 let _appuntamentoAttivo = null;
 
+let _worklistGenerate = new Set();  // accession_number per cui ho già creato worklist
+
 async function loadPazientiAttesa() {
   try {
     const lista = await fetch('/api/agenda/pazienti-attesa').then(r => r.json());
     renderPazientiAttesa(lista);
+    // Per ogni paziente arrivato che non ha ancora worklist → creala
+    for (const app of (lista || [])) {
+      const acc = app.accession_number;
+      if (!acc || _worklistGenerate.has(acc)) continue;
+      try {
+        await fetch('/api/worklist/crea', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paziente_cognome:      app.pazienti?.cognome  || app.cognome,
+            paziente_nome:         app.pazienti?.nome     || app.nome,
+            paziente_data_nascita: app.pazienti?.data_nascita || app.nascita,
+            accession_number:      acc,
+            tipo_esame:            app.tipi_prestazione?.nome || app.tipo,
+            data_ora_inizio:       app.data_ora_inizio,
+          }),
+        });
+        _worklistGenerate.add(acc);
+        console.log('[Worklist] Creata per', acc);
+      } catch (e) {
+        console.error('[Worklist] Errore creazione:', e);
+      }
+    }
   } catch (e) {
     const panel = document.getElementById('attesa-panel');
     if (panel) panel.style.display = 'none';
@@ -2623,6 +2929,9 @@ async function caricaPazienteDaAgenda(appuntamentoId) {
     }
     document.getElementById('f-data').value = new Date().toISOString().slice(0, 10);
     _appuntamentoAttivo = appuntamentoId;
+    _accessionAttivo   = app.accession_number || null;
+    // Avvia il monitoraggio Orthanc per questo accession number
+    _avviaWatchOrthanc(_accessionAttivo);
     document.getElementById('f-cognome').scrollIntoView({ behavior: 'smooth', block: 'center' });
     setTimeout(() => document.getElementById('f-cognome').focus(), 400);
     document.querySelectorAll('.attesa-item').forEach(el => el.style.background = '');
@@ -2650,7 +2959,61 @@ function toggleAttesa() {
   if (chevron) chevron.classList.toggle('closed', !_attesaAperta);
 }
 
-setInterval(loadPazientiAttesa, 60000);
+// Polling più frequente (10s) per worklist immediata quando paziente è "arrivato"
+setInterval(loadPazientiAttesa, 10000);
+
+// ══════════════════════════════════════════════════════════════
+// WATCH ORTHANC — controlla nuove immagini per il paziente corrente
+// ══════════════════════════════════════════════════════════════
+let _accessionAttivo = null;
+let _watchOrthancTimer = null;
+let _orthancStudiVisti = new Set();
+
+function _avviaWatchOrthanc(accession) {
+  if (_watchOrthancTimer) clearInterval(_watchOrthancTimer);
+  if (!accession) return;
+  console.log('[OrthancWatch] Avvio sorveglianza per accession', accession);
+  _watchOrthancTimer = setInterval(() => _controllaOrthanc(accession), 5000);
+}
+
+async function _controllaOrthanc(accession) {
+  if (_accessionAttivo !== accession) {
+    clearInterval(_watchOrthancTimer); return;
+  }
+  try {
+    // Cerca su Orthanc studi con questo AccessionNumber
+    const r = await fetch('/api/orthanc/cerca-accession?n=' + encodeURIComponent(accession));
+    if (!r.ok) return;
+    const studi = await r.json();
+    for (const studyId of (studi || [])) {
+      if (_orthancStudiVisti.has(studyId)) continue;
+      _orthancStudiVisti.add(studyId);
+      // Importa automaticamente lo studio nel referto corrente
+      await _importaStudioOrthanc(studyId);
+      toast('📸 Immagini dall\'ecografo importate automaticamente', 'ok');
+    }
+  } catch (e) {
+    console.error('[OrthancWatch]', e);
+  }
+}
+
+async function _importaStudioOrthanc(studyId) {
+  // Se non c'è ancora un _tempRefertoId, ne creiamo uno
+  if (!_tempRefertoId) _tempRefertoId = 'temp-' + Date.now();
+  try {
+    const res = await fetch('/api/orthanc/importa/' + studyId, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refertoId: _tempRefertoId }),
+    });
+    const data = await res.json();
+    if (data.files && data.files.length > 0) {
+      await ricaricaViewer([]);
+    }
+  } catch (e) {
+    console.error('[importaStudioOrthanc]', e);
+  }
+}
 
 // ── ORTHANC PANEL ─────────────────────────────────────────────
 
