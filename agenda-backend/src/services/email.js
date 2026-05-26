@@ -79,4 +79,58 @@ async function notificaNuovoAppuntamento(appuntamento) {
   }
 }
 
-module.exports = { notificaNuovoAppuntamento };
+async function notificaAppuntamentoAnnullato(appuntamento) {
+  const resend = getResend();
+  if (!resend) return;
+
+  const paziente = appuntamento.pazienti;
+  const esame    = appuntamento.tipi_prestazione;
+  const nome     = paziente ? `${paziente.cognome} ${paziente.nome}` : '—';
+  const tipoEsame = esame?.nome || '—';
+  const data     = formatData(appuntamento.data_ora_inizio);
+  const ora      = formatOra(appuntamento.data_ora_inizio);
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;background:#f9f9f9;border-radius:10px;overflow:hidden;">
+      <div style="background:#b94a4a;padding:20px 24px;">
+        <h2 style="color:#fff;margin:0;font-size:18px;">❌ Appuntamento annullato</h2>
+      </div>
+      <div style="padding:24px;background:#fff;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <td style="padding:8px 0;color:#777;font-size:13px;width:120px;">Paziente</td>
+            <td style="padding:8px 0;font-weight:bold;font-size:15px;color:#222;">${nome}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;color:#777;font-size:13px;">Esame</td>
+            <td style="padding:8px 0;font-size:14px;color:#333;">${tipoEsame}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;color:#777;font-size:13px;">Data</td>
+            <td style="padding:8px 0;font-size:14px;color:#333;">${data}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;color:#777;font-size:13px;">Ora</td>
+            <td style="padding:8px 0;font-size:14px;color:#333;">${ora}</td>
+          </tr>
+        </table>
+      </div>
+      <div style="padding:12px 24px;background:#fdf0f0;font-size:11px;color:#888;text-align:center;">
+        Agenda Studio — notifica automatica
+      </div>
+    </div>
+  `;
+
+  try {
+    await resend.emails.send({
+      from: 'Agenda Studio <onboarding@resend.dev>',
+      to: MEDICO_EMAIL,
+      subject: `❌ ANNULLATO: ${nome} — ${tipoEsame} — ${data} ore ${ora}`,
+      html,
+    });
+  } catch (e) {
+    console.error('[email] Errore invio notifica annullamento:', e.message);
+  }
+}
+
+module.exports = { notificaNuovoAppuntamento, notificaAppuntamentoAnnullato };

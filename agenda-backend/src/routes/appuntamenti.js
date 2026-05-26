@@ -2,7 +2,7 @@ const express  = require('express');
 const supabase  = require('../services/supabase');
 const { requireAuth, requireMedico } = require('../middleware/auth');
 const { getIO }  = require('../socket');
-const { notificaNuovoAppuntamento } = require('../services/email');
+const { notificaNuovoAppuntamento, notificaAppuntamentoAnnullato } = require('../services/email');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -166,12 +166,15 @@ router.delete('/:id', async (req, res) => {
       updated_at: new Date().toISOString()
     })
     .eq('id', req.params.id)
-    .select()
+    .select('*, pazienti(*), tipi_prestazione(*)')
     .single();
 
   if (error) return res.status(500).json({ error: error.message });
 
   try { getIO().emit('appuntamento:annullato', { id: req.params.id }); } catch (e) {}
+
+  // Notifica email al medico
+  notificaAppuntamentoAnnullato(data).catch(() => {});
 
   res.json({ ok: true, data });
 });
