@@ -37,14 +37,16 @@ function normalizzaNumero(tel) {
 function fmtData(iso) {
   const d = new Date(iso);
   return d.toLocaleDateString('it-IT', {
-    weekday: 'long', day: 'numeric', month: 'long'
+    weekday: 'long', day: 'numeric', month: 'long',
+    timeZone: 'Europe/Rome'
   });
 }
 
 // ─── Formatta ora (es. "10:30") ───────────────────────────────────────────
 function fmtOra(iso) {
   return new Date(iso).toLocaleTimeString('it-IT', {
-    hour: '2-digit', minute: '2-digit'
+    hour: '2-digit', minute: '2-digit',
+    timeZone: 'Europe/Rome'
   });
 }
 
@@ -80,4 +82,54 @@ async function inviaPromemoria(appuntamento) {
   return { sid: msg.sid, numero, testo };
 }
 
-module.exports = { inviaPromemoria, normalizzaNumero };
+// ─── SMS conferma prenotazione (inviato subito al momento della prenotazione) ─
+async function inviaSmsConferma(appuntamento) {
+  const c = getClient();
+  if (!c) throw new Error('Twilio non configurato (credenziali mancanti)');
+
+  const p = appuntamento.pazienti;
+  if (!p) throw new Error('Dati paziente mancanti');
+
+  const numero = normalizzaNumero(p.telefono);
+  if (!numero) throw new Error(`Numero non valido: "${p.telefono}"`);
+
+  const data  = fmtData(appuntamento.data_ora_inizio);
+  const ora   = fmtOra(appuntamento.data_ora_inizio);
+  const esame = appuntamento.tipi_prestazione?.nome || 'visita';
+  const nome  = `${p.nome} ${p.cognome}`;
+
+  const testo =
+    `Gentile ${nome}, la sua prenotazione è confermata: ` +
+    `${data} alle ore ${ora} (${esame}) ` +
+    `presso il ${STUDIO}.` +
+    (TEL ? ` Per info: ${TEL}.` : '');
+
+  const msg = await c.messages.create({ body: testo, from: FROM, to: numero });
+  return { sid: msg.sid, numero, testo };
+}
+
+// ─── SMS annullamento appuntamento ───────────────────────────────────────
+async function inviaSmsAnnullamento(appuntamento) {
+  const c = getClient();
+  if (!c) throw new Error('Twilio non configurato (credenziali mancanti)');
+
+  const p = appuntamento.pazienti;
+  if (!p) throw new Error('Dati paziente mancanti');
+
+  const numero = normalizzaNumero(p.telefono);
+  if (!numero) throw new Error(`Numero non valido: "${p.telefono}"`);
+
+  const data  = fmtData(appuntamento.data_ora_inizio);
+  const ora   = fmtOra(appuntamento.data_ora_inizio);
+  const nome  = `${p.nome} ${p.cognome}`;
+
+  const testo =
+    `Gentile ${nome}, il suo appuntamento del ${data} alle ore ${ora} ` +
+    `è stato annullato.` +
+    (TEL ? ` Per info o nuova prenotazione: ${TEL}.` : '');
+
+  const msg = await c.messages.create({ body: testo, from: FROM, to: numero });
+  return { sid: msg.sid, numero, testo };
+}
+
+module.exports = { inviaPromemoria, inviaSmsConferma, inviaSmsAnnullamento, normalizzaNumero };

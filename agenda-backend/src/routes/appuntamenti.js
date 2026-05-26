@@ -3,6 +3,7 @@ const supabase  = require('../services/supabase');
 const { requireAuth, requireMedico } = require('../middleware/auth');
 const { getIO }  = require('../socket');
 const { notificaNuovoAppuntamento, notificaAppuntamentoAnnullato } = require('../services/email');
+const { inviaSmsConferma, inviaSmsAnnullamento } = require('../services/sms');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -108,6 +109,9 @@ router.post('/', async (req, res) => {
   // Notifica email al medico
   notificaNuovoAppuntamento(data).catch(() => {});
 
+  // SMS di conferma al paziente
+  inviaSmsConferma(data).catch(e => console.error('[SMS] Conferma:', e.message));
+
   res.status(201).json(data);
 });
 
@@ -175,6 +179,9 @@ router.delete('/:id', async (req, res) => {
 
   // Notifica email al medico
   notificaAppuntamentoAnnullato(data).catch(() => {});
+
+  // SMS di annullamento al paziente
+  inviaSmsAnnullamento(data).catch(e => console.error('[SMS] Annullamento:', e.message));
 
   res.json({ ok: true, data });
 });
