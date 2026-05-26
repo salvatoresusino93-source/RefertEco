@@ -4,7 +4,8 @@
 > fare qualsiasi modifica. Contiene il contesto delle conversazioni precedenti, le
 > decisioni prese, e i prossimi passi.
 
-Ultimo aggiornamento: **2026-05-19**, dopo la sessione di refactor e fix di Salvatore.
+Ultimo aggiornamento: **2026-05-26**, sessione con Salvatore (agenda: slot 30 min,
+DOB obbligatoria, fix Railway build, duplicato telefono).
 
 ---
 
@@ -12,12 +13,13 @@ Ultimo aggiornamento: **2026-05-19**, dopo la sessione di refactor e fix di Salv
 
 **Dott. Salvatore Susino**, medico radiologo. Usa RefertEco nel suo ambulatorio
 privato per scrivere referti ecografici, importare immagini DICOM, esportare PDF.
+Ha anche un modulo **Agenda** (sistema prenotazioni) separato.
 
 Profilo:
 - **Non programmatore** — non sa leggere codice, ma capisce bene le spiegazioni a parole
 - Preferisce **soluzioni semplici e a un click**
 - Vuole sapere *cosa* fai e *perché*, non *come* lo fai tecnicamente
-- Lavora su **Windows 11** principalmente, ma installerà anche su Mac e su un altro PC Windows
+- Lavora su **Windows 11** (PC studio), ha anche un MacBook e un secondo PC Windows (workstation)
 - Vuole **sincronizzazione automatica** tra PC tramite Google Drive
 
 Linee guida per parlare con lui:
@@ -29,201 +31,221 @@ Linee guida per parlare con lui:
 
 ## 2. ARCHITETTURA DEL PROGETTO
 
-### Stack
-- **Backend**: Node.js + Express
-- **Database**: file JSON (`referteco_data.json`) — non SQLite nonostante il BRIEFING originale
-- **Frontend**: HTML + CSS + JS vanilla
-- **Porta**: 3000
+Ci sono **due applicazioni distinte**:
 
-### Struttura cartelle sul PC dello sviluppatore (questo)
+### A) RefertEco (referti ecografici)
+- **Backend**: Node.js + Express, porta 3000
+- **Database**: file JSON (`referteco_data.json`) su Google Drive
+- **Frontend**: HTML + CSS + JS vanilla in `public/`
+- **Gira**: in locale su ogni PC (AppData + bat di avvio)
+- Serve anche come proxy per l'agenda: chiama `https://referteco-production.up.railway.app/api/...`
+
+### B) Agenda Studio (prenotazioni)
+- **Backend**: Node.js + Express — `agenda-backend/`
+- **Database**: Supabase (PostgreSQL cloud)
+- **Frontend**: HTML + CSS + JS vanilla — `agenda-backend/frontend/`
+  *(attenzione: i file sorgente stanno in `agenda-frontend/` ma vengono copiati
+  dentro `agenda-backend/frontend/` per Railway — vedi sezione 5)*
+- **Gira**: su Railway (cloud) → https://referteco-production.up.railway.app/
+- **SMS**: Twilio per promemoria appuntamenti
+- **Socket.io**: aggiornamento in tempo reale tra più client
+
+### Struttura cartelle sul PC dello sviluppatore
 
 ```
 C:\Users\sunis\Desktop\RefertEco\            ← SORGENTE (per modifiche)
-├── server.js, config.js, database.js, ...
-├── public/                                   ← frontend
-├── dist/RefertEco-Windows/RefertEco-Windows\ ← installer pronto Windows
-├── dist/RefertEco-Mac-Intel/                 ← installer Mac Intel
-├── dist/RefertEco-Mac-M1/                    ← installer Mac Silicon
-├── dist/RefertEco-Windows.zip                ← installer pronto da distribuire
-└── .git/                                     ← repository git (remote = GitHub)
+├── server.js, config.js, database.js, ...   ← RefertEco
+├── public/                                   ← frontend RefertEco
+├── agenda-backend/                           ← backend Agenda
+│   ├── src/app.js                            ← entry point (node src/app.js)
+│   ├── src/routes/                           ← API routes
+│   ├── src/services/supabase.js              ← client Supabase
+│   ├── frontend/                             ← ⚠️ COPIA del frontend per Railway
+│   │   ├── index.html
+│   │   ├── js/app.js, js/api.js
+│   │   └── css/style.css
+│   ├── .env                                  ← credenziali Railway/Supabase/Twilio
+│   └── package.json
+├── agenda-frontend/                          ← frontend Agenda SORGENTE (modificare qui)
+│   ├── index.html
+│   ├── js/app.js, js/api.js
+│   └── css/style.css
+├── railway.json                              ← config deploy Railway
+└── .git/
 
-C:\Users\sunis\AppData\Local\RefertEco\      ← INSTALLAZIONE ATTIVA (in esecuzione)
-└── (copia del contenuto di dist\RefertEco-Windows\RefertEco-Windows\)
-
+C:\Users\sunis\AppData\Local\RefertEco\      ← INSTALLAZIONE ATTIVA RefertEco
 G:\Il mio Drive\RefertEco Dati Pazienti\     ← DATI PAZIENTI (Google Drive)
-├── referteco_data.json                       ← DB
-└── immagini\<refertoId>\*.dcm                ← immagini DICOM
-
-G:\Il mio Drive\Installer RefertEco\         ← INSTALLER ZIP (per altri PC)
-└── RefertEco-Windows.zip
-
+G:\Il mio Drive\Installer RefertEco\         ← INSTALLER ZIP
 C:\Users\sunis\.referteco\config.json        ← config locale (dataDir + apiKey)
 ```
 
 ### Repository GitHub
 - URL: **https://github.com/salvatoresusino93-source/RefertEco**
 - Branch: `main`
-- Identità git: `Salvatore Susino <salvatore.susino93@gmail.com>`
-- `.gitignore` esclude: `node_modules/`, `dist/`, `referteco.db`, `referteco_data.json`,
-  `config.json`, `immagini/`, ecc. (vedi file)
-
-### Workflow di rilascio
-Quando si fa una modifica:
-1. Modifica in `AppData\Local\RefertEco\` (funziona subito riavviando il server)
-2. Propaga in `Desktop\RefertEco\` (sorgente) e `Desktop\RefertEco\dist\...` (installer)
-3. Aggiorna cache-buster nei 3 `index.html` (`?v=YYYYMMDDx`)
-4. `git add -A && git commit && git push`
-5. **Solo se l'utente lo chiede esplicitamente**: ricostruisci lo ZIP in `dist/` e
-   copialo su `G:\Il mio Drive\Installer RefertEco\RefertEco-Windows.zip`
+- Auto-deploy Railway attivo sul branch `main`
+- Root Directory Railway: `/agenda-backend`
 
 ---
 
-## 3. FUNZIONALITÀ E FIX FATTI IN QUESTA SESSIONE (19/05/2026)
+## 3. FUNZIONALITÀ E FIX — SESSIONE 2026-05-26
+
+### Merge Mac → Windows
+- Il branch locale era indietro di 23 commit rispetto al Mac (fast-forward pulito)
+- Fatto `git pull` — nessun conflitto
+
+### Slot prenotazione: 20 min → 30 min
+File modificati:
+- `agenda-frontend/js/app.js` → `const SLOT_MIN = 30`
+- `agenda-frontend/index.html` → `step="1800"`, `value="30"` sul campo durata
+- **Database Supabase**: migration eseguita via script Node.js → tutti i 68 tipi di esame
+  impostati a `durata_minuti = 30` nella tabella `tipi_prestazione`
+
+### Data di nascita obbligatoria nella creazione paziente
+- `agenda-frontend/index.html` → `<label>Data di nascita *</label>` + `required`
+- `agenda-frontend/js/app.js` → validazione client: alert se campo vuoto
+- `agenda-backend/src/routes/pazienti.js` → validazione server:
+  `if (!data_nascita) return res.status(400).json({ error: '...' })`
+
+### Duplicato numero di telefono: solo avviso, non blocco
+- **Prima**: compariva un `confirm()` con `[OK] = usa paziente esistente` e
+  `[Annulla] = crea nuovo paziente` → contro-intuitivo, l'utente si confondeva
+- **Ora**: compare un `alert()` con "il numero X è già usato dal paziente Y —
+  il nuovo paziente verrà salvato ugualmente", poi il salvataggio avviene in automatico
+- Il duplicato **nome + data di nascita** mantiene il `confirm()` (lì è quasi certamente
+  la stessa persona → ha senso chiedere)
+- File: `agenda-frontend/js/app.js` (e copia in `agenda-backend/frontend/js/app.js`)
+
+### Fix build Railway (⚠️ critico per capire la struttura)
+**Problema**: Railway usava `Root Directory = /agenda-backend`, quindi la build context
+era solo la cartella `agenda-backend/`. I comandi `cd agenda-backend && npm install`
+fallivano perché dentro `agenda-backend/` non esiste un'altra cartella `agenda-backend/`.
+
+**Soluzione applicata**:
+1. Il frontend (`agenda-frontend/`) è stato **copiato** dentro `agenda-backend/frontend/`
+2. `agenda-backend/src/app.js` usa ora `path.resolve(__dirname, '..', 'frontend')`
+3. `railway.json` usa ora `npm install --production` e `node src/app.js` (senza prefisso)
+
+**Regola da ricordare**: quando modifichi il frontend dell'agenda, devi aggiornare
+**entrambi** i file:
+- `agenda-frontend/js/app.js` ← sorgente
+- `agenda-backend/frontend/js/app.js` ← copia per Railway (stesso contenuto)
+
+---
+
+## 4. FUNZIONALITÀ E FIX — SESSIONE 2026-05-19
 
 ### Bug DICOM JPEG Lossless
-- Problema: MRI/CT non visualizzati ("pixel bianchi e neri")
-- Causa: il codice trattava il JPEG Lossless come JPEG normale; il browser non sa decodificarlo
-- Causa secondaria: dicom-parser non popolava `el.items` per alcuni file → cadeva su path raw
-- Fix: aggiunto `jpeg-lossless-decoder.min.js` in `public/lib/`, funzioni
-  `_jpegIsBaseline()` + `_renderJpegLossless()`, fallback con scansione manuale degli
-  item delimiter (`FE FF 00 E0`) quando dicom-parser non popola `el.items`
+- Fix: decoder `jpeg-lossless-decoder.min.js` + fallback manuale item delimiter
 
-### Import cartelle con sottocartelle
-- Drag-and-drop di intere cartelle DICOM (recursivo via `webkitGetAsEntry`)
-- Pulsante 📂 con `webkitdirectory` per selezione folder
-- Rilevamento DICOM via magic byte `DICM` all'offset 128 (per file senza estensione .dcm)
-- Nomi file univoci basati sul path (es. `Series1__IM00001.dcm`) per evitare collisioni
-- Upload batched a 30 file alla volta
-- **Applicato sia alla refertazione che all'archivio** (entrambi i flussi avevano funzioni separate, ora unificate)
+### Import cartelle DICOM con sottocartelle
+- Drag-and-drop ricorsivo, rilevamento via magic byte `DICM`, upload batched a 30 file
 
 ### Bug "Caricamento..." eterno sui referti vecchi
-- `apiGet` non gestiva errori → promise rejected silenziosa
-- Fix: `apiGet` ora propaga errori, `loadImmagini` mostra messaggio + pulsante "Riprova"
+- `apiGet` ora propaga errori, `loadImmagini` mostra messaggio + pulsante "Riprova"
 
 ### Sincronizzazione Google Drive a 1-click
-- `detectGoogleDrive()` ora cerca **"RefertEco Dati Pazienti"** (default) e "RefertEco" (fallback)
-- Supporta "Il mio Drive" (italiano) e "My Drive" (inglese)
-- Supporta lettere drive G-K (Mirror Drive su Windows)
-- UI Impostazioni: box verde con percorso rilevato + pulsante "⚡ Usa questa cartella (1 click)"
-- Bug correlato fixato: `config.js` ora rimuove BOM UTF-8 in `load()` (PowerShell aggiungeva BOM rompendo JSON.parse)
+- `detectGoogleDrive()` cerca "RefertEco Dati Pazienti" e "RefertEco" come fallback
 
 ### Eliminazione referto pulisce anche immagini
-- Prima: DELETE rimuoveva solo il record DB, lasciando cartelle orfane su Drive
-- Fix: `fs.rmSync(dir, { recursive:true })` dopo cancellazione record
-- Endpoint `POST /api/referti/pulisci-orfane` per cleanup cartelle pre-esistenti
-- Pulsante "🧹 Cerca e cancella cartelle orfane" in Impostazioni > Manutenzione
-
-### Altro
-- Icona RefertEco (file `.ico` multi-risoluzione 16/24/32/48/64/128/256 px)
-- Favicon nel browser (`favicon.ico`, `favicon-32.png`, `icon-192.png`)
-- `Installa.bat` aggiornato per applicare l'icona al collegamento Desktop
-- Server limite upload alzato a 2000 file (era 50, faceva fallire serie DICOM grandi)
-- Cache busting nei `<script>` per evitare problemi di cache browser
+- `fs.rmSync(dir, { recursive:true })` + endpoint `/api/referti/pulisci-orfane`
 
 ---
 
-## 4. CONFIGURAZIONE CORRENTE
+## 5. CONFIGURAZIONE CORRENTE
 
-### `~/.referteco/config.json`
+### `.referteco/config.json` (locale, mai committare)
 ```json
 {
   "dataDir": "G:\\Il mio Drive\\RefertEco Dati Pazienti",
   "anthropicApiKey": "sk-ant-api03-..."
 }
 ```
+**⚠️ IMPORTANTE**: la chiave API Anthropic è qui. **Mai loggarla, mai stamparla,
+mai committarla**. Il `.gitignore` la esclude.
 
-**⚠️ Importante**: la chiave API Anthropic è in questo file. **Mai loggarla, mai stamparla,
-mai committarla**. Il `.gitignore` esclude `config.json`. Se vedi che sta uscendo nei
-log o nelle risposte, avvisa l'utente di rigenerarla.
+### `agenda-backend/.env` (locale, mai committare)
+Contiene: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `TWILIO_*`, `JWT_SECRET`, `PORT`
+
+### Railway
+- Progetto: `referteco`
+- Servizio: `agenda-backend`
+- URL produzione: https://referteco-production.up.railway.app/
+- Root Directory: `/agenda-backend`
+- Auto-deploy: **attivo** su push a `main`
+- Build: `npm install --production`
+- Start: `node src/app.js`
 
 ### Google Drive
 - Cartella dati: `G:\Il mio Drive\RefertEco Dati Pazienti\`
 - Cartella installer: `G:\Il mio Drive\Installer RefertEco\`
-- Sull'altro PC (Mac/Win) si chiamerà con percorso diverso ma stesso nome cartella
-- Modalità richiesta: **Mirror file** (no Stream — il file deve essere fisicamente in locale)
 
 ---
 
-## 5. COSE DA NON FARE / TRAPPOLE NOTE
+## 6. COSE DA NON FARE / TRAPPOLE NOTE
 
-1. **PowerShell `Set-Content` o `Out-File` con `-Encoding utf8`** aggiungono BOM UTF-8.
-   Questo rompe `JSON.parse` di Node e mojibake i caratteri Unicode in HTML.
-   Usa sempre `[System.IO.File]::WriteAllText($path, $text, $utf8NoBom)` dove
-   `$utf8NoBom = New-Object System.Text.UTF8Encoding $false`.
+1. **Frontend Agenda in due posti**: sorgente in `agenda-frontend/`, copia per Railway in
+   `agenda-backend/frontend/`. Quando modifichi `agenda-frontend/js/app.js` o altri file,
+   devi fare la stessa modifica in `agenda-backend/frontend/` — altrimenti Railway
+   distribuisce la versione vecchia.
 
-2. **Non modificare** il file `referteco_data.json` o la cartella `immagini/`
-   direttamente dal codice. È il database dell'utente, ha referti VERI.
+2. **PowerShell `Set-Content` / `Out-File` con `-Encoding utf8`** aggiungono BOM UTF-8.
+   Usa sempre `[System.IO.File]::WriteAllText($path, $text, $utf8NoBom)`.
 
-3. **L'app gira sempre** da `C:\Users\sunis\AppData\Local\RefertEco\` (NON dal Desktop).
-   Quindi modificare solo i file in `Desktop\` non ha effetto immediato. Devi propagare
-   anche in `AppData\` per testare. Vedi sezione 2 → Workflow di rilascio.
+3. **Non modificare** `referteco_data.json` o la cartella `immagini/` direttamente.
+   Sono i dati reali dei pazienti.
 
-4. **Cache browser**: dopo modifiche a `app.js`, il browser carica la versione vecchia.
-   Aggiorna il cache-buster (`?v=YYYYMMDDx`) in tutti gli `index.html`.
+4. **RefertEco gira da AppData**, non da Desktop. Modifiche al Desktop non hanno effetto
+   immediato — devi propagare in AppData.
 
-5. **Force push solo se richiesto esplicitamente**. Il branch `main` può contenere
-   commit di altri PC dell'utente (ha un MacBook). Verifica sempre prima.
+5. **Cache browser**: dopo modifiche a JS/CSS, aggiorna il cache-buster (`?v=YYYYMMDD`)
+   in tutti gli `index.html` pertinenti.
 
-6. **NON fare modifiche durante un upload in corso** o quando l'utente sta usando
-   l'app — può causare disconnessione del browser e perdita di lavoro.
+6. **Force push solo se richiesto esplicitamente**. Ci sono commit da più PC.
+
+7. **`agenda-backend/.env` e `~/.referteco/config.json` non vanno mai in git**.
+   Entrambi sono in `.gitignore`. Se li vedi staged, fermati.
 
 ---
 
-## 6. PROGETTO IN SOSPESO: INTEGRAZIONE ORTHANC
+## 7. PROGETTO IN SOSPESO: INTEGRAZIONE ORTHANC
 
-L'utente ha un sistema Orthanc esistente (PACS) configurato da un ingegnere ora
-irreperibile. **Non funziona da un po' di tempo**.
+L'utente ha un sistema Orthanc (PACS) configurato da un ingegnere ora irreperibile.
+Non funziona da tempo. Da affrontare quando si lavora sulla workstation in studio.
 
 Workflow originale (presunto):
-1. Ecografo invia DICOM via rete Ethernet al server Orthanc
-2. Orthanc riceve e (probabilmente) inoltra le immagini a un altro PC/server locale
-3. Da lì le immagini dovrebbero arrivare al PC di lavoro
+1. Ecografo → DICOM via rete Ethernet → Orthanc
+2. Orthanc → inoltra a PC di lavoro
 
-Stato attuale:
-- L'utente **non sa dove sia fisicamente il PC server Orthanc**
-- Ha solo una scheda tecnica cartacea dell'ingegnere
-- Il PC di lavoro su cui dovrà operare è **SU UNA RETE DIVERSA** da quello attuale
+Stato: PC server Orthanc non localizzato, rete diversa rispetto al PC attuale.
 
-Roadmap futura (quando arriverà sull'altro PC):
-1. **Identificare** il PC server Orthanc (potrebbe essere lo stesso o un altro)
-2. **Diagnosticare** perché non funziona (servizio fermato, IP cambiato, firewall, disco pieno?)
-3. **Verificare** la web UI di Orthanc (`http://IP:8042` di default)
-4. **Riparare** o ricostruire la configurazione
-5. **Integrare** con RefertEco: cartella `inbox` su Google Drive dove Orthanc deposita
-   i nuovi DICOM, e RefertEco mostra una sezione "Immagini in arrivo da ecografo"
-   con matching automatico paziente↔referto basato su `PatientName + StudyDate`
+Roadmap:
+1. Identificare il PC Orthanc
+2. Diagnosticare (`http://IP:8042`)
+3. Integrare con RefertEco via cartella `inbox` su Google Drive
 
-Alternativa proposta (se Orthanc è irrecuperabile):
-- Implementare DICOM Storage SCP **direttamente dentro RefertEco** usando
-  la libreria Node.js [`dcmjs-dimse`](https://github.com/PantelisGeorgiadis/dcmjs-dimse)
-- Roadmap ~30-35 ore di sviluppo
+Alternativa: DICOM Storage SCP diretto con `dcmjs-dimse` (~30-35 ore sviluppo).
 
 ---
 
-## 7. COME RIPRENDERE LA SESSIONE SUL NUOVO PC
+## 8. COME RIPRENDERE SUL NUOVO PC (WORKSTATION IN STUDIO)
 
-Sul nuovo PC, dopo aver clonato la repo:
-
+Se la repo non è ancora clonata:
 ```bash
 git clone https://github.com/salvatoresusino93-source/RefertEco.git
 cd RefertEco
 npm install
+cd agenda-backend && npm install && cd ..
 ```
 
-Poi apri Claude Code in quella cartella e **come PRIMO messaggio scrivi**:
+Poi crea il file `agenda-backend/.env` con le credenziali Supabase/Twilio/JWT
+(recuperale da Google Drive o dal PC di questo sviluppatore).
 
-> Leggi `RIPRENDI_QUI.md` e `BRIEFING_ClaudeCode.md` prima di iniziare.
-> Poi conferma in 5 righe cosa è già stato fatto e cosa resta da fare.
-
-In questo modo il nuovo Claude:
-1. Sa chi sei
-2. Sa cosa è stato fatto
-3. Sa cosa devi ancora fare (Orthanc)
-4. Sa evitare le trappole note (cache, BOM, force push, ecc.)
+**Come PRIMO messaggio a Claude** scrivi:
+> Leggi `RIPRENDI_QUI.md` prima di iniziare. Poi dimmi in 5 righe cosa è stato fatto
+> e cosa resta da fare.
 
 ---
 
-## 8. CONTATTO
+## 9. CONTATTO
 
 Repository: https://github.com/salvatoresusino93-source/RefertEco
-Issue tracker: nessuno (si parla direttamente in chat con Claude)
