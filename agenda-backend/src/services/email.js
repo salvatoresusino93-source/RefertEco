@@ -1,7 +1,10 @@
-const { Resend } = require('resend');
-
-const resend = new Resend(process.env.RESEND_API_KEY);
 const MEDICO_EMAIL = 'salvatore.susino93@gmail.com';
+
+function getResend() {
+  if (!process.env.RESEND_API_KEY) return null;
+  const { Resend } = require('resend');
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 function formatData(isoString) {
   const d = new Date(isoString);
@@ -17,7 +20,8 @@ function formatOra(isoString) {
 }
 
 async function notificaNuovoAppuntamento(appuntamento) {
-  if (!process.env.RESEND_API_KEY) return;
+  const resend = getResend();
+  if (!resend) return;
 
   const paziente = appuntamento.pazienti;
   const esame    = appuntamento.tipi_prestazione;
