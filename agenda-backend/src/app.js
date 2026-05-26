@@ -22,9 +22,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // ─── Frontend statico ────────────────────────────────────────────────────
-// In locale: __dirname = agenda-backend/src → ../../agenda-frontend
-// Su Railway (start da root): __dirname = agenda-backend/src → ../../agenda-frontend ✓
-const FRONTEND_PATH = path.resolve(__dirname, '..', '..', 'agenda-frontend');
+// frontend/ è dentro agenda-backend/ sia in locale che su Railway
+const FRONTEND_PATH = path.resolve(__dirname, '..', 'frontend');
 app.use(express.static(FRONTEND_PATH));
 
 // ─── API Routes ───────────────────────────────────────────────────────────

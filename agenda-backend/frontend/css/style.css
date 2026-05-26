@@ -1,0 +1,362 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   AGENDA STUDIO — Stylesheet
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --pri:      #2563eb;
+  --pri-dark: #1d4ed8;
+  --pri-bg:   #eff6ff;
+  --surface:  #ffffff;
+  --bg:       #f1f5f9;
+  --border:   #e2e8f0;
+  --text:     #1e293b;
+  --muted:    #64748b;
+  --danger:   #ef4444;
+  --danger-bg:#fef2f2;
+  --header-h: 56px;
+  --sidebar-w:224px;
+  --radius:   8px;
+  --shadow:   0 1px 3px rgba(0,0,0,.1);
+  --shadow-lg:0 8px 32px rgba(0,0,0,.18);
+}
+
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:14px; color:var(--text); background:var(--bg); height:100vh; overflow:hidden; }
+.hidden { display:none !important; }
+button { font-family:inherit; }
+
+/* ─── Buttons ─────────────────────────────────────────────────────────── */
+.btn-pri   { background:var(--pri); color:#fff; border:none; padding:8px 18px;
+             border-radius:var(--radius); cursor:pointer; font-size:14px; font-weight:500; }
+.btn-pri:hover { background:var(--pri-dark); }
+.btn-sec   { background:var(--surface); color:var(--text); border:1px solid var(--border);
+             padding:8px 16px; border-radius:var(--radius); cursor:pointer; font-size:14px; }
+.btn-sec:hover { background:var(--bg); }
+.btn-ghost { background:none; color:var(--muted); border:none;
+             padding:8px 14px; border-radius:var(--radius); cursor:pointer; font-size:14px; }
+.btn-ghost:hover { background:var(--bg); }
+.btn-danger { background:var(--danger-bg); color:var(--danger);
+              border:1px solid var(--danger); padding:8px 16px;
+              border-radius:var(--radius); cursor:pointer; font-size:14px; }
+.btn-danger:hover { background:var(--danger); color:#fff; }
+.btn-icon  { background:none; border:none; cursor:pointer; padding:6px 10px;
+             border-radius:var(--radius); font-size:18px; color:var(--muted); line-height:1; }
+.btn-icon:hover  { background:var(--border); color:var(--text); }
+.btn-text  { background:none; border:1px solid var(--border); padding:4px 12px;
+             border-radius:var(--radius); cursor:pointer; font-size:13px; color:var(--text); }
+.btn-text:hover { background:var(--bg); }
+.btn-link  { background:none; border:none; color:var(--pri); cursor:pointer;
+             font-size:13px; padding:0; text-decoration:underline; }
+.btn-full  { width:100%; }
+
+/* ─── Fields ─────────────────────────────────────────────────────────── */
+.field { display:flex; flex-direction:column; gap:4px; flex:1; }
+.field label { font-size:11px; font-weight:700; color:var(--muted);
+               text-transform:uppercase; letter-spacing:.04em; }
+.field input, .field select, .field textarea {
+  border:1px solid var(--border); border-radius:var(--radius);
+  padding:8px 10px; font-size:14px; color:var(--text); background:var(--surface); width:100%; }
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline:none; border-color:var(--pri); box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+.field textarea { resize:vertical; }
+.field-row { display:flex; gap:12px; }
+
+/* ─── LOGIN ───────────────────────────────────────────────────────────── */
+.login-screen { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(135deg,#1e3a8a 0%,#0891b2 100%); }
+.login-card { background:var(--surface); border-radius:16px; padding:40px;
+  width:100%; max-width:380px; box-shadow:var(--shadow-lg); text-align:center; }
+.login-logo { font-size:52px; margin-bottom:8px; }
+.login-title { font-size:24px; font-weight:700; margin-bottom:4px; }
+.login-sub { color:var(--muted); font-size:14px; margin-bottom:28px; }
+.login-form { text-align:left; display:flex; flex-direction:column; gap:16px; }
+.login-err { background:var(--danger-bg); color:var(--danger);
+  border:1px solid #fca5a5; border-radius:var(--radius); padding:8px 12px; font-size:13px; }
+
+/* ─── APP SHELL ───────────────────────────────────────────────────────── */
+.app { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+
+/* Header */
+.app-header { height:var(--header-h); background:var(--surface);
+  border-bottom:1px solid var(--border); display:flex; align-items:center;
+  padding:0 14px; gap:10px; box-shadow:var(--shadow); z-index:10; flex-shrink:0; }
+.hdr-left  { display:flex; align-items:center; gap:8px; }
+.app-title { font-size:16px; font-weight:700; white-space:nowrap; }
+.hdr-nav   { display:flex; align-items:center; gap:6px; flex:1; justify-content:center; }
+.hdr-period { font-size:15px; font-weight:600; min-width:200px; text-align:center; }
+.hdr-right { display:flex; align-items:center; gap:8px; }
+.user-badge { background:var(--pri-bg); color:var(--pri);
+  border-radius:20px; padding:4px 12px; font-size:13px; font-weight:600; }
+
+/* Body */
+.app-body { display:flex; flex:1; overflow:hidden; }
+
+/* Sidebar */
+.app-sidebar { width:var(--sidebar-w); background:var(--surface);
+  border-right:1px solid var(--border); display:flex; flex-direction:column;
+  padding:14px; gap:16px; overflow-y:auto; flex-shrink:0; }
+.sidebar-sec h3 { font-size:11px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.06em; color:var(--muted); margin-bottom:8px; }
+.sidebar-list { display:flex; flex-direction:column; gap:4px; }
+.sidebar-item { background:var(--bg); border-left:3px solid #94a3b8;
+  border-radius:0 var(--radius) var(--radius) 0; padding:6px 8px; cursor:pointer; }
+.sidebar-item:hover { background:var(--pri-bg); }
+.sidebar-time  { font-size:11px; font-weight:700; color:var(--muted); }
+.sidebar-nome  { font-size:13px; font-weight:600; }
+.sidebar-esame { font-size:11px; color:var(--muted); }
+.empty-msg { font-size:13px; color:var(--muted); font-style:italic; }
+
+/* Main */
+.app-main { flex:1; overflow:auto; }
+
+/* ─── CALENDAR ────────────────────────────────────────────────────────── */
+.cal-wrap { min-width:680px; }
+
+.cal-header { display:grid; grid-template-columns:52px repeat(7,1fr);
+  background:var(--surface); border-bottom:2px solid var(--border);
+  position:sticky; top:0; z-index:5; }
+.cal-th-time { /* empty corner */ }
+.cal-th-day  { padding:8px 4px; text-align:center; border-left:1px solid var(--border); }
+.cal-th-dayname { display:block; font-size:10px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+.cal-th-daynum  { display:inline-flex; align-items:center; justify-content:center;
+  font-size:22px; font-weight:700; width:36px; height:36px; border-radius:50%;
+  margin-top:2px; }
+.cal-th-day.today .cal-th-daynum { background:var(--pri); color:#fff; }
+
+.cal-body { display:grid; grid-template-columns:52px repeat(7,1fr); }
+
+.cal-time-col { position:relative; }
+.cal-lbl { position:absolute; right:6px; font-size:10px; color:var(--muted);
+  transform:translateY(-7px); white-space:nowrap; }
+
+.cal-day { position:relative; border-left:1px solid var(--border); }
+.cal-day.today { background:#fffbeb; }
+
+.cal-hline { position:absolute; left:0; right:0; border-top:1px solid #f0f4f8; }
+.cal-hline.major { border-top-color:#cbd5e1; }
+
+.cal-slot { position:absolute; left:0; right:0; cursor:pointer; }
+.cal-slot:hover { background:rgba(37,99,235,.06); }
+
+/* Appointment blocks */
+.cal-app { position:absolute; left:2px; right:2px; border-radius:6px;
+  padding:3px 6px; cursor:pointer; overflow:hidden; z-index:2;
+  border-left:3px solid rgba(0,0,0,.15); box-shadow:var(--shadow);
+  transition:box-shadow .15s; }
+.cal-app:hover { box-shadow:0 3px 10px rgba(0,0,0,.2); }
+.cal-app-time  { font-size:10px; font-weight:700; opacity:.85; }
+.cal-app-nome  { font-size:12px; font-weight:600;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cal-app-esame { font-size:10px; opacity:.75;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* Status colors — calendar blocks */
+.stato-prenotato { background:#dbeafe; color:#1e40af; border-left-color:#3b82f6; }
+.stato-arrivato  { background:#fef3c7; color:#92400e; border-left-color:#f59e0b; }
+.stato-in_corso  { background:#d1fae5; color:#065f46; border-left-color:#10b981; }
+.stato-refertato { background:#f1f5f9; color:#475569; border-left-color:#94a3b8; }
+.stato-annullato { background:#fee2e2; color:#991b1b; border-left-color:#ef4444; opacity:.55; }
+
+/* Sidebar border colors */
+.sidebar-item.stato-prenotato { border-left-color:#3b82f6; }
+.sidebar-item.stato-arrivato  { border-left-color:#f59e0b; }
+.sidebar-item.stato-in_corso  { border-left-color:#10b981; }
+.sidebar-item.stato-refertato { border-left-color:#94a3b8; }
+.sidebar-item.stato-annullato { border-left-color:#ef4444; opacity:.6; }
+
+/* ─── MODAL ───────────────────────────────────────────────────────────── */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5);
+  display:flex; align-items:center; justify-content:center;
+  z-index:100; backdrop-filter:blur(2px); }
+.modal { background:var(--surface); border-radius:14px; width:100%; max-width:540px;
+  max-height:92vh; display:flex; flex-direction:column; box-shadow:var(--shadow-lg); }
+.modal-hdr { display:flex; align-items:center; justify-content:space-between;
+  padding:16px 20px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.modal-hdr h2 { font-size:18px; font-weight:700; }
+.modal-body { padding:20px; overflow-y:auto; flex:1; display:flex;
+  flex-direction:column; gap:14px; }
+.modal-ftr { padding:12px 20px; border-top:1px solid var(--border);
+  display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
+.modal-ftr-r { display:flex; gap:8px; }
+
+/* Patient search */
+.paz-search-wrap { position:relative; }
+.paz-results { position:absolute; top:100%; left:0; right:0;
+  background:var(--surface); border:1px solid var(--border); border-top:none;
+  border-radius:0 0 var(--radius) var(--radius); max-height:200px; overflow-y:auto;
+  z-index:10; box-shadow:var(--shadow-lg); }
+.paz-item { padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border); }
+.paz-item:last-child { border-bottom:none; }
+.paz-item:hover { background:var(--pri-bg); }
+.paz-nome { font-weight:600; font-size:13px; }
+.paz-info { font-size:11px; color:var(--muted); }
+.paz-selezionato { background:var(--pri-bg); border:1px solid #bfdbfe;
+  border-radius:var(--radius); padding:8px 12px; display:flex;
+  align-items:center; justify-content:space-between; font-weight:600; }
+
+.nuovo-paz-form { background:var(--bg); border:1px solid var(--border);
+  border-radius:var(--radius); padding:14px; display:flex; flex-direction:column; gap:10px; }
+
+/* ─── PREP REMINDER ──────────────────────────────────────────────────── */
+.prep-reminder {
+  display:flex; align-items:flex-start; gap:10px;
+  background:#fffbeb; border:1px solid #f59e0b;
+  border-left:4px solid #f59e0b;
+  border-radius:var(--radius); padding:12px 14px;
+  animation:prepIn .2s ease;
+}
+@keyframes prepIn {
+  from { opacity:0; transform:translateY(-6px); }
+  to   { opacity:1; transform:none; }
+}
+.prep-icon { font-size:20px; line-height:1.2; flex-shrink:0; }
+.prep-text { font-size:13px; color:#78350f; line-height:1.5; }
+.prep-text strong { color:#92400e; }
+
+/* Stato buttons */
+.stato-btns { display:flex; gap:6px; flex-wrap:wrap; }
+.stato-btn { padding:6px 14px; border-radius:20px; border:2px solid transparent;
+  cursor:pointer; font-size:12px; font-weight:600; transition:box-shadow .15s; }
+.stato-btn.active { box-shadow:0 0 0 2px var(--pri); }
+
+/* ─── MENU DROPDOWN ──────────────────────────────────────────────────── */
+.menu-wrap { position:relative; }
+.menu-dropdown {
+  position:absolute; top:calc(100% + 6px); left:0;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); box-shadow:var(--shadow-lg);
+  min-width:230px; z-index:200; padding:5px 0;
+  animation:menuIn .12s ease;
+}
+@keyframes menuIn { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
+.menu-item {
+  display:flex; align-items:center; gap:2px;
+  width:100%; padding:10px 18px;
+  background:none; border:none; cursor:pointer;
+  font-size:14px; color:var(--text); text-align:left;
+}
+.menu-item:hover { background:var(--bg); }
+.menu-item--danger { color:var(--danger); }
+.menu-divider { border-top:1px solid var(--border); margin:5px 0; }
+
+/* ─── ARCHIVIO PAZIENTI ───────────────────────────────────────────────── */
+.arch-modal { max-width:720px; width:95%; }
+.arch-table-wrap { max-height:420px; overflow-y:auto; border:1px solid var(--border); border-radius:var(--radius); }
+.arch-table { width:100%; border-collapse:collapse; font-size:13px; }
+.arch-table thead th {
+  position:sticky; top:0; background:var(--bg);
+  padding:8px 12px; text-align:left;
+  font-size:11px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.05em; color:var(--muted);
+  border-bottom:2px solid var(--border);
+}
+.arch-table tbody td { padding:9px 12px; border-bottom:1px solid var(--border); }
+.arch-table tbody tr:last-child td { border-bottom:none; }
+.arch-table tbody tr:hover td { background:var(--pri-bg); cursor:pointer; }
+.arch-empty { padding:32px; text-align:center; color:var(--muted); font-style:italic; }
+.arch-hint { font-size:12px; color:var(--muted); margin-top:10px; text-align:center; }
+
+/* ─── MOBILE DAY NAV — nascosta su desktop, visibile su mobile via media query */
+.mobile-day-nav {
+  display:none;  /* default: nascosta */
+  align-items:center; justify-content:space-between;
+  background:var(--surface); border-bottom:2px solid var(--border);
+  padding:0 4px; height:50px; flex-shrink:0;
+}
+#mobile-day-label {
+  flex:1; text-align:center; font-size:14px; font-weight:700; color:var(--text);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 4px;
+}
+.mobile-nav-btn {
+  background:none; border:none; font-size:32px; color:var(--pri);
+  cursor:pointer; padding:0 10px; line-height:1;
+  min-width:52px; min-height:50px;
+  display:flex; align-items:center; justify-content:center;
+  -webkit-tap-highlight-color:transparent;
+}
+.mobile-nav-btn:active { background:var(--pri-bg); }
+
+/* ─── MOBILE BOTTOM BAR — nascosta su desktop, visibile su mobile via media query */
+.mobile-bottom-bar {
+  display:none;  /* default: nascosta */
+  position:fixed; bottom:0; left:0; right:0;
+  background:var(--surface); border-top:1px solid var(--border);
+  z-index:9999;
+  padding-bottom:env(safe-area-inset-bottom, 0px);
+  box-shadow:0 -2px 8px rgba(0,0,0,.08);
+}
+.mobile-bottom-bar button {
+  flex:1; background:none; border:none; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:3px; color:var(--pri); padding:10px 0;
+  -webkit-tap-highlight-color:transparent;
+  font-family:inherit;
+}
+.mobile-bottom-bar button:active { background:var(--pri-bg); }
+.mbb-icon { font-size:22px; line-height:1; }
+.mbb-lbl  { font-size:11px; font-weight:600; }
+
+/* ─── RESPONSIVE ──────────────────────────────────────────────────────── */
+@media (max-width:768px) {
+  /* Mostra elementi mobile */
+  .mobile-day-nav    { display:flex !important; }
+  .mobile-bottom-bar { display:flex !important; }
+
+  /* Header semplificato */
+  .hdr-nav    { display:none; }
+  .hdr-period { display:none; }
+  #btn-stampa { display:none; }
+  .app-title  { font-size:15px; }
+  .user-badge { display:none; }
+
+  /* Sidebar nascosta — accessibile dal menu */
+  .app-sidebar { display:none !important; }
+
+  /* .app e .app-body restano overflow:hidden (contenitore 100vh).
+     Il bottom bar e' fuori da #app quindi position:fixed funziona. */
+  .app-main {
+    flex:1; overflow:auto;
+    -webkit-overflow-scrolling:touch;
+    /* Spazio per la bottom bar fissa in fondo */
+    padding-bottom:calc(62px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Calendario: 7 colonne da 68px + colonna ore 44px = 520px scrollabile */
+  .cal-wrap   { width:calc(44px + 7 * 68px); min-width:0; }
+  .cal-header { grid-template-columns:44px repeat(7,68px); }
+  .cal-body   { grid-template-columns:44px repeat(7,68px); }
+
+  /* Colonna ore sticky a sinistra (con prefisso webkit per iOS) */
+  .cal-time-col {
+    position:-webkit-sticky; position:sticky;
+    left:0; z-index:3; background:var(--surface);
+  }
+  .cal-th-time {
+    position:-webkit-sticky; position:sticky;
+    left:0; z-index:7; background:var(--surface);
+  }
+
+  /* Intestazioni giorni compatte */
+  .cal-th-day     { padding:5px 1px; }
+  .cal-th-dayname { font-size:9px; }
+  .cal-th-daynum  { font-size:15px; width:26px; height:26px; margin-top:1px; }
+
+  /* Etichette ore compatte */
+  .cal-lbl { font-size:9px; right:2px; }
+
+  /* Appuntamenti compatti */
+  .cal-app-nome  { font-size:11px; }
+  .cal-app-time  { font-size:10px; }
+  .cal-app-esame { display:none; }
+
+  /* Dropdown non tagliato fuori schermo */
+  .menu-dropdown { left:0; right:auto; min-width:220px; }
+
+  /* Modal: sale dal basso a schermo pieno */
+  .modal-overlay { padding:0 !important; align-items:flex-end !important; }
+  .modal         { border-radius:16px 16px 0 0; max-height:92vh; width:100% !important; max-width:100% !important; }
+  .modal-body    { overflow-y:auto; max-height:60vh; }
+  .arch-modal    { border-radius:16px 16px 0 0; }
+}

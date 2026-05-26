@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agenda Studio</title>
+  <!-- PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Agenda Studio">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+  <meta name="theme-color" content="#2563eb">
+  <link rel="stylesheet" href="/css/style.css?v=20260526">
+</head>
+<body>
+
+<!-- ═══════════════════════════════ LOGIN ════════════════════════════════ -->
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <div class="login-logo">🏥</div>
+    <h1 class="login-title">Agenda Studio</h1>
+    <p class="login-sub">Sistema prenotazioni ecografie</p>
+    <form id="login-form" class="login-form">
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="login-user" autocomplete="username" required placeholder="medico">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="login-pass" autocomplete="current-password" required>
+      </div>
+      <div id="login-err" class="login-err hidden"></div>
+      <button type="submit" class="btn-pri btn-full" id="login-btn">Accedi</button>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ APP ══════════════════════════════════ -->
+<div id="app" class="app hidden">
+
+  <!-- Header -->
+  <header class="app-header" id="app-header">
+    <div class="hdr-left">
+      <div class="menu-wrap" id="menu-wrap">
+        <button class="btn-icon" id="btn-menu" title="Menu">☰</button>
+        <div class="menu-dropdown hidden" id="menu-dropdown">
+          <button class="menu-item" onclick="menuNuovoApp()">➕&nbsp; Nuovo appuntamento</button>
+          <button class="menu-item" onclick="menuArchivio()">👥&nbsp; Archivio pazienti</button>
+          <button class="menu-item" onclick="menuStampa()">🖨&nbsp; Stampa giornata</button>
+          <div class="menu-divider"></div>
+          <button class="menu-item menu-item--danger" onclick="menuLogout()">🚪&nbsp; Esci</button>
+        </div>
+      </div>
+      <h1 class="app-title">🏥 Agenda Studio</h1>
+    </div>
+    <div class="hdr-nav">
+      <button class="btn-icon" id="btn-prev" title="Settimana precedente">&#8249;</button>
+      <button class="btn-text" id="btn-oggi">Oggi</button>
+      <button class="btn-icon" id="btn-next" title="Settimana successiva">&#8250;</button>
+      <span id="header-period" class="hdr-period"></span>
+    </div>
+    <div class="hdr-right">
+      <button class="btn-sec" id="btn-stampa">🖨 Stampa</button>
+      <div class="user-badge" id="user-badge"></div>
+    </div>
+  </header>
+
+  <!-- Navigazione settimana (solo mobile, visibile via CSS) -->
+  <div class="mobile-day-nav" id="mobile-day-nav">
+    <button class="mobile-nav-btn" onclick="navMobileWeek(-1)">&#8249;</button>
+    <span id="mobile-day-label"></span>
+    <button class="mobile-nav-btn" onclick="navMobileWeek(1)">&#8250;</button>
+  </div>
+
+  <!-- Body -->
+  <div class="app-body">
+
+    <!-- Sidebar -->
+    <aside class="app-sidebar" id="app-sidebar">
+      <div class="sidebar-sec">
+        <h3>Oggi</h3>
+        <div id="sidebar-oggi" class="sidebar-list">
+          <p class="empty-msg">Nessun appuntamento</p>
+        </div>
+      </div>
+      <div class="sidebar-sec">
+        <button class="btn-pri btn-full" id="btn-nuovo">+ Nuovo appuntamento</button>
+      </div>
+    </aside>
+
+    <!-- Calendar -->
+    <main class="app-main">
+      <div id="cal-wrap" class="cal-wrap"></div>
+    </main>
+
+  </div>
+
+
+</div>
+
+<!-- Bottom bar mobile — FUORI da #app per evitare bug iOS Safari position:fixed -->
+<nav class="mobile-bottom-bar" id="mobile-bottom-bar">
+  <button onclick="openModal({})">
+    <span class="mbb-icon">➕</span>
+    <span class="mbb-lbl">Nuovo</span>
+  </button>
+  <button onclick="goToToday()">
+    <span class="mbb-icon">📅</span>
+    <span class="mbb-lbl">Oggi</span>
+  </button>
+  <button onclick="document.getElementById('btn-menu').click()">
+    <span class="mbb-icon">☰</span>
+    <span class="mbb-lbl">Menu</span>
+  </button>
+</nav>
+
+<!-- ═══════════════════════════ MODAL APPUNTAMENTO ════════════════════════ -->
+<div id="modal-overlay" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-hdr">
+      <h2 id="modal-title">Nuovo appuntamento</h2>
+      <button class="btn-icon modal-close" id="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Paziente -->
+      <div class="field">
+        <label>Paziente *</label>
+        <div class="paz-search-wrap">
+          <input type="text" id="paziente-search" placeholder="Cerca per cognome, nome o codice fiscale…" autocomplete="off">
+          <div id="paz-results" class="paz-results hidden"></div>
+        </div>
+        <div id="paz-selezionato" class="paz-selezionato hidden">
+          <span id="paz-nome-display"></span>
+          <button class="btn-link" id="btn-cambia-paz">cambia</button>
+        </div>
+        <button class="btn-link" id="btn-nuovo-paz-toggle">+ Crea nuovo paziente</button>
+      </div>
+
+      <!-- Nuovo paziente (collassabile) -->
+      <div id="nuovo-paz-form" class="nuovo-paz-form hidden">
+        <div class="field-row">
+          <div class="field">
+            <label>Cognome *</label>
+            <input type="text" id="np-cognome" placeholder="ROSSI">
+          </div>
+          <div class="field">
+            <label>Nome *</label>
+            <input type="text" id="np-nome" placeholder="Mario">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Data di nascita *</label>
+            <input type="date" id="np-nascita" required>
+          </div>
+          <div class="field">
+            <label>Sesso</label>
+            <select id="np-sesso">
+              <option value="">—</option>
+              <option value="M">Maschio</option>
+              <option value="F">Femmina</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Codice fiscale</label>
+            <input type="text" id="np-cf" placeholder="RSSMRA80A01H501Z">
+          </div>
+          <div class="field">
+            <label>Telefono *</label>
+            <input type="tel" id="np-telefono" placeholder="333 1234567" required>
+          </div>
+        </div>
+        <button class="btn-sec" id="btn-salva-nuovo-paz">✓ Salva paziente</button>
+      </div>
+
+      <!-- Tipo esame -->
+      <div class="field">
+        <label>Tipo esame *</label>
+        <select id="app-tipo">
+          <option value="">— seleziona —</option>
+        </select>
+      </div>
+
+      <!-- Reminder preparazione -->
+      <div id="prep-reminder" class="prep-reminder hidden">
+        <div class="prep-icon">⚠️</div>
+        <div class="prep-text">
+          <strong>Ricordare al paziente la preparazione:</strong><br>
+          Venire a <strong>DIGIUNO</strong> e con <strong>VESCICA PIENA</strong>
+        </div>
+      </div>
+
+      <!-- Data / ora / durata -->
+      <div class="field-row">
+        <div class="field">
+          <label>Data *</label>
+          <input type="date" id="app-data" required>
+        </div>
+        <div class="field">
+          <label>Ora inizio *</label>
+          <input type="time" id="app-ora-inizio" step="1800" required>
+        </div>
+        <div class="field" style="max-width:90px">
+          <label>Durata (min)</label>
+          <input type="number" id="app-durata" value="30" min="5" max="120" step="5">
+        </div>
+      </div>
+
+      <!-- Note -->
+      <div class="field">
+        <label>Note segreteria</label>
+        <textarea id="app-note" rows="2" placeholder="Note per il medico…"></textarea>
+      </div>
+
+      <!-- Stato (solo in modifica) -->
+      <div class="field" id="field-stato">
+        <label>Stato appuntamento</label>
+        <div class="stato-btns" id="stato-btns"></div>
+      </div>
+
+    </div>
+    <div class="modal-ftr">
+      <div>
+        <button class="btn-danger hidden" id="btn-annulla-app">🗑 Annulla appuntamento</button>
+      </div>
+      <div class="modal-ftr-r">
+        <button class="btn-ghost" id="btn-modal-cancel">Chiudi</button>
+        <button class="btn-pri"   id="btn-salva-app">Salva</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ MODAL ARCHIVIO PAZIENTI ════════════════════ -->
+<div id="arch-overlay" class="modal-overlay hidden">
+  <div class="modal arch-modal">
+    <div class="modal-hdr">
+      <h2>👥 Archivio Pazienti</h2>
+      <button class="btn-icon modal-close" onclick="chiudiArchivio()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field" style="margin-bottom:14px">
+        <input type="text" id="arch-search" placeholder="Cerca per cognome, nome o codice fiscale…" autocomplete="off">
+      </div>
+      <div class="arch-table-wrap">
+        <table class="arch-table">
+          <thead>
+            <tr>
+              <th>Cognome</th>
+              <th>Nome</th>
+              <th>Nascita</th>
+              <th>Telefono</th>
+              <th>Cod. Fiscale</th>
+            </tr>
+          </thead>
+          <tbody id="arch-tbody">
+            <tr><td colspan="5" class="arch-empty">Caricamento…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="arch-hint">Clicca su un paziente per prenotare un nuovo appuntamento</p>
+    </div>
+    <div class="modal-ftr">
+      <div></div>
+      <div class="modal-ftr-r">
+        <button class="btn-ghost" onclick="chiudiArchivio()">Chiudi</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/api.js?v=20260526"></script>
+<script src="/js/app.js?v=20260526"></script>
+</body>
+</html>
