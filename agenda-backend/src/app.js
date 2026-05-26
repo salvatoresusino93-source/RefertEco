@@ -38,6 +38,25 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, service: 'agenda-backend', ts: new Date().toISOString() });
 });
 
+// ─── Test email notifica ─────────────────────────────────────────────────
+app.post('/api/test-email', async (req, res) => {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return res.status(500).json({ error: 'RESEND_API_KEY non impostata su Railway' });
+  try {
+    const { Resend } = require('resend');
+    const resend = new Resend(key);
+    const r = await resend.emails.send({
+      from: 'Agenda Studio <onboarding@resend.dev>',
+      to: 'salvatore.susino93@gmail.com',
+      subject: 'Test da Railway — RefertEco',
+      html: '<p>Email di test dal server Railway. Funziona!</p>',
+    });
+    res.json({ ok: true, id: r.id });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Test invio SMS manuale (solo in sviluppo o da admin) ────────────────
 app.post('/api/reminder/test', async (req, res) => {
   try {
