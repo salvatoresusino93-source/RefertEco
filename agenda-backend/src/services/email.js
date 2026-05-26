@@ -9,13 +9,15 @@ function getResend() {
 function formatData(isoString) {
   const d = new Date(isoString);
   return d.toLocaleDateString('it-IT', {
-    weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
+    weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
+    timeZone: 'Europe/Rome'
   });
 }
 
 function formatOra(isoString) {
   return new Date(isoString).toLocaleTimeString('it-IT', {
-    hour: '2-digit', minute: '2-digit'
+    hour: '2-digit', minute: '2-digit',
+    timeZone: 'Europe/Rome'
   });
 }
 
