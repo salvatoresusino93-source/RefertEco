@@ -5,7 +5,7 @@
 const CAL_START = 8;          // 08:00
 const CAL_END   = 20;         // 20:00
 const PX_PER_MIN = 2;         // 2px per minuto → 1 ora = 120px
-const SLOT_MIN  = 20;         // slot cliccabili ogni 20 min
+const SLOT_MIN  = 30;         // slot cliccabili ogni 30 min
 const SLOT_H    = SLOT_MIN * PX_PER_MIN; // 40px
 
 const STATI = {
@@ -327,7 +327,7 @@ function openModal(opts={}) {
   _pazienteId = null;
   resetPaziente();
   $('app-tipo').value   = '';
-  $('app-durata').value = 20;
+  $('app-durata').value = 30;
   $('app-note').value   = '';
   $('prep-reminder').classList.add('hidden');
   $('field-stato').style.display = 'none';
@@ -394,7 +394,7 @@ async function salvaApp() {
   if (!data || !ora) { alert('Inserisci data e ora'); return; }
 
   const inizio = new Date(`${data}T${ora}:00`);
-  const durata = Number($('app-durata').value) || 20;
+  const durata = Number($('app-durata').value) || 30;
   const fine   = new Date(inizio.getTime() + durata*60000);
 
   const body = {
