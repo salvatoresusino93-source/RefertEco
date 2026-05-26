@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// SERVIZIO SMS — Skebby REST API v2
+// SERVIZIO SMS — SMS Hosting REST API
 // ═══════════════════════════════════════════════════════════════════════════
 
-const STUDIO = process.env.STUDIO_NOME      || 'Studio Medico';
-const TEL    = process.env.STUDIO_TELEFONO  || '';
+const STUDIO = process.env.STUDIO_NOME     || 'Studio Medico';
+const TEL    = process.env.STUDIO_TELEFONO || '';
 
 // ─── Normalizza numero italiano → formato E.164 (+39XXXXXXXXXX) ───────────
 function normalizzaNumero(tel) {
@@ -32,56 +32,42 @@ function fmtOra(iso) {
   });
 }
 
-// ─── Autenticazione Skebby → restituisce { userKey, sessionKey } ──────────
-async function skebbyAuth() {
-  const username = process.env.SKEBBY_USERNAME;
-  const password = process.env.SKEBBY_PASSWORD;
-  if (!username || !password) throw new Error('SKEBBY_USERNAME o SKEBBY_PASSWORD non impostati');
+// ─── Invia SMS tramite SMS Hosting ───────────────────────────────────────
+async function inviaSms(numero, testo) {
+  const apiKey    = process.env.SMSHOSTING_API_KEY;
+  const apiSecret = process.env.SMSHOSTING_API_SECRET;
+  const sender    = (process.env.SMS_SENDER || 'Studio').slice(0, 11);
 
-  const url = `https://api.skebby.it/API/send/smseasy/advanced/json` +
-              `?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-
-  const res = await fetch(url);
-  const txt = await res.text();
-  if (!res.ok || !txt.includes(';')) {
-    throw new Error(`Skebby auth fallita: ${txt}`);
+  if (!apiKey || !apiSecret) {
+    throw new Error('SMSHOSTING_API_KEY o SMSHOSTING_API_SECRET non impostati');
   }
 
-  const [userKey, sessionKey] = txt.split(';');
-  return { userKey: userKey.trim(), sessionKey: sessionKey.trim() };
-}
+  // Basic Auth: Base64(apiKey:apiSecret)
+  const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
 
-// ─── Invia SMS tramite Skebby ─────────────────────────────────────────────
-async function inviaSms(numero, testo) {
-  const { userKey, sessionKey } = await skebbyAuth();
+  const params = new URLSearchParams({
+    to:   numero,
+    text: testo,
+    from: sender,
+  });
 
-  const sender = (process.env.SKEBBY_SENDER || 'Studio').slice(0, 11);
-
-  const body = {
-    message:      testo,
-    message_type: 'SI',   // Smart Info — permette mittente alfanumerico
-    sender,
-    recipient: [numero],
-  };
-
-  const res = await fetch('https://api.skebby.it/API/send/smseasy/advanced/json', {
+  const res = await fetch('https://api.smshosting.it/rest/api/sms/send', {
     method:  'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'user_key':     userKey,
-      'Session_key':  sessionKey,
+      'Authorization': `Basic ${auth}`,
+      'Content-Type':  'application/x-www-form-urlencoded',
     },
-    body: JSON.stringify(body),
+    body: params.toString(),
   });
 
   const json = await res.json().catch(() => ({}));
-  if (!res.ok || json.result === 'KO') {
-    throw new Error(`Skebby invio fallito: ${JSON.stringify(json)}`);
+  if (!res.ok || json.status === 'ERROR') {
+    throw new Error(`SMS Hosting errore: ${JSON.stringify(json)}`);
   }
   return json;
 }
 
-// ─── SMS promemoria (inviato la sera prima dall'appuntamento) ────────────
+// ─── SMS promemoria (inviato la sera prima dell'appuntamento) ────────────
 async function inviaPromemoria(appuntamento) {
   const p = appuntamento.pazienti;
   if (!p) throw new Error('Dati paziente mancanti');
@@ -97,12 +83,11 @@ async function inviaPromemoria(appuntamento) {
   const testo =
     `Gentile ${nome}, le ricordiamo il suo appuntamento ` +
     `di domani ${data} alle ore ${ora} ` +
-    `(${esame}) ` +
-    `presso il ${STUDIO}.` +
+    `(${esame}) presso il ${STUDIO}.` +
     (TEL ? ` Per info: ${TEL}.` : '');
 
   const result = await inviaSms(numero, testo);
-  return { sid: result.order_id || 'ok', numero, testo };
+  return { sid: result.id || 'ok', numero, testo };
 }
 
 // ─── SMS conferma prenotazione ────────────────────────────────────────────
@@ -125,7 +110,7 @@ async function inviaSmsConferma(appuntamento) {
     (TEL ? ` Per info: ${TEL}.` : '');
 
   const result = await inviaSms(numero, testo);
-  return { sid: result.order_id || 'ok', numero, testo };
+  return { sid: result.id || 'ok', numero, testo };
 }
 
 // ─── SMS annullamento appuntamento ────────────────────────────────────────
@@ -146,7 +131,7 @@ async function inviaSmsAnnullamento(appuntamento) {
     (TEL ? ` Per info o nuova prenotazione: ${TEL}.` : '');
 
   const result = await inviaSms(numero, testo);
-  return { sid: result.order_id || 'ok', numero, testo };
+  return { sid: result.id || 'ok', numero, testo };
 }
 
 module.exports = { inviaPromemoria, inviaSmsConferma, inviaSmsAnnullamento, normalizzaNumero };
