@@ -111,22 +111,38 @@ async function creaEvento(appuntamento) {
   return data.id; // Google Calendar event ID
 }
 
-// ─── Elimina evento da Google Calendar ───────────────────────────────────
-async function eliminaEvento(googleEventId) {
-  if (!googleEventId) return;
+// ─── Elimina evento da Google Calendar per ID appuntamento ───────────────
+// Cerca l'evento tramite extendedProperties.private.agendaStudioId
+// (non serve google_event_id salvato in DB)
+async function eliminaEventoByAgendaId(appuntamentoId) {
+  if (!appuntamentoId) return;
   const creds = getCreds();
   if (!creds) return;
 
   const token = await getAccessToken();
   const calId = encodeURIComponent(creds.calendarId);
 
-  await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${calId}/events/${googleEventId}`,
-    {
-      method:  'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    }
+  // Cerca l'evento per agendaStudioId nelle extended properties
+  const params = new URLSearchParams({
+    privateExtendedProperty: `agendaStudioId=${appuntamentoId}`,
+    maxResults: '5',
+  });
+
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${calId}/events?${params}`,
+    { headers: { Authorization: `Bearer ${token}` } }
   );
+
+  const data = await res.json();
+  if (!res.ok || !data.items?.length) return;
+
+  // Elimina tutti gli eventi trovati con questo ID (di solito uno solo)
+  for (const ev of data.items) {
+    await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${calId}/events/${ev.id}`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
+    );
+  }
 }
 
 // ─── Aggiorna evento su Google Calendar ──────────────────────────────────
@@ -200,4 +216,4 @@ async function leggiEventiPersonali(da, a) {
   });
 }
 
-module.exports = { creaEvento, eliminaEvento, aggiornaEvento, leggiEventiPersonali, getCreds };
+module.exports = { creaEvento, eliminaEventoByAgendaId, aggiornaEvento, leggiEventiPersonali, getCreds };

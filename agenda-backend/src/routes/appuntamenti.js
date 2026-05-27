@@ -4,7 +4,7 @@ const { requireAuth, requireMedico } = require('../middleware/auth');
 const { getIO }  = require('../socket');
 const { notificaNuovoAppuntamento, notificaAppuntamentoAnnullato } = require('../services/email');
 const { inviaPromemoria, inviaSmsConferma, inviaSmsAnnullamento } = require('../services/sms');
-const { creaEvento, eliminaEvento, aggiornaEvento } = require('../services/googleCalendar');
+const { creaEvento, eliminaEventoByAgendaId } = require('../services/googleCalendar');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -129,17 +129,8 @@ router.post('/', async (req, res) => {
   // SMS conferma prenotazione al paziente (immediato)
   inviaSmsConferma(data).catch(e => console.error('[SMS] Conferma prenotazione:', e.message));
 
-  // Google Calendar — crea evento
-  creaEvento(data)
-    .then(googleEventId => {
-      if (googleEventId) {
-        supabase.from('appuntamenti')
-          .update({ google_event_id: googleEventId })
-          .eq('id', data.id)
-          .then(() => {});
-      }
-    })
-    .catch(e => console.error('[GCal] Crea evento:', e.message));
+  // Google Calendar — crea evento (ID appuntamento salvato in extendedProperties)
+  creaEvento(data).catch(e => console.error('[GCal] Crea evento:', e.message));
 
   // SMS promemoria immediato se l'appuntamento è domani e siamo già oltre le 19:00
   // (il cron serale è già passato e non lo manderebbe più)
@@ -232,11 +223,9 @@ router.delete('/:id', async (req, res) => {
   // SMS di annullamento al paziente
   inviaSmsAnnullamento(data).catch(e => console.error('[SMS] Annullamento:', e.message));
 
-  // Google Calendar — elimina evento
-  if (data.google_event_id) {
-    eliminaEvento(data.google_event_id)
-      .catch(e => console.error('[GCal] Elimina evento:', e.message));
-  }
+  // Google Calendar — elimina evento (cerca per ID appuntamento)
+  eliminaEventoByAgendaId(req.params.id)
+    .catch(e => console.error('[GCal] Elimina evento:', e.message));
 
   res.json({ ok: true, data });
 });
