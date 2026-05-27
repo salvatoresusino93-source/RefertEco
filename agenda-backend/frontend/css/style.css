@@ -359,4 +359,9 @@ button { font-family:inherit; }
   .modal         { border-radius:16px 16px 0 0; max-height:92vh; width:100% !important; max-width:100% !important; }
   .modal-body    { overflow-y:auto; max-height:60vh; }
   .arch-modal    { border-radius:16px 16px 0 0; }
+
+  /* iOS fix: quando JS imposta l'altezza dell'overlay via visualViewport,
+     il modal usa % invece di vh così il footer resta sempre visibile */
+  .modal-overlay[data-vv] .modal      { max-height:98% !important; }
+  .modal-overlay[data-vv] .modal-body { max-height:calc(100% - 130px) !important; }
 }

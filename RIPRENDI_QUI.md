@@ -207,23 +207,10 @@ Contiene: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `TWILIO_*`, `JWT_SECRET`, `POR
 
 ---
 
-## 7. PROGETTO IN SOSPESO: INTEGRAZIONE ORTHANC
+## 7. NOTA: ORTHANC — NON PERTINENTE A QUESTA REPO
 
-L'utente ha un sistema Orthanc (PACS) configurato da un ingegnere ora irreperibile.
-Non funziona da tempo. Da affrontare quando si lavora sulla workstation in studio.
-
-Workflow originale (presunto):
-1. Ecografo → DICOM via rete Ethernet → Orthanc
-2. Orthanc → inoltra a PC di lavoro
-
-Stato: PC server Orthanc non localizzato, rete diversa rispetto al PC attuale.
-
-Roadmap:
-1. Identificare il PC Orthanc
-2. Diagnosticare (`http://IP:8042`)
-3. Integrare con RefertEco via cartella `inbox` su Google Drive
-
-Alternativa: DICOM Storage SCP diretto con `dcmjs-dimse` (~30-35 ore sviluppo).
+Il server Orthanc gira su **un altro PC separato**, con la propria memoria e configurazione.
+Non è collegato a questa repo né a questo PC di sviluppo. Non serve fare nulla qui.
 
 ---
 

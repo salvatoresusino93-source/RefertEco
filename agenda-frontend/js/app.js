@@ -307,6 +307,12 @@ function bindEvents() {
   };
   $('btn-salva-nuovo-paz').onclick = salvaNuovoPaz;
   $('btn-cambia-paz').onclick = resetPaziente;
+
+  // iOS fix: ascolta il resize del visual viewport (apertura/chiusura tastiera)
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', _adjustModalToViewport);
+    window.visualViewport.addEventListener('scroll', _adjustModalToViewport);
+  }
 }
 
 // ─── Popola select prestazioni ────────────────────────────────────────────
@@ -319,6 +325,31 @@ function fillPrestazioni() {
     opt.textContent = `${p.nome} (${p.durata_minuti} min)`;
     sel.appendChild(opt);
   }
+}
+
+// ─── iOS Safari: fix tastiera che nasconde il pulsante Salva ─────────────
+// Su iOS, position:fixed è ancorato alla "layout viewport" (tutta la pagina),
+// mentre la tastiera occupa la parte bassa della "visual viewport" (quello che vedi).
+// Risultato: il footer del modal (con il pulsante Salva) finisce SOTTO la tastiera.
+// Fix: ascoltiamo visualViewport.resize e aggiorniamo top/height dell'overlay
+// in modo che copra solo l'area visibile sopra la tastiera.
+function _adjustModalToViewport() {
+  if (!window.visualViewport || window.innerWidth > 768) return;
+  const overlay = document.getElementById('modal-overlay');
+  if (!overlay || overlay.classList.contains('hidden')) return;
+  const vv = window.visualViewport;
+  overlay.style.top    = vv.offsetTop + 'px';
+  overlay.style.height = vv.height    + 'px';
+  overlay.style.bottom = 'auto';
+  overlay.dataset.vv   = '1'; // attiva regole CSS che usano % invece di vh
+}
+function _resetModalViewport() {
+  const overlay = document.getElementById('modal-overlay');
+  if (!overlay) return;
+  overlay.style.top = '';
+  overlay.style.height = '';
+  overlay.style.bottom = '';
+  delete overlay.dataset.vv;
 }
 
 // ─── Modal ────────────────────────────────────────────────────────────────
@@ -342,10 +373,12 @@ function openModal(opts={}) {
     loadAppInModal(_editId);
   }
   $('modal-overlay').classList.remove('hidden');
+  _adjustModalToViewport(); // iOS: adatta subito all'altezza corrente
 }
 
 function closeModal() {
   $('modal-overlay').classList.add('hidden');
+  _resetModalViewport();    // iOS: ripristina stile overlay
   _editId = null; _pazienteId = null;
 }
 
