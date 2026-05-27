@@ -220,8 +220,8 @@ router.delete('/:id', async (req, res) => {
   // Notifica email al medico
   notificaAppuntamentoAnnullato(data).catch(() => {});
 
-  // SMS di annullamento al paziente
-  inviaSmsAnnullamento(data).catch(e => console.error('[SMS] Annullamento:', e.message));
+  // SMS di annullamento al paziente — disabilitato su richiesta
+  // inviaSmsAnnullamento(data).catch(e => console.error('[SMS] Annullamento:', e.message));
 
   // Google Calendar — elimina evento (cerca per ID appuntamento)
   eliminaEventoByAgendaId(req.params.id)
