@@ -69,8 +69,15 @@ app.post('/api/test-sms', async (req, res) => {
     return res.status(500).json({ error: 'SMSHOSTING_API_KEY o SMSHOSTING_API_SECRET mancanti su Railway' });
   }
 
-  const numero = req.body.numero;
-  if (!numero) return res.status(400).json({ error: 'Campo "numero" obbligatorio nel body' });
+  const raw = (req.body.numero || '').toString().replace(/[\s\-\.]/g, '');
+  if (!raw) return res.status(400).json({ error: 'Campo "numero" obbligatorio nel body' });
+
+  // Normalizza in formato E.164 (+39XXXXXXXXXX)
+  let numero = raw;
+  if      (raw.startsWith('+39'))  numero = raw;
+  else if (raw.startsWith('0039')) numero = '+39' + raw.slice(4);
+  else if (raw.startsWith('3'))    numero = '+39' + raw;
+  else if (raw.startsWith('0'))    numero = '+39' + raw;
 
   const auth   = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
   const params = new URLSearchParams({
