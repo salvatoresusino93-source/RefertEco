@@ -4,7 +4,7 @@
 > fare qualsiasi modifica. Contiene il contesto delle conversazioni precedenti, le
 > decisioni prese, e i prossimi passi.
 
-Ultimo aggiornamento: **2026-05-27**, sessione serale (prenotazione online pazienti).
+Ultimo aggiornamento: **2026-05-27**, sessione notturna (privacy GDPR prenotazione online).
 
 ---
 
@@ -123,7 +123,19 @@ Il paziente prenota direttamente dal link `/prenota` (da mettere su Google Busin
 
 ### URL pagina prenotazione
 `https://referteco-production.up.railway.app/prenota`
-→ Da aggiungere manualmente su Google Business Profile come link di prenotazione
+
+### ⚠️ PENDING — Rimozione Mio Dottore da GBP
+- Su Google Business Profile appare ancora "Prenota con Google" che porta a **Mio Dottore** (miodottore.it)
+- Non è possibile rimuoverlo né dall'app GBP né dal pannello pro.miodottore.it
+- **Azione richiesta**: contattare il supporto Mio Dottore (trovare il vero contatto su pro.miodottore.it)
+  e chiedere di rimuovere l'integrazione "Prenota con Google"
+- Una volta rimossa, impostare il nuovo URL tramite `POST /api/gbp/set-booking-url`
+  (richiede `GBP_LOCATION_NAME` su Railway — vedi sezione GBP sotto)
+  oppure manualmente dal pannello GBP → Info → Prenotazioni
+
+### ⚠️ PENDING — API GBP in attesa approvazione Google
+- `mybusinessaccountmanagement.googleapis.com` quota=0 — Case ID: **1-7862000040720** (2026-05-27)
+- Se `GBP_LOCATION_NAME` è impostato su Railway, `/api/gbp/set-booking-url` funziona già ora
 
 ### Disponibilità
 - Mostra solo Martedì (js day 2) e Venerdì (js day 5)
@@ -136,6 +148,34 @@ Il paziente prenota direttamente dal link `/prenota` (da mettere su Google Busin
 - Sidebar "oggi": bordino giallo
 - Modal modifica: banner giallo con spiegazione, il medico può cliccare "Prenotato" per conferma manuale
 - Print view: badge ambra
+
+---
+
+## 4. PRIVACY GDPR — 2026-05-27 notturno ✅
+
+### Cosa è stato fatto
+Implementata conformità GDPR art. 13 per la pagina di prenotazione online.
+
+### File nuovi / modificati
+- `agenda-backend/frontend/privacy.html` (NUOVO) — informativa completa in 10 sezioni:
+  titolare, dati raccolti, finalità+base giuridica, obbligatorietà, modalità, conservazione,
+  destinatari (Railway, Supabase, SMS Hosting, Resend), diritti dell'interessato, esercizio
+  diritti, reclamo al Garante. Link "← Torna alla prenotazione".
+- `agenda-backend/src/app.js` — aggiunta route `GET /privacy` → serve `privacy.html`
+- `agenda-backend/frontend/js/prenota.js` — aggiunto `privacyAccettata: false` in ST,
+  checkbox GDPR in step 3 (link `/privacy` apre in nuova tab), validazione in `avanzaStep4()`
+- `agenda-backend/frontend/prenota.html` — aggiunto CSS `.privacy-wrap`, `.privacy-label`, `.pr-link`
+- Tutte le modifiche replicate in `agenda-frontend/`
+- Commit pushato a `main` (deploy Railway attivo) — commit `742fd8f`
+
+### Dati sanitari come "categoria particolare" (art. 9 GDPR)
+Il tipo di esame ecografico è trattato come dato sanitario ex art. 9 GDPR.
+Base giuridica: art. 9(2)(a) consenso esplicito + art. 9(2)(h) finalità mediche.
+Il consenso è obbligatorio per procedere con la prenotazione.
+
+### Conservazione dati
+- Dati prenotazione: 10 anni (D.P.R. 128/1969 documentazione sanitaria)
+- Appuntamenti annullati: 2 anni (fini amministrativi)
 
 ---
 
