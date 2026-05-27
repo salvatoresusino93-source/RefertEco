@@ -36,7 +36,6 @@ function fmtOra(iso) {
 async function inviaSms(numero, testo) {
   const apiKey    = process.env.SMSHOSTING_API_KEY;
   const apiSecret = process.env.SMSHOSTING_API_SECRET;
-  const sender    = (process.env.SMS_SENDER || 'Studio').slice(0, 11);
 
   if (!apiKey || !apiSecret) {
     throw new Error('SMSHOSTING_API_KEY o SMSHOSTING_API_SECRET non impostati');
@@ -45,11 +44,16 @@ async function inviaSms(numero, testo) {
   // Basic Auth: Base64(apiKey:apiSecret)
   const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
 
+  // NOTA: 'from' non viene inviato intenzionalmente.
+  // I mittenti alfanumerici (es. "DrSusino") richiedono registrazione preventiva
+  // presso SMS Hosting. Senza registrazione, viene sostituito da "#RANDOMNUM#"
+  // e i messaggi vengono filtrati dagli operatori italiani.
+  // Senza 'from', SMS Hosting usa il numero fisso 394390009000, già registrato,
+  // con consegna più affidabile sugli operatori italiani (TIM, Vodafone, WindTre).
   const params = new URLSearchParams({
     to:     numero,
     text:   testo,
-    from:   sender,
-    isTest: 'false',   // esplicito: non modalità test
+    isTest: 'false',
   });
 
   const res = await fetch('https://api.smshosting.it/rest/api/sms/send', {

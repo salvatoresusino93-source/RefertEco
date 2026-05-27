@@ -63,7 +63,6 @@ app.post('/api/test-email', async (req, res) => {
 app.post('/api/test-sms', async (req, res) => {
   const apiKey    = process.env.SMSHOSTING_API_KEY;
   const apiSecret = process.env.SMSHOSTING_API_SECRET;
-  const sender    = (process.env.SMS_SENDER || 'Studio').slice(0, 11);
 
   if (!apiKey || !apiSecret) {
     return res.status(500).json({ error: 'SMSHOSTING_API_KEY o SMSHOSTING_API_SECRET mancanti su Railway' });
@@ -80,10 +79,13 @@ app.post('/api/test-sms', async (req, res) => {
   else if (raw.startsWith('0'))    numero = '+39' + raw;
 
   const auth   = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+  // NOTA: 'from' rimosso — i mittenti alfanumerici non registrati vengono rimpiazzati
+  // da #RANDOMNUM# e filtrati dagli operatori italiani. Senza 'from', SMS Hosting usa
+  // il numero fisso 394390009000, già registrato, con consegna più affidabile.
   const params = new URLSearchParams({
-    to:   numero,
-    text: `Test SMS da Agenda Studio [${new Date().toLocaleTimeString('it-IT', {timeZone:'Europe/Rome'})}]. Credenziali OK.`,
-    from: sender,
+    to:     numero,
+    text:   `Test SMS Agenda Studio [${new Date().toLocaleTimeString('it-IT', {timeZone:'Europe/Rome'})}]. Funziona?`,
+    isTest: 'false',
   });
 
   try {
@@ -101,7 +103,7 @@ app.post('/api/test-sms', async (req, res) => {
       http_status: r.status,
       http_ok:     r.ok,
       risposta_smshosting: json,
-      parametri_inviati: { numero, from: sender, apiKey_prefix: apiKey.slice(0, 6) + '...' }
+      parametri_inviati: { numero, from: '(nessuno — usa numero fisso SMS Hosting)', apiKey_prefix: apiKey.slice(0, 6) + '...' }
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
