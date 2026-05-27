@@ -825,6 +825,23 @@ async function salvaPaziente() {
   }
 }
 
+async function eliminaPaziente() {
+  if (!_pdId) return;
+  const nome = $('paz-detail-title').textContent;
+  if (!confirm(`⚠️ Eliminare definitivamente il paziente "${nome}"?\n\nQuesta azione non può essere annullata.`)) return;
+
+  try {
+    await api.eliminaPaziente(_pdId);
+    chiudiDettaglioPaziente();
+    // Aggiorna la lista in archivio se è aperta
+    if (!$('arch-overlay').classList.contains('hidden')) {
+      caricaArchivio($('arch-search').value.trim());
+    }
+  } catch(e) {
+    alert('Impossibile eliminare:\n' + e.message);
+  }
+}
+
 function nuovoAppDaPaziente() {
   if (!_pdId) return;
   const cognome = $('pd-cognome').value.trim();

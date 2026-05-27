@@ -168,4 +168,29 @@ router.get('/:id/appuntamenti', async (req, res) => {
   res.json(data);
 });
 
+// ─── DELETE /api/pazienti/:id ────────────────────────────────────────────
+router.delete('/:id', async (req, res) => {
+  // Blocca se ci sono appuntamenti NON annullati associati
+  const { data: attivi } = await supabase
+    .from('appuntamenti')
+    .select('id')
+    .eq('paziente_id', req.params.id)
+    .neq('stato', 'annullato')
+    .limit(1);
+
+  if (attivi && attivi.length > 0) {
+    return res.status(409).json({
+      error: 'Impossibile eliminare: il paziente ha appuntamenti attivi. Annullali prima di procedere.'
+    });
+  }
+
+  const { error } = await supabase
+    .from('pazienti')
+    .delete()
+    .eq('id', req.params.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
+});
+
 module.exports = router;

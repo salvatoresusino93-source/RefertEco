@@ -36,6 +36,7 @@ const api = {
   paziente:              (id)     => api._req('GET',  `/pazienti/${id}`),
   creaPaziente:          (data)   => api._req('POST', '/pazienti', data),
   aggiornaPaziente:      (id, d)  => api._req('PUT',  `/pazienti/${id}`, d),
+  eliminaPaziente:       (id)     => api._req('DELETE', `/pazienti/${id}`),
   appuntamentiPaziente:  (id)     => api._req('GET',  `/pazienti/${id}/appuntamenti`),
 
   // Appuntamenti
