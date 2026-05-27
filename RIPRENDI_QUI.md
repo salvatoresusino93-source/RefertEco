@@ -4,8 +4,7 @@
 > fare qualsiasi modifica. Contiene il contesto delle conversazioni precedenti, le
 > decisioni prese, e i prossimi passi.
 
-Ultimo aggiornamento: **2026-05-27**, fusione sessioni 26/05 mattina + pomeriggio/sera
-(agenda iOS fix, email/SMS, Orthanc workstation, fix UI RefertEco).
+Ultimo aggiornamento: **2026-05-27**, sessione serale (fix SMS delivery).
 
 ---
 
@@ -140,7 +139,21 @@ C:\Program Files\Orthanc Server\             ← Orthanc 1.12.11 come servizio W
 - Caso edge: prenotazione dopo le 19:00 per domani → SMS immediato
 - Annullamento → SMS al paziente
 - File: `agenda-backend/src/services/sms.js`
-- Variabili Railway: `SMSHOSTING_API_KEY`, `SMSHOSTING_API_SECRET`, `SMS_SENDER`, `STUDIO_NOME`
+- Variabili Railway: `SMSHOSTING_API_KEY`, `SMSHOSTING_API_SECRET`, `STUDIO_NOME`
+- **`SMS_SENDER` NON viene più usato** (vedi fix sotto)
+
+### Fix SMS delivery — 2026-05-27 sera
+- **Problema**: SMS non arrivavano nonostante `smsInserted:1` nell'API response.
+  Causa: il campo `from` con mittente alfanumerico ("Dr Susino") non è registrato su SMS Hosting
+  → viene rimpiazzato da `#RANDOMNUM#` → gli operatori italiani (TIM, Vodafone, WindTre, Iliad)
+  filtrano/bloccano questi SMS come spam.
+- **Fix**: rimosso il parametro `from` dalla chiamata API in `sms.js` e `/api/test-sms`.
+  Senza `from`, SMS Hosting usa il proprio numero fisso `394390009000`, già registrato
+  presso gli operatori, con consegna molto più affidabile.
+- Gli SMS appaiono ora sul cellulare come mittente `+39 439 000 9000` (SMS Hosting).
+- **Se in futuro si vuole un mittente personalizzato** (es. "StudioSus"):
+  contattare SMS Hosting support e richiedere la registrazione del nome mittente.
+  Nomi alphanumerici in Italia richiedono approvazione AGCOM. Max 11 caratteri, solo lettere/numeri.
 
 ### Orthanc su workstation
 - Server Linux originale (192.168.1.77) irraggiungibile (btrfs corrotto)
@@ -183,16 +196,17 @@ Endpoint aggiunti:
 
 ## 7. CONFIGURAZIONE CORRENTE
 
-### Variabili Railway (non committare)
+### Variabili Railway (non committare — valori reali su Railway dashboard o su .env locale)
 ```
-SUPABASE_URL / SUPABASE_SERVICE_KEY
-TWILIO_* (vecchio, ora usato SMS Hosting)
-JWT_SECRET
-RESEND_API_KEY         = re_hGzWNiTr_...
-SMSHOSTING_API_KEY     = SMSHNJ6I5RWQUJ2CMFJKU
-SMSHOSTING_API_SECRET  = KUC3IOCRIMN2328R61Z0XOQ4DWGUD0UG
-SMS_SENDER             = StudioSusin
+SUPABASE_URL           = <da Railway dashboard>
+SUPABASE_SERVICE_KEY   = <da Railway dashboard>
+JWT_SECRET             = <da Railway dashboard>
+RESEND_API_KEY         = <da Railway dashboard>
+SMSHOSTING_API_KEY     = <da Railway dashboard>
+SMSHOSTING_API_SECRET  = <da Railway dashboard>
+SMS_SENDER             = (non più usato dal codice — mittente fisso 394390009000)
 STUDIO_NOME            = Studio Dr. Susino
+STUDIO_TELEFONO        = <opzionale, appare negli SMS>
 ```
 
 ### File locali (non committare)
