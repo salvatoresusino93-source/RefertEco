@@ -82,7 +82,7 @@ app.post('/api/test-sms', async (req, res) => {
   const auth   = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
   const params = new URLSearchParams({
     to:   numero,
-    text: `Test SMS da Agenda Studio. Se ricevi questo messaggio le credenziali SMS Hosting funzionano correttamente.`,
+    text: `Test SMS da Agenda Studio [${new Date().toLocaleTimeString('it-IT', {timeZone:'Europe/Rome'})}]. Credenziali OK.`,
     from: sender,
   });
 
