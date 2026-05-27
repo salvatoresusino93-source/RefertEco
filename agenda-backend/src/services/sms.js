@@ -46,9 +46,10 @@ async function inviaSms(numero, testo) {
   const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
 
   const params = new URLSearchParams({
-    to:   numero,
-    text: testo,
-    from: sender,
+    to:     numero,
+    text:   testo,
+    from:   sender,
+    isTest: 'false',   // esplicito: non modalità test
   });
 
   const res = await fetch('https://api.smshosting.it/rest/api/sms/send', {
