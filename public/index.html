@@ -1,9 +1,13 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="it">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>RefertEco — Gestionale Referti</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=2">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=2">
+<link rel="apple-touch-icon" href="icon-192.png?v=2">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -214,6 +218,8 @@
 
           <div class="form-actions">
             <button class="btn btn-primary" onclick="salvaReferto()">💾 Salva referto</button>
+            <button class="btn btn-primary" onclick="salvaEdEsporta(false)">📄 Solo referto</button>
+            <button class="btn btn-primary" onclick="salvaEdEsporta(true)">🖼 Referto + immagini</button>
             <button class="btn btn-secondary" onclick="resetForm()">Reset</button>
             <span style="flex:1"></span>
             <span style="font-size:11px;color:var(--text-muted);font-family:'DM Mono',monospace;">Dati salvati su database locale · SQLite</span>
@@ -241,7 +247,15 @@
               <button class="viewer-zoom-btn" onclick="zoomBy(1.4)" title="Ingrandisci (+)">+</button>
             </div>
             <button class="viewer-measure-btn" id="viewer-measure-btn" onclick="toggleMeasureMode()" title="Strumento misura — click su 2 punti per misurare la distanza">📏</button>
+            <button class="viewer-measure-btn" id="viewer-zoom-mode-btn" onclick="toggleZoomMode()" title="Rotella: SCORRE immagini — clicca per passare allo zoom">🔍</button>
             <button class="viewer-measure-clr" id="viewer-measure-clr" onclick="clearMeasurements()" title="Cancella tutte le misure" style="display:none">✕ misure</button>
+            <div class="viewer-pp-ctrl">
+              <button class="pp-btn" data-n="4" onclick="setPrintPerPage(4)" title="4 immagini per pagina">4</button>
+              <button class="pp-btn" data-n="6" onclick="setPrintPerPage(6)" title="6 immagini per pagina">6</button>
+              <button class="pp-btn" data-n="8" onclick="setPrintPerPage(8)" title="8 immagini per pagina">8</button>
+            </div>
+            <button class="viewer-measure-btn" onclick="stampaImmagini()" title="Stampa tutte le immagini (solo immagini, qualità massima)">🖨️</button>
+            <button class="viewer-measure-btn" id="orthanc-open-btn" onclick="apriPanelOrthanc()" title="Importa immagini da Orthanc (ecografo)">🏥</button>
             <label class="viewer-import-btn" title="Importa file immagine">
               📁
               <input type="file" multiple accept=".jpg,.jpeg,.png,.dcm,.DCM" style="display:none" onchange="caricaImmaginiViewer(event)">
@@ -251,6 +265,7 @@
               <input type="file" webkitdirectory multiple style="display:none" onchange="caricaImmaginiViewer(event)">
             </label>
             <button class="viewer-clear-btn" onclick="svuotaViewer()" title="Rimuovi immagini">✕</button>
+            <button class="viewer-measure-btn" id="viewer-collapse-btn" onclick="toggleViewerCollapse()" title="Nascondi/mostra pannello immagini">◀</button>
           </div>
 
           <div class="viewer-empty" id="viewer-empty">
@@ -267,7 +282,7 @@
             <div class="viewer-footer">
               <span class="viewer-counter" id="viewer-counter">1 / 1</span>
               <span class="viewer-cal-badge" id="viewer-cal-badge" style="display:none"></span>
-              <span class="viewer-hint" id="viewer-hint">↕ scorri per cambiare</span>
+              <span class="viewer-hint" id="viewer-hint">↕ rotella = cambia immagine · 🔍 per zoom</span>
             </div>
           </div>
 
@@ -397,39 +412,119 @@
         </div>
       </div>
 
+      <!-- ═══ VIEW EDIT REFERTO (sotto-pagina dell'archivio) ═══ -->
+      <div class="view" id="view-edit-referto">
+        <div class="edit-topbar">
+          <button class="btn btn-secondary btn-sm" onclick="tornaAdArchivio()">← Torna all'archivio</button>
+          <span class="edit-title" id="edit-title">Modifica referto</span>
+          <span style="flex:1"></span>
+          <button class="btn btn-primary btn-sm" onclick="salvaModifiche()">💾 Salva</button>
+          <button class="btn btn-primary btn-sm" onclick="esportaDaEdit(false)">📄 Solo referto</button>
+          <button class="btn btn-primary btn-sm" onclick="esportaDaEdit(true)">🖼 Referto + immagini</button>
+          <button class="btn btn-danger btn-sm" onclick="eliminaDaEdit()">🗑 Elimina</button>
+        </div>
+
+        <div class="nuovo-layout" id="edit-layout">
+          <div class="nuovo-form">
+            <div class="form-card">
+
+              <div class="form-section">
+                <div class="sec-lbl">Dati paziente</div>
+                <div class="form-row c3">
+                  <div class="fg"><label>Cognome *</label><input type="text" id="e-cognome" autocomplete="off"></div>
+                  <div class="fg"><label>Nome *</label><input type="text" id="e-nome" autocomplete="off"></div>
+                  <div class="fg"><label>Data di nascita</label><input type="date" id="e-nascita"></div>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <div class="sec-lbl">Esame</div>
+                <div class="form-row c2">
+                  <div class="fg">
+                    <label>Tipo di esame *</label>
+                    <div class="tipo-wrap">
+                      <select id="e-tipo-sel"></select>
+                      <input type="text" id="e-tipo-custom" placeholder="...oppure digita un tipo personalizzato">
+                    </div>
+                  </div>
+                  <div class="fg"><label>Data esame *</label><input type="date" id="e-data"></div>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <div class="sec-lbl">Referto</div>
+                <div class="fg">
+                  <div class="ta-wrap">
+                    <textarea id="e-referto" placeholder="Testo del referto…"></textarea>
+                    <button class="mic-btn" id="mic-e-referto" title="Dettatura vocale" onclick="toggleDictation('e-referto','mic-e-referto','db-e-referto')">🎤</button>
+                  </div>
+                  <div class="dict-bar" id="db-e-referto">
+                    <div class="dict-dot"></div>
+                    <span>Dettatura in corso — parla in italiano. Clicca 🎤 per fermare.</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+          <!-- Resizer e viewer vengono spostati qui dinamicamente quando si entra in edit -->
+        </div>
+      </div>
+
       <!-- ═══ VIEW IMPOSTAZIONI ═══ -->
       <div class="view" id="view-impostazioni">
 
         <div class="form-card" style="max-width:660px">
           <div class="form-section">
             <div class="sec-lbl">Posizione database</div>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:18px;line-height:1.6">
-              Scegli dove salvare i referti. Con <strong style="color:var(--text)">Google Drive</strong>
-              l'archivio è condiviso e sincronizzato su tutti i computer dove usi RefertEco.
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">
+              Scegli dove salvare referti e immagini. Con <strong style="color:var(--text)">Google Drive</strong>
+              i dati si sincronizzano automaticamente tra più computer.
             </p>
+
+            <div style="background:var(--bg-soft, #f7f7f7);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px">
+              <span style="color:var(--text-muted)">Posizione attiva:</span>
+              <span id="current-datadir-display" style="font-family:'DM Mono',monospace;font-weight:600;margin-left:6px">—</span>
+            </div>
+
             <div style="display:flex;flex-direction:column;gap:10px">
 
-              <label class="mode-card">
-                <input type="radio" name="modalita" value="locale" id="r-locale" onchange="onModalitaChange()">
-                <div class="mode-card-body">
-                  <div class="mode-title">Locale — solo questo computer</div>
-                  <div class="mode-path" id="path-locale-display">—</div>
-                </div>
-              </label>
-
+              <!-- Card 1: Google Drive (con click rapido) -->
               <label class="mode-card">
                 <input type="radio" name="modalita" value="gdrive" id="r-gdrive" onchange="onModalitaChange()">
                 <div class="mode-card-body">
-                  <div class="mode-title">☁ Google Drive — condiviso tra computer</div>
-                  <div class="mode-desc">Richiede <strong>Google Drive per Desktop</strong> installato e attivo su ogni computer.</div>
-                  <div class="gdrive-section" id="gdrive-section">
-                    <div class="gdrive-detected" id="gdrive-detected" style="display:none">✓ Google Drive rilevato automaticamente</div>
-                    <label style="font-size:11px;font-weight:500;color:var(--text-muted)">Percorso cartella RefertEco in Google Drive:</label>
-                    <div style="display:flex;gap:8px">
-                      <input type="text" id="gdrive-path" placeholder="/percorso/Google Drive/My Drive/RefertEco" style="flex:1;font-size:12px;font-family:'DM Mono',monospace">
-                      <button class="btn btn-secondary btn-sm" onclick="rilevaDrive()">Rileva auto</button>
+                  <div class="mode-title">☁ Google Drive — sincronizzato tra computer</div>
+                  <div class="mode-desc" style="margin-bottom:8px">Salva in una cartella di Google Drive accessibile da tutti i tuoi PC e Mac.</div>
+
+                  <div id="gdrive-auto-box" style="display:none;background:#e7f5ee;border-left:3px solid #10b981;padding:10px 12px;border-radius:4px;margin-bottom:8px">
+                    <div style="font-size:12px;font-weight:600;color:#065f46;margin-bottom:4px">✓ Google Drive rilevato automaticamente</div>
+                    <div style="font-size:11px;font-family:'DM Mono',monospace;color:#047857;word-break:break-all" id="gdrive-detected-path">—</div>
+                    <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="usaGoogleDrive()" type="button">⚡ Usa questa cartella (1 click)</button>
+                  </div>
+
+                  <div id="gdrive-manual-box" style="display:none">
+                    <div style="font-size:12px;color:#b45309;background:#fef3c7;border-left:3px solid #f59e0b;padding:8px 10px;border-radius:4px;margin-bottom:8px">
+                      ⚠️ Google Drive non rilevato. Installa <strong>Google Drive per Desktop</strong> oppure inserisci manualmente il percorso.
                     </div>
                   </div>
+
+                  <details style="margin-top:6px">
+                    <summary style="font-size:11px;color:var(--text-muted);cursor:pointer">Personalizza percorso</summary>
+                    <div style="display:flex;gap:8px;margin-top:6px">
+                      <input type="text" id="gdrive-path" placeholder="Percorso cartella Google Drive" style="flex:1;font-size:12px;font-family:'DM Mono',monospace">
+                      <button class="btn btn-secondary btn-sm" onclick="rilevaDrive()" type="button">Rileva</button>
+                    </div>
+                  </details>
+                </div>
+              </label>
+
+              <!-- Card 2: Locale -->
+              <label class="mode-card">
+                <input type="radio" name="modalita" value="locale" id="r-locale" onchange="onModalitaChange()">
+                <div class="mode-card-body">
+                  <div class="mode-title">💻 Locale — solo questo computer</div>
+                  <div class="mode-desc" style="margin-bottom:6px">I dati restano sul disco, niente sincronizzazione.</div>
+                  <div class="mode-path" id="path-locale-display" style="font-size:11px">—</div>
                 </div>
               </label>
 
@@ -500,6 +595,21 @@
           </div>
         </div>
 
+        <div class="form-card" style="max-width:660px;margin-top:18px">
+          <div class="form-section">
+            <div class="sec-lbl">Manutenzione</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;line-height:1.6">
+              Cerca e rimuove cartelle di immagini di referti che <strong>non esistono più</strong>
+              (es. referti eliminati prima di questa versione che non avevano la pulizia automatica).
+              Sicuro: rimuove solo cartelle di referti che non risultano nel database.
+            </p>
+            <button class="btn btn-secondary btn-sm" onclick="pulisciOrfane()" type="button">
+              🧹 Cerca e cancella cartelle orfane
+            </button>
+            <div id="pulisci-result" style="font-size:12px;margin-top:8px;font-family:'DM Mono',monospace"></div>
+          </div>
+        </div>
+
       </div>
 
     </div>
@@ -513,6 +623,15 @@
       <div><div class="m-title" id="m-title"></div><div class="m-meta" id="m-meta"></div></div>
       <button class="m-close" onclick="closeModal()">✕</button>
     </div>
+    <div class="m-ft">
+      <button class="btn btn-danger btn-sm" id="m-del">🗑 Elimina</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeModal()">Chiudi</button>
+      <button class="btn btn-secondary btn-sm" id="m-btn-annulla-mod" style="display:none" onclick="annullaModificaReferto()">Annulla</button>
+      <button class="btn btn-primary btn-sm" id="m-btn-modifica" onclick="apriModificaReferto()">✏ Modifica</button>
+      <button class="btn btn-primary btn-sm" id="m-btn-salva-mod" style="display:none" onclick="salvaModificaReferto()">💾 Salva modifiche</button>
+      <button class="btn btn-primary btn-sm" id="m-pdf-solo" title="PDF solo testo del referto, senza immagini">📄 Solo referto</button>
+      <button class="btn btn-primary btn-sm" id="m-pdf-img"  title="PDF con testo e tutte le immagini allegate">🖼 Referto + immagini</button>
+    </div>
     <div class="m-body">
       <div id="m-view-section">
         <div class="info-grid" id="m-info"></div>
@@ -520,22 +639,27 @@
         <div class="prev-box" id="m-referto"></div>
         <div class="img-section-hdr">
           <span class="sec-lbl" style="margin:0">Immagini</span>
-          <label class="btn btn-secondary btn-sm img-import-label">
-            📁 Importa immagini
-            <input type="file" id="img-file-input" accept=".dcm,.DCM,.jpg,.jpeg,.png" multiple style="display:none" onchange="importaImmagini(event)">
-          </label>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <div class="viewer-pp-ctrl">
+              <button class="pp-btn" data-n="4" onclick="setPrintPerPage(4)" title="4 immagini per pagina">4</button>
+              <button class="pp-btn" data-n="6" onclick="setPrintPerPage(6)" title="6 immagini per pagina">6</button>
+              <button class="pp-btn" data-n="8" onclick="setPrintPerPage(8)" title="8 immagini per pagina">8</button>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="stampaImmaginiArchivio(_modalRefertoId)" title="Stampa solo le immagini">🖨️ Stampa</button>
+            <label class="btn btn-secondary btn-sm img-import-label" title="Importa file singoli">
+              📁 File
+              <input type="file" id="img-file-input" accept=".dcm,.DCM,.dicom,.jpg,.jpeg,.png" multiple style="display:none" onchange="importaImmagini(event)">
+            </label>
+            <label class="btn btn-secondary btn-sm img-import-label" title="Importa intera cartella (anche con sottocartelle)">
+              📂 Cartella
+              <input type="file" id="img-folder-input" webkitdirectory multiple style="display:none" onchange="importaImmagini(event)">
+            </label>
+            <button class="btn btn-secondary btn-sm" id="btn-ordina-acquisizione" onclick="ordinaPerAcquisizione(_modalRefertoId)" title="Ordina le immagini DICOM per ordine di acquisizione (Instance Number)">🕐 Ordina</button>
+          </div>
         </div>
-        <div class="img-grid" id="m-img-grid"></div>
+        <div class="img-grid" id="m-img-grid" ondrop="importaImmaginiDrop(event)" ondragover="importaImmaginiDragOver(event)" ondragleave="importaImmaginiDragLeave(event)"></div>
       </div>
       <div id="m-edit-section" style="display:none"></div>
-    </div>
-    <div class="m-ft">
-      <button class="btn btn-danger btn-sm" id="m-del">🗑 Elimina</button>
-      <button class="btn btn-secondary btn-sm" onclick="closeModal()">Chiudi</button>
-      <button class="btn btn-secondary btn-sm" id="m-btn-annulla-mod" style="display:none" onclick="annullaModificaReferto()">Annulla</button>
-      <button class="btn btn-primary btn-sm" id="m-btn-modifica" onclick="apriModificaReferto()">✏ Modifica</button>
-      <button class="btn btn-primary btn-sm" id="m-btn-salva-mod" style="display:none" onclick="salvaModificaReferto()">💾 Salva modifiche</button>
-      <button class="btn btn-primary btn-sm" id="m-pdf">📄 Esporta PDF</button>
     </div>
   </div>
 </div>
@@ -555,6 +679,21 @@
 <div class="toast" id="toast"></div>
 
 <script src="lib/dicom-parser.min.js"></script>
-<script src="app.js"></script>
+<script src="lib/jpeg-lossless-decoder.min.js?v=20260519d"></script>
+<!-- PANEL ORTHANC -->
+<div class="orthanc-overlay" id="orthanc-overlay" onclick="chiudiPanelOrthanc(event)">
+  <div class="orthanc-panel">
+    <div class="orthanc-panel-hdr">
+      <span>🏥 Studi recenti — Orthanc</span>
+      <button class="orthanc-close-btn" onclick="chiudiPanelOrthanc()">✕</button>
+    </div>
+    <div class="orthanc-status" id="orthanc-status"></div>
+    <div class="orthanc-list" id="orthanc-list">
+      <div class="orthanc-loading">Caricamento studi…</div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=20260526g"></script>
 </body>
 </html>

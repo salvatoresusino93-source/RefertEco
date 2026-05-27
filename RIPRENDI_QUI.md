@@ -4,8 +4,8 @@
 > fare qualsiasi modifica. Contiene il contesto delle conversazioni precedenti, le
 > decisioni prese, e i prossimi passi.
 
-Ultimo aggiornamento: **2026-05-26**, sessione con Salvatore (agenda: slot 30 min,
-DOB obbligatoria, fix Railway build, duplicato telefono).
+Ultimo aggiornamento: **2026-05-27**, fusione sessioni 26/05 mattina + pomeriggio/sera
+(agenda iOS fix, email/SMS, Orthanc workstation, fix UI RefertEco).
 
 ---
 
@@ -18,249 +18,241 @@ Ha anche un modulo **Agenda** (sistema prenotazioni) separato.
 Profilo:
 - **Non programmatore** — non sa leggere codice, ma capisce bene le spiegazioni a parole
 - Preferisce **soluzioni semplici e a un click**
-- Vuole sapere *cosa* fai e *perché*, non *come* lo fai tecnicamente
-- Lavora su **Windows 11** (PC studio), ha anche un MacBook e un secondo PC Windows (workstation)
+- Lavora su **Windows 11** (PC principale), ha anche un MacBook e un secondo PC Windows (workstation in studio)
 - Vuole **sincronizzazione automatica** tra PC tramite Google Drive
 
-Linee guida per parlare con lui:
+Linee guida:
 - Italiano, tono colloquiale ma chiaro
-- Spiega gli errori con cause e soluzioni, non con stack trace
-- Conferma sempre prima di operazioni distruttive (cancellazioni, force push, ecc.)
+- Spiega errori con cause e soluzioni, non stack trace
+- Conferma sempre prima di operazioni distruttive
 
 ---
 
 ## 2. ARCHITETTURA DEL PROGETTO
 
-Ci sono **due applicazioni distinte**:
+Ci sono **due applicazioni distinte** e **due macchine**:
 
 ### A) RefertEco (referti ecografici)
 - **Backend**: Node.js + Express, porta 3000
-- **Database**: file JSON (`referteco_data.json`) su Google Drive
+- **Database**: file JSON (`referteco_data.json`) — su Google Drive o `K:\RefertEco Dati Pazienti` (workstation)
 - **Frontend**: HTML + CSS + JS vanilla in `public/`
 - **Gira**: in locale su ogni PC (AppData + bat di avvio)
-- Serve anche come proxy per l'agenda: chiama `https://referteco-production.up.railway.app/api/...`
+- Serve anche come proxy per l'agenda: `/api/agenda/pazienti-attesa` e `/api/agenda/marca-refertato/:id`
 
 ### B) Agenda Studio (prenotazioni)
 - **Backend**: Node.js + Express — `agenda-backend/`
 - **Database**: Supabase (PostgreSQL cloud)
 - **Frontend**: HTML + CSS + JS vanilla — `agenda-backend/frontend/`
-  *(attenzione: i file sorgente stanno in `agenda-frontend/` ma vengono copiati
-  dentro `agenda-backend/frontend/` per Railway — vedi sezione 5)*
+  *(⚠️ sorgente in `agenda-frontend/`, COPIA per Railway in `agenda-backend/frontend/` — modificare ENTRAMBI)*
 - **Gira**: su Railway (cloud) → https://referteco-production.up.railway.app/
-- **SMS**: Twilio per promemoria appuntamenti
-- **Socket.io**: aggiornamento in tempo reale tra più client
+- **SMS**: SMS Hosting (smshosting.it)
+- **Email**: Resend (resend.com)
+- **Socket.io**: aggiornamento real-time
 
-### Struttura cartelle sul PC dello sviluppatore
+### Struttura cartelle
 
 ```
-C:\Users\sunis\Desktop\RefertEco\            ← SORGENTE (per modifiche)
+Desktop\RefertEco\                            ← SORGENTE (questo PC)
 ├── server.js, config.js, database.js, ...   ← RefertEco
 ├── public/                                   ← frontend RefertEco
-├── agenda-backend/                           ← backend Agenda
-│   ├── src/app.js                            ← entry point (node src/app.js)
-│   ├── src/routes/                           ← API routes
-│   ├── src/services/supabase.js              ← client Supabase
-│   ├── frontend/                             ← ⚠️ COPIA del frontend per Railway
-│   │   ├── index.html
-│   │   ├── js/app.js, js/api.js
-│   │   └── css/style.css
-│   ├── .env                                  ← credenziali Railway/Supabase/Twilio
-│   └── package.json
-├── agenda-frontend/                          ← frontend Agenda SORGENTE (modificare qui)
-│   ├── index.html
-│   ├── js/app.js, js/api.js
-│   └── css/style.css
-├── railway.json                              ← config deploy Railway
-└── .git/
+├── agenda-backend/
+│   ├── src/app.js                            ← entry point Railway
+│   ├── src/routes/, src/services/
+│   ├── frontend/                             ← ⚠️ COPIA per Railway
+│   └── .env                                  ← credenziali (non in git)
+├── agenda-frontend/                          ← sorgente frontend agenda
+└── railway.json
 
-C:\Users\sunis\AppData\Local\RefertEco\      ← INSTALLAZIONE ATTIVA RefertEco
-G:\Il mio Drive\RefertEco Dati Pazienti\     ← DATI PAZIENTI (Google Drive)
-G:\Il mio Drive\Installer RefertEco\         ← INSTALLER ZIP
-C:\Users\sunis\.referteco\config.json        ← config locale (dataDir + apiKey)
+AppData\Local\RefertEco\                      ← INSTALLAZIONE ATTIVA (questo PC)
+G:\Il mio Drive\RefertEco Dati Pazienti\     ← dati pazienti (Google Drive)
+G:\Il mio Drive\Installer RefertEco\         ← installer ZIP + RIPRENDI_QUI
+~\.referteco\config.json                      ← config locale (non in git)
+```
+
+### Workstation in studio (PC separato)
+```
+K:\OrthancStorage\                            ← immagini DICOM da ecografo
+K:\OrthancWorklists\                          ← file .wl per DICOM Worklist
+K:\RefertEco Dati Pazienti\                  ← DB referti (invece di Google Drive)
+C:\Program Files\Orthanc Server\             ← Orthanc 1.12.11 come servizio Windows
+  └── Configuration\orthanc.json + worklists.json
 ```
 
 ### Repository GitHub
 - URL: **https://github.com/salvatoresusino93-source/RefertEco**
 - Branch: `main`
-- Auto-deploy Railway attivo sul branch `main`
+- Auto-deploy Railway attivo su push a `main`
 - Root Directory Railway: `/agenda-backend`
 
 ---
 
-## 3. FUNZIONALITÀ E FIX — SESSIONE 2026-05-26
+## 3. FIX SESSIONE 2026-05-27 (questo PC — agenda iOS)
+
+### Fix pulsante Salva non raggiungibile su iPhone
+- **Problema**: su iOS Safari il modal dell'agenda sale dal basso (bottom sheet).
+  Quando si tocca un campo e appare la tastiera, la tastiera copre il footer col pulsante Salva.
+  `position:fixed` rimane ancorato alla layout viewport, non alla visual viewport.
+- **Fix**: Visual Viewport API — al resize del viewport (apertura tastiera) aggiorniamo
+  `top` e `height` dell'overlay così copre solo la zona visibile sopra la tastiera.
+  CSS `[data-vv]`: il modal usa `%` invece di `vh`.
+- File: `agenda-frontend/js/app.js` (e copia in `agenda-backend/frontend/js/app.js`)
+  + `agenda-frontend/css/style.css` + `agenda-backend/frontend/css/style.css`
+
+---
+
+## 4. FIX SESSIONE 2026-05-26 MATTINA (questo PC — agenda)
 
 ### Merge Mac → Windows
-- Il branch locale era indietro di 23 commit rispetto al Mac (fast-forward pulito)
-- Fatto `git pull` — nessun conflitto
+- Il branch locale era indietro di 23 commit (fast-forward pulito)
 
 ### Slot prenotazione: 20 min → 30 min
-File modificati:
 - `agenda-frontend/js/app.js` → `const SLOT_MIN = 30`
-- `agenda-frontend/index.html` → `step="1800"`, `value="30"` sul campo durata
-- **Database Supabase**: migration eseguita via script Node.js → tutti i 68 tipi di esame
-  impostati a `durata_minuti = 30` nella tabella `tipi_prestazione`
+- Database Supabase: tutti i 68 tipi di esame aggiornati a `durata_minuti = 30`
 
-### Data di nascita obbligatoria nella creazione paziente
-- `agenda-frontend/index.html` → `<label>Data di nascita *</label>` + `required`
-- `agenda-frontend/js/app.js` → validazione client: alert se campo vuoto
-- `agenda-backend/src/routes/pazienti.js` → validazione server:
-  `if (!data_nascita) return res.status(400).json({ error: '...' })`
+### Data di nascita obbligatoria
+- Validazione frontend (alert) + backend (HTTP 400)
 
-### Duplicato numero di telefono: solo avviso, non blocco
-- **Prima**: compariva un `confirm()` con `[OK] = usa paziente esistente` e
-  `[Annulla] = crea nuovo paziente` → contro-intuitivo, l'utente si confondeva
-- **Ora**: compare un `alert()` con "il numero X è già usato dal paziente Y —
-  il nuovo paziente verrà salvato ugualmente", poi il salvataggio avviene in automatico
-- Il duplicato **nome + data di nascita** mantiene il `confirm()` (lì è quasi certamente
-  la stessa persona → ha senso chiedere)
-- File: `agenda-frontend/js/app.js` (e copia in `agenda-backend/frontend/js/app.js`)
+### Duplicato telefono: solo avviso, salva comunque
+- Prima: `confirm()` confuso (OK=usa-esistente, Annulla=crea-nuovo)
+- Ora: `alert()` informativo → salvataggio automatico con `forza_creazione:true`
 
-### Fix build Railway (⚠️ critico per capire la struttura)
-**Problema**: Railway usava `Root Directory = /agenda-backend`, quindi la build context
-era solo la cartella `agenda-backend/`. I comandi `cd agenda-backend && npm install`
-fallivano perché dentro `agenda-backend/` non esiste un'altra cartella `agenda-backend/`.
-
-**Soluzione applicata**:
-1. Il frontend (`agenda-frontend/`) è stato **copiato** dentro `agenda-backend/frontend/`
-2. `agenda-backend/src/app.js` usa ora `path.resolve(__dirname, '..', 'frontend')`
-3. `railway.json` usa ora `npm install --production` e `node src/app.js` (senza prefisso)
-
-**Regola da ricordare**: quando modifichi il frontend dell'agenda, devi aggiornare
-**entrambi** i file:
-- `agenda-frontend/js/app.js` ← sorgente
-- `agenda-backend/frontend/js/app.js` ← copia per Railway (stesso contenuto)
+### Fix build Railway
+- Frontend copiato in `agenda-backend/frontend/` (incluso nel build context)
+- `railway.json`: `npm install --production` e `node src/app.js` (senza prefisso)
 
 ---
 
-## 4. FUNZIONALITÀ E FIX — SESSIONE 2026-05-19
+## 5. FIX SESSIONE 2026-05-26 POMERIGGIO/SERA (workstation in studio)
 
-### Bug DICOM JPEG Lossless
-- Fix: decoder `jpeg-lossless-decoder.min.js` + fallback manuale item delimiter
+> ⚠️ Queste modifiche sono state fatte sulla **workstation in studio** (PC separato).
+> Alcuni di questi fix potrebbero non essere ancora in sync con questo PC.
 
-### Import cartelle DICOM con sottocartelle
-- Drag-and-drop ricorsivo, rilevamento via magic byte `DICM`, upload batched a 30 file
+### Notifiche email (Agenda → Medico)
+- Email su nuovo appuntamento (verde) e annullamento (rossa) via **Resend**
+- File: `agenda-backend/src/services/email.js`
+- Variabile Railway: `RESEND_API_KEY = re_hGzWNiTr_...` (non committare mai)
+- Endpoint debug: `POST /api/test-email`
+- Fix orario: `timeZone: 'Europe/Rome'` (non più UTC)
 
-### Bug "Caricamento..." eterno sui referti vecchi
-- `apiGet` ora propaga errori, `loadImmagini` mostra messaggio + pulsante "Riprova"
+### SMS al paziente (SMS Hosting)
+- Promemoria serale (cron 19:00) per appuntamenti del giorno dopo
+- Promemoria 1 ora prima (cron ogni minuto)
+- Caso edge: prenotazione dopo le 19:00 per domani → SMS immediato
+- Annullamento → SMS al paziente
+- File: `agenda-backend/src/services/sms.js`
+- Variabili Railway: `SMSHOSTING_API_KEY`, `SMSHOSTING_API_SECRET`, `SMS_SENDER`, `STUDIO_NOME`
 
-### Sincronizzazione Google Drive a 1-click
-- `detectGoogleDrive()` cerca "RefertEco Dati Pazienti" e "RefertEco" come fallback
+### Orthanc su workstation
+- Server Linux originale (192.168.1.77) irraggiungibile (btrfs corrotto)
+- Installato **Orthanc 1.12.11** sulla workstation come servizio Windows
+- Storage: `K:\OrthancStorage` — AET: `ORTHANC`, HTTP: 8042, DICOM: 4242
+- Plugin worklists 0.9.2 attivo (`K:\OrthancWorklists`)
+- Ecografo Samsung Medison V5: configurare DICOM Store/Worklist → 192.168.1.17:4242
 
-### Eliminazione referto pulisce anche immagini
-- `fs.rmSync(dir, { recursive:true })` + endpoint `/api/referti/pulisci-orfane`
-
----
-
-## 5. CONFIGURAZIONE CORRENTE
-
-### `.referteco/config.json` (locale, mai committare)
-```json
-{
-  "dataDir": "G:\\Il mio Drive\\RefertEco Dati Pazienti",
-  "anthropicApiKey": "sk-ant-api03-..."
-}
+### Workflow DICOM Worklist (da completare)
 ```
-**⚠️ IMPORTANTE**: la chiave API Anthropic è qui. **Mai loggarla, mai stamparla,
-mai committarla**. Il `.gitignore` la esclude.
+Segretaria "Arrivato" in Agenda → RefertEco genera .wl → Ecografo legge Worklist
+→ Immagini arrivano con AccessionNumber → Auto-import nel referto in corso
+```
+Endpoint aggiunti:
+- `POST /api/worklist/crea` — crea voce worklist
+- `GET /api/worklist` — lista attive
+- `DELETE /api/worklist/:accession` — rimuove
+- `GET /api/orthanc/cerca-accession?n=...` — query studi per accession
 
-### `agenda-backend/.env` (locale, mai committare)
-Contiene: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `TWILIO_*`, `JWT_SECRET`, `PORT`
+### Fix UI RefertEco (workstation)
+- **Pulsanti modal archivio in alto**: Elimina/Chiudi/Modifica spostati sopra `.m-body` con `position:sticky;top:0`
+- **Form referto espandibile**: rimosso `max-width:820px`, pulsante ◀/▶ collassa viewer
+- **F8 dettatura**: premi F8 sul form nuovo referto per avviare/fermare microfono
 
-### Railway
-- Progetto: `referteco`
-- Servizio: `agenda-backend`
-- URL produzione: https://referteco-production.up.railway.app/
-- Root Directory: `/agenda-backend`
-- Auto-deploy: **attivo** su push a `main`
-- Build: `npm install --production`
-- Start: `node src/app.js`
-
-### Google Drive
-- Cartella dati: `G:\Il mio Drive\RefertEco Dati Pazienti\`
-- Cartella installer: `G:\Il mio Drive\Installer RefertEco\`
-
----
-
-## 6. COSE DA NON FARE / TRAPPOLE NOTE
-
-1. **Frontend Agenda in due posti**: sorgente in `agenda-frontend/`, copia per Railway in
-   `agenda-backend/frontend/`. Quando modifichi `agenda-frontend/js/app.js` o altri file,
-   devi fare la stessa modifica in `agenda-backend/frontend/` — altrimenti Railway
-   distribuisce la versione vecchia.
-
-2. **PowerShell `Set-Content` / `Out-File` con `-Encoding utf8`** aggiungono BOM UTF-8.
-   Usa sempre `[System.IO.File]::WriteAllText($path, $text, $utf8NoBom)`.
-
-3. **Non modificare** `referteco_data.json` o la cartella `immagini/` direttamente.
-   Sono i dati reali dei pazienti.
-
-4. **RefertEco gira da AppData**, non da Desktop. Modifiche al Desktop non hanno effetto
-   immediato — devi propagare in AppData.
-
-5. **Cache browser**: dopo modifiche a JS/CSS, aggiorna il cache-buster (`?v=YYYYMMDD`)
-   in tutti gli `index.html` pertinenti.
-
-6. **Force push solo se richiesto esplicitamente**. Ci sono commit da più PC.
-
-7. **`agenda-backend/.env` e `~/.referteco/config.json` non vanno mai in git**.
-   Entrambi sono in `.gitignore`. Se li vedi staged, fermati.
+### Pulizia repository
+- Rimossi: `referteco_data.json`, `config.json`, `node_modules/`, file obsoleti
+- `.gitignore` aggiornato — progetto da 66 MB → 2 MB
 
 ---
 
-## 7. NOTA: ORTHANC — NON PERTINENTE A QUESTA REPO
+## 6. FIX SESSIONE 2026-05-19 (questo PC)
 
-Il server Orthanc gira su **un altro PC separato**, con la propria memoria e configurazione.
-Non è collegato a questa repo né a questo PC di sviluppo. Non serve fare nulla qui.
+- Bug DICOM JPEG Lossless: decoder + fallback manuale
+- Import cartelle DICOM con sottocartelle (drag-and-drop ricorsivo)
+- Bug "Caricamento..." eterno: `apiGet` propaga errori
+- Sincronizzazione Google Drive a 1-click
+- Eliminazione referto pulisce anche immagini
 
 ---
 
-## 8. ⚠️ ATTENZIONE — WORKSTATION IN STUDIO: NON SOVRASCRIVERE LE SUE MODIFICHE
+## 7. CONFIGURAZIONE CORRENTE
 
-La workstation in studio ha già delle **migliorie proprie** che NON esistono in questa repo.
-In particolare: **formattazione di stampa** e altre personalizzazioni fatte direttamente su quel PC.
+### Variabili Railway (non committare)
+```
+SUPABASE_URL / SUPABASE_SERVICE_KEY
+TWILIO_* (vecchio, ora usato SMS Hosting)
+JWT_SECRET
+RESEND_API_KEY         = re_hGzWNiTr_...
+SMSHOSTING_API_KEY     = SMSHNJ6I5RWQUJ2CMFJKU
+SMSHOSTING_API_SECRET  = KUC3IOCRIMN2328R61Z0XOQ4DWGUD0UG
+SMS_SENDER             = StudioSusin
+STUDIO_NOME            = Studio Dr. Susino
+```
 
-**Quando porti gli aggiornamenti di questa sessione sulla workstation, NON fare mai:**
+### File locali (non committare)
+- `~/.referteco/config.json` — `dataDir` + `anthropicApiKey`
+- `agenda-backend/.env` — tutte le credenziali Railway
+
+---
+
+## 8. COSE DA NON FARE / TRAPPOLE NOTE
+
+1. **Frontend Agenda in due posti**: sorgente `agenda-frontend/`, copia `agenda-backend/frontend/`.
+   Modificare SEMPRE entrambi insieme.
+
+2. **PowerShell encoding**: `Set-Content`/`Out-File` aggiungono BOM UTF-8. Usa `[System.IO.File]::WriteAllText`.
+
+3. **Non modificare** `referteco_data.json` o `immagini/` direttamente (dati reali).
+
+4. **RefertEco gira da AppData**, non da Desktop. Propagare le modifiche anche lì.
+
+5. **Cache browser**: aggiornare il cache-buster `?v=YYYYMMDD` dopo modifiche a JS/CSS.
+
+6. **Force push solo se richiesto esplicitamente**.
+
+7. **`.env` e `config.json` non vanno mai in git**.
+
+8. **git fileMode**: su Windows, i file `.sh` appaiono sempre "modificati" per i permessi Unix.
+   Già configurato `core.fileMode = false` in questo repo.
+
+---
+
+## 9. ⚠️ ATTENZIONE — WORKSTATION IN STUDIO: NON SOVRASCRIVERE LE SUE MODIFICHE
+
+La workstation in studio ha modifiche proprie (formattazione stampa, UI fix, Orthanc, worklist)
+che non esistono completamente su questo PC e viceversa.
+
+**NON fare mai:**
 - `git pull` + sovrascrittura cieca dei file locali
-- Copia e incolla di interi file da questa repo sopra i file della workstation
-- Nessuna operazione che cancelli o rimpiazzi le modifiche già presenti lì
+- Copia di interi file da questa repo sopra i file della workstation
 
-**Come si fa correttamente:**
-1. Prima di tutto, **guarda cosa c'è di diverso** sulla workstation:
-   ```bash
-   git diff HEAD
-   git status
-   ```
-2. Porta solo le modifiche specifiche di questa sessione (slot 30 min, DOB, duplicato telefono)
-   usando `git merge` o applicando manualmente le sole righe cambiate
-3. Se un file è diverso su entrambi i lati, **fai un merge manuale** riga per riga —
-   non scegliere "la versione mia" o "la versione loro" in blocco
-4. Dopo ogni integrazione, **verifica che la stampa e le altre funzioni personalizzate
-   funzionino ancora** prima di considerare il lavoro fatto
-
-**In sintesi**: la workstation è una versione parallela con miglioramenti propri.
-Gli aggiornamenti vanno *integrati*, non *sovrascritti*.
+**Come fare correttamente:**
+1. `git diff HEAD` e `git status` — vedi cosa c'è di diverso
+2. Porta solo le modifiche specifiche usando `git merge` o merge manuale riga per riga
+3. Verifica che stampa e funzioni personalizzate funzionino ancora dopo ogni merge
 
 ---
 
-## 9. COME RIPRENDERE SUL NUOVO PC (WORKSTATION IN STUDIO)
+## 10. COME RIPRENDERE (su qualsiasi PC)
 
-Se la repo non è ancora clonata:
 ```bash
 git clone https://github.com/salvatoresusino93-source/RefertEco.git
-cd RefertEco
-npm install
+cd RefertEco && npm install
 cd agenda-backend && npm install && cd ..
 ```
 
-Poi crea il file `agenda-backend/.env` con le credenziali Supabase/Twilio/JWT
-(recuperale da Google Drive o dal PC di questo sviluppatore).
+Crea `agenda-backend/.env` con le credenziali (recupera da Google Drive o dall'altro PC).
 
-**Come PRIMO messaggio a Claude** scrivi:
-> Leggi `RIPRENDI_QUI.md` prima di iniziare. Poi dimmi in 5 righe cosa è stato fatto
-> e cosa resta da fare.
+**Primo messaggio a Claude**: "Leggi `RIPRENDI_QUI.md` prima di iniziare."
 
 ---
 
-## 10. CONTATTO
+## 11. CONTATTO
 
 Repository: https://github.com/salvatoresusino93-source/RefertEco

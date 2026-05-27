@@ -1,8 +1,14 @@
 node_modules/
+agenda-backend/node_modules/
 dist/
 dist 2/
 dist 3/
+dist*/
 .DS_Store
 referteco.db
 *.log
 .env
+referteco_data.json
+config.json
+*.icns
+pulizia.ps1

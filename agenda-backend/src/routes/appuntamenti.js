@@ -2,6 +2,8 @@ const express  = require('express');
 const supabase  = require('../services/supabase');
 const { requireAuth, requireMedico } = require('../middleware/auth');
 const { getIO }  = require('../socket');
+const { notificaNuovoAppuntamento, notificaAppuntamentoAnnullato } = require('../services/email');
+const { inviaPromemoria, inviaSmsAnnullamento } = require('../services/sms');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -104,6 +106,30 @@ router.post('/', async (req, res) => {
   // Notifica tutti i client connessi via Socket.io
   try { getIO().emit('appuntamento:nuovo', data); } catch (e) {}
 
+  // Notifica email al medico
+  notificaNuovoAppuntamento(data).catch(() => {});
+
+  // SMS promemoria immediato se l'appuntamento è domani e siamo già oltre le 19:00
+  // (il cron serale è già passato e non lo manderebbe più)
+  try {
+    const ora_it = new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' });
+    const adesso = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+    const domani = new Date(adesso);
+    domani.setDate(domani.getDate() + 1);
+
+    const appData = new Date(new Date(data_ora_inizio).toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+    const eDopoMezzogiorno = adesso.getHours() >= 19;
+    const eDomani = appData.getFullYear() === domani.getFullYear() &&
+                    appData.getMonth()     === domani.getMonth()    &&
+                    appData.getDate()      === domani.getDate();
+
+    if (eDomani && eDopoMezzogiorno) {
+      inviaPromemoria(data).catch(e => console.error('[SMS] Promemoria immediato:', e.message));
+    }
+  } catch (e) {
+    console.error('[SMS] Controllo promemoria immediato:', e.message);
+  }
+
   res.status(201).json(data);
 });
 
@@ -162,12 +188,18 @@ router.delete('/:id', async (req, res) => {
       updated_at: new Date().toISOString()
     })
     .eq('id', req.params.id)
-    .select()
+    .select('*, pazienti(*), tipi_prestazione(*)')
     .single();
 
   if (error) return res.status(500).json({ error: error.message });
 
   try { getIO().emit('appuntamento:annullato', { id: req.params.id }); } catch (e) {}
+
+  // Notifica email al medico
+  notificaAppuntamentoAnnullato(data).catch(() => {});
+
+  // SMS di annullamento al paziente
+  inviaSmsAnnullamento(data).catch(e => console.error('[SMS] Annullamento:', e.message));
 
   res.json({ ok: true, data });
 });
