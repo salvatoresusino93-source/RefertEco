@@ -32,10 +32,11 @@ const api = {
   me:     ()     => api._req('GET',  '/auth/me'),
 
   // Pazienti
-  pazienti:         (q)      => api._req('GET',  `/pazienti${q ? '?q=' + encodeURIComponent(q) : ''}`),
-  paziente:         (id)     => api._req('GET',  `/pazienti/${id}`),
-  creaPaziente:     (data)   => api._req('POST', '/pazienti', data),
-  aggiornaPaziente: (id, d)  => api._req('PUT',  `/pazienti/${id}`, d),
+  pazienti:              (q)      => api._req('GET',  `/pazienti${q ? '?q=' + encodeURIComponent(q) : ''}`),
+  paziente:              (id)     => api._req('GET',  `/pazienti/${id}`),
+  creaPaziente:          (data)   => api._req('POST', '/pazienti', data),
+  aggiornaPaziente:      (id, d)  => api._req('PUT',  `/pazienti/${id}`, d),
+  appuntamentiPaziente:  (id)     => api._req('GET',  `/pazienti/${id}/appuntamenti`),
 
   // Appuntamenti
   appuntamenti:         (from, to) => api._req('GET', `/appuntamenti?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),

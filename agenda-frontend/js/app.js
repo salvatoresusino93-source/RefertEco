@@ -726,14 +726,116 @@ async function caricaArchivio(q) {
   }
 }
 
-function selezionaPazienteDaArchivio(id, nomeCompleto) {
+function selezionaPazienteDaArchivio(id) {
   chiudiArchivio();
+  apriDettaglioPaziente(id);
+}
+
+// ─── Dettaglio / modifica paziente ───────────────────────────────────────
+let _pdId = null; // ID paziente nel modal dettaglio
+
+async function apriDettaglioPaziente(id) {
+  _pdId = id;
+  $('paz-detail-title').textContent = 'Caricamento…';
+  $('pd-storico-list').innerHTML = '<span class="arch-empty">Caricamento…</span>';
+  $('paz-detail-overlay').classList.remove('hidden');
+
+  try {
+    const p = await api.paziente(id);
+    _pdId = p.id;
+
+    // Popola i campi
+    $('paz-detail-title').textContent = `${p.cognome} ${p.nome}`;
+    $('pd-cognome').value  = p.cognome       || '';
+    $('pd-nome').value     = p.nome          || '';
+    $('pd-nascita').value  = p.data_nascita  || '';
+    $('pd-sesso').value    = p.sesso         || '';
+    $('pd-telefono').value = p.telefono      || '';
+    $('pd-email').value    = p.email         || '';
+    $('pd-cf').value       = p.codice_fiscale|| '';
+    $('pd-note').value     = p.note          || '';
+  } catch(e) {
+    alert('Errore caricamento paziente: ' + e.message);
+    chiudiDettaglioPaziente();
+    return;
+  }
+
+  // Carica storico appuntamenti
+  try {
+    const apps = await api.appuntamentiPaziente(id);
+    if (!apps || apps.length === 0) {
+      $('pd-storico-list').innerHTML = '<span class="paz-storico-vuoto">Nessun appuntamento registrato</span>';
+    } else {
+      $('pd-storico-list').innerHTML = apps.map(a => {
+        const data  = new Date(a.data_ora_inizio).toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
+        const ora   = fmtTime(a.data_ora_inizio);
+        const esame = a.tipi_prestazione?.nome || '—';
+        return `<div class="paz-storico-item">
+          <span class="paz-storico-data">${data} ${ora}</span>
+          <span class="paz-storico-esame">${esc(esame)}</span>
+          <span class="paz-storico-stato">${esc(a.stato || 'prenotato')}</span>
+        </div>`;
+      }).join('');
+    }
+  } catch(e) {
+    $('pd-storico-list').innerHTML = '<span class="paz-storico-vuoto">Impossibile caricare lo storico</span>';
+  }
+}
+
+function chiudiDettaglioPaziente() {
+  $('paz-detail-overlay').classList.add('hidden');
+  _pdId = null;
+}
+
+async function salvaPaziente() {
+  if (!_pdId) return;
+
+  const cognome  = $('pd-cognome').value.trim();
+  const nome     = $('pd-nome').value.trim();
+  const telefono = $('pd-telefono').value.trim();
+  const nascita  = $('pd-nascita').value;
+
+  if (!cognome || !nome)     { alert('Cognome e nome sono obbligatori'); return; }
+  if (!nascita)              { alert('La data di nascita è obbligatoria'); return; }
+  if (!telefono)             { alert('Il numero di telefono è obbligatorio'); return; }
+
+  const btn = $('pd-btn-salva');
+  btn.disabled = true;
+  btn.textContent = 'Salvataggio…';
+
+  try {
+    await api.aggiornaPaziente(_pdId, {
+      cognome,
+      nome,
+      data_nascita:   nascita,
+      sesso:          $('pd-sesso').value || null,
+      telefono,
+      email:          $('pd-email').value.trim()  || null,
+      codice_fiscale: $('pd-cf').value.trim().toUpperCase() || null,
+      note:           $('pd-note').value.trim()   || null,
+    });
+
+    $('paz-detail-title').textContent = `${cognome} ${nome}`;
+    btn.textContent = '✓ Salvato';
+    setTimeout(() => { btn.textContent = 'Salva modifiche'; btn.disabled = false; }, 1800);
+  } catch(e) {
+    alert('Errore salvataggio: ' + e.message);
+    btn.textContent = 'Salva modifiche';
+    btn.disabled = false;
+  }
+}
+
+function nuovoAppDaPaziente() {
+  if (!_pdId) return;
+  const cognome = $('pd-cognome').value.trim();
+  const nome    = $('pd-nome').value.trim();
+  chiudiDettaglioPaziente();
   openModal({});
   // Pre-seleziona il paziente nel modal appuntamento
-  _pazienteId = id;
+  _pazienteId = _pdId;
   $('paziente-search').style.display = 'none';
   $('paz-results').classList.add('hidden');
-  $('paz-nome-display').textContent = nomeCompleto;
+  $('paz-nome-display').textContent = `${cognome} ${nome}`;
   $('paz-selezionato').classList.remove('hidden');
   $('btn-nuovo-paz-toggle').style.display = 'none';
 }

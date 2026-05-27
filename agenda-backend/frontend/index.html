@@ -12,7 +12,7 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
   <meta name="theme-color" content="#2563eb">
-  <link rel="stylesheet" href="/css/style.css?v=20260527c">
+  <link rel="stylesheet" href="/css/style.css?v=20260527d">
 </head>
 <body>
 
@@ -263,7 +263,7 @@
           </tbody>
         </table>
       </div>
-      <p class="arch-hint">Clicca su un paziente per prenotare un nuovo appuntamento</p>
+      <p class="arch-hint">Clicca su un paziente per vedere e modificare i suoi dati</p>
     </div>
     <div class="modal-ftr">
       <div></div>
@@ -274,9 +274,79 @@
   </div>
 </div>
 
+<!-- ─── Modal Dettaglio Paziente ────────────────────────────────────────── -->
+<div id="paz-detail-overlay" class="modal-overlay hidden">
+  <div class="modal paz-detail-modal">
+    <div class="modal-hdr">
+      <h2>👤 <span id="paz-detail-title">Dettaglio Paziente</span></h2>
+      <button class="btn-icon modal-close" onclick="chiudiDettaglioPaziente()">✕</button>
+    </div>
+    <div class="modal-body paz-detail-body">
+
+      <!-- ── Anagrafica (campi editabili) ── -->
+      <div class="paz-detail-grid">
+        <div class="field">
+          <label>Cognome *</label>
+          <input type="text" id="pd-cognome" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Nome *</label>
+          <input type="text" id="pd-nome" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Data di nascita *</label>
+          <input type="date" id="pd-nascita">
+        </div>
+        <div class="field">
+          <label>Sesso</label>
+          <select id="pd-sesso">
+            <option value="">—</option>
+            <option value="M">Maschio</option>
+            <option value="F">Femmina</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Telefono *</label>
+          <input type="tel" id="pd-telefono" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="pd-email" autocomplete="off">
+        </div>
+        <div class="field paz-detail-full">
+          <label>Codice Fiscale</label>
+          <input type="text" id="pd-cf" autocomplete="off" style="text-transform:uppercase">
+        </div>
+        <div class="field paz-detail-full">
+          <label>Note</label>
+          <textarea id="pd-note" rows="2" style="resize:vertical"></textarea>
+        </div>
+      </div>
+
+      <!-- ── Appuntamenti recenti ── -->
+      <div class="paz-detail-storico">
+        <h3 class="paz-storico-title">📅 Appuntamenti recenti</h3>
+        <div id="pd-storico-list" class="paz-storico-list">
+          <span class="arch-empty">Caricamento…</span>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-ftr">
+      <div>
+        <button class="btn-primary" onclick="nuovoAppDaPaziente()">+ Nuovo appuntamento</button>
+      </div>
+      <div class="modal-ftr-r">
+        <button class="btn-ghost" onclick="chiudiDettaglioPaziente()">Chiudi</button>
+        <button class="btn-primary" id="pd-btn-salva" onclick="salvaPaziente()">Salva modifiche</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Scripts -->
 <script src="/socket.io/socket.io.js"></script>
-<script src="/js/api.js?v=20260527c"></script>
-<script src="/js/app.js?v=20260527c"></script>
+<script src="/js/api.js?v=20260527d"></script>
+<script src="/js/app.js?v=20260527d"></script>
 </body>
 </html>
