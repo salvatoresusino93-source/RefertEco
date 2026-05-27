@@ -4,7 +4,7 @@
 > fare qualsiasi modifica. Contiene il contesto delle conversazioni precedenti, le
 > decisioni prese, e i prossimi passi.
 
-Ultimo aggiornamento: **2026-05-27**, sessione pomeriggio/sera (GBP + festività + GCal + SMS).
+Ultimo aggiornamento: **2026-05-27**, sessione serale (prenotazione online pazienti).
 
 ---
 
@@ -85,7 +85,61 @@ C:\Program Files\Orthanc Server\             ← Orthanc 1.12.11 come servizio W
 
 ---
 
-## 3. FIX SESSIONE 2026-05-27 POMERIGGIO/SERA — Google Calendar + Festività + GBP
+## 3. PRENOTAZIONE ONLINE PAZIENTI — 2026-05-27 sera
+
+### Architettura
+Il paziente prenota direttamente dal link `/prenota` (da mettere su Google Business Profile):
+1. Il paziente sceglie esame → data → orario → inserisce i suoi dati → invia
+2. Viene creato un appuntamento con `stato='in_attesa'` (blocca lo slot)
+3. Il medico riceve email con pulsanti **✅ Conferma** / **❌ Rifiuta**
+4. Conferma → `stato='prenotato'` + SMS al paziente (usa `inviaSmsConferma` esistente)
+5. Rifiuta → `stato='annullato'` + nessun SMS (il medico chiama manualmente)
+
+### File nuovi / modificati
+- `agenda-backend/src/routes/public.js` (NUOVO) — API pubblica, no auth:
+  - `GET /api/public/esami` — esami attivi
+  - `GET /api/public/disponibilita?tipo_id=UUID` — slot liberi Martedì/Venerdì, prossimi 45 giorni
+  - `POST /api/public/prenota` — crea appuntamento in_attesa, manda email al medico
+- `agenda-backend/src/routes/prenota.js` (NUOVO) — routes approvazione:
+  - `GET /api/prenota/conferma/:token` — conferma appuntamento
+  - `GET /api/prenota/rifiuta/:token` — rifiuta appuntamento
+- `agenda-backend/src/services/email.js` — aggiunta `notificaPrenotazioneOnline(app, token)`
+- `agenda-backend/src/app.js` — registrate nuove routes + route `/prenota` per `prenota.html`
+- `agenda-backend/frontend/prenota.html` (NUOVO) — pagina prenotazione pubblica (mobile-first, 4 step)
+- `agenda-backend/frontend/js/prenota.js` (NUOVO) — logic pagina prenotazione
+- `agenda-backend/frontend/css/style.css` — aggiunto `.stato-in_attesa` (ambra tratteggiato)
+- `agenda-backend/frontend/js/app.js` — `in_attesa` aggiunto a STATI, banner nel modal di modifica
+- Tutte le modifiche frontend replicate in `agenda-frontend/`
+
+### Token approvazione
+- JWT stateless: `jwt.sign({ id: appointmentId }, JWT_SECRET, { expiresIn: '7d' })`
+- Nessuna colonna DB aggiuntiva necessaria
+- Gestisce correttamente doppio-click (idempotente: se già gestito, mostra messaggio)
+
+### Gestione paziente nella POST /api/public/prenota
+1. Cerca paziente per CF (se fornito)
+2. Cerca paziente per cognome+nome+data_nascita
+3. Se non trovato, crea nuovo paziente
+
+### URL pagina prenotazione
+`https://referteco-production.up.railway.app/prenota`
+→ Da aggiungere manualmente su Google Business Profile come link di prenotazione
+
+### Disponibilità
+- Mostra solo Martedì (js day 2) e Venerdì (js day 5)
+- Fasce: 9:00-13:00 e 15:00-19:00, step = durata esame
+- Esclude: appuntamenti non annullati + blocchi_agenda (festivi, impegni GCal, manuali)
+- Timezone gestita correttamente con `getRomeOffsetMs()` (funziona sia CEST +02 che CET +01)
+
+### Stato in_attesa in agenda
+- Blocco calendario: ambra chiaro con bordo sinistro giallo tratteggiato
+- Sidebar "oggi": bordino giallo
+- Modal modifica: banner giallo con spiegazione, il medico può cliccare "Prenotato" per conferma manuale
+- Print view: badge ambra
+
+---
+
+## 5. FIX SESSIONE 2026-05-27 POMERIGGIO/SERA — Google Calendar + Festività + GBP
 
 ### Festività italiane in agenda (blocco prenotazioni)
 - Nuovo file: `agenda-backend/src/services/festivita.js`
@@ -154,7 +208,7 @@ C:\Program Files\Orthanc Server\             ← Orthanc 1.12.11 come servizio W
 
 ---
 
-## 4. FIX SESSIONE 2026-05-27 (questo PC — agenda iOS)
+## 6. FIX SESSIONE 2026-05-27 (questo PC — agenda iOS)
 
 ### Fix pulsante Salva non raggiungibile su iPhone
 - **Problema**: su iOS Safari il modal dell'agenda sale dal basso (bottom sheet).
@@ -168,7 +222,7 @@ C:\Program Files\Orthanc Server\             ← Orthanc 1.12.11 come servizio W
 
 ---
 
-## 5. FIX SESSIONE 2026-05-26 MATTINA (questo PC — agenda)
+## 7. FIX SESSIONE 2026-05-26 MATTINA (questo PC — agenda)
 
 ### Merge Mac → Windows
 - Il branch locale era indietro di 23 commit (fast-forward pulito)
@@ -190,7 +244,7 @@ C:\Program Files\Orthanc Server\             ← Orthanc 1.12.11 come servizio W
 
 ---
 
-## 6. FIX SESSIONE 2026-05-26 POMERIGGIO/SERA (workstation in studio)
+## 8. FIX SESSIONE 2026-05-26 POMERIGGIO/SERA (workstation in studio)
 
 > ⚠️ Queste modifiche sono state fatte sulla **workstation in studio** (PC separato).
 > Alcuni di questi fix potrebbero non essere ancora in sync con questo PC.
@@ -253,7 +307,7 @@ Endpoint aggiunti:
 
 ---
 
-## 7. FIX SESSIONE 2026-05-19 (questo PC)
+## 9. FIX SESSIONE 2026-05-19 (questo PC)
 
 - Bug DICOM JPEG Lossless: decoder + fallback manuale
 - Import cartelle DICOM con sottocartelle (drag-and-drop ricorsivo)
@@ -263,7 +317,7 @@ Endpoint aggiunti:
 
 ---
 
-## 8. CONFIGURAZIONE CORRENTE
+## 10. CONFIGURAZIONE CORRENTE
 
 ### Variabili Railway (non committare — valori reali su Railway dashboard o su .env locale)
 ```
@@ -294,7 +348,7 @@ GBP_LOCATION_NAME           = (opzionale — si scopre auto alla prima chiamata)
 
 ---
 
-## 9. COSE DA NON FARE / TRAPPOLE NOTE
+## 11. COSE DA NON FARE / TRAPPOLE NOTE
 
 1. **Frontend Agenda in due posti**: sorgente `agenda-frontend/`, copia `agenda-backend/frontend/`.
    Modificare SEMPRE entrambi insieme.
@@ -316,7 +370,7 @@ GBP_LOCATION_NAME           = (opzionale — si scopre auto alla prima chiamata)
 
 ---
 
-## 10. ⚠️ ATTENZIONE — WORKSTATION IN STUDIO: NON SOVRASCRIVERE LE SUE MODIFICHE
+## 12. ⚠️ ATTENZIONE — WORKSTATION IN STUDIO: NON SOVRASCRIVERE LE SUE MODIFICHE
 
 La workstation in studio ha modifiche proprie (formattazione stampa, UI fix, Orthanc, worklist)
 che non esistono completamente su questo PC e viceversa.
@@ -332,7 +386,7 @@ che non esistono completamente su questo PC e viceversa.
 
 ---
 
-## 11. COME RIPRENDERE (su qualsiasi PC)
+## 13. COME RIPRENDERE (su qualsiasi PC)
 
 ```bash
 git clone https://github.com/salvatoresusino93-source/RefertEco.git
@@ -346,6 +400,6 @@ Crea `agenda-backend/.env` con le credenziali (recupera da Google Drive o dall'a
 
 ---
 
-## 12. CONTATTO
+## 14. CONTATTO
 
 Repository: https://github.com/salvatoresusino93-source/RefertEco
