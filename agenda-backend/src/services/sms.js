@@ -78,10 +78,9 @@ async function inviaPromemoria(appuntamento) {
   const data  = fmtData(appuntamento.data_ora_inizio);
   const ora   = fmtOra(appuntamento.data_ora_inizio);
   const esame = appuntamento.tipi_prestazione?.nome || 'visita';
-  const nome  = `${p.nome} ${p.cognome}`;
 
   const testo =
-    `PROMEMORIA: Gentile ${nome}, le ricordiamo il suo appuntamento ` +
+    `PROMEMORIA: Gentile paziente, le ricordiamo il suo appuntamento ` +
     `di domani ${data} alle ore ${ora} ` +
     `per ${esame} presso il ${STUDIO}.` +
     (TEL ? ` Per info: ${TEL}.` : '');
@@ -100,10 +99,9 @@ async function inviaPromemoria1Ora(appuntamento) {
 
   const ora   = fmtOra(appuntamento.data_ora_inizio);
   const esame = appuntamento.tipi_prestazione?.nome || 'visita';
-  const nome  = `${p.nome} ${p.cognome}`;
 
   const testo =
-    `PROMEMORIA: Gentile ${nome}, il suo appuntamento per ${esame} ` +
+    `PROMEMORIA: Gentile paziente, il suo appuntamento per ${esame} ` +
     `è tra un'ora, alle ore ${ora} ` +
     `presso il ${STUDIO}.` +
     (TEL ? ` Per info: ${TEL}.` : '');
@@ -123,10 +121,9 @@ async function inviaSmsConferma(appuntamento) {
   const data  = fmtData(appuntamento.data_ora_inizio);
   const ora   = fmtOra(appuntamento.data_ora_inizio);
   const esame = appuntamento.tipi_prestazione?.nome || 'visita';
-  const nome  = `${p.nome} ${p.cognome}`;
 
   const testo =
-    `Gentile ${nome}, la sua prenotazione è confermata: ` +
+    `Gentile paziente, la sua prenotazione è confermata: ` +
     `${data} alle ore ${ora} (${esame}) ` +
     `presso il ${STUDIO}.` +
     (TEL ? ` Per info: ${TEL}.` : '');
@@ -145,10 +142,9 @@ async function inviaSmsAnnullamento(appuntamento) {
 
   const data  = fmtData(appuntamento.data_ora_inizio);
   const ora   = fmtOra(appuntamento.data_ora_inizio);
-  const nome  = `${p.nome} ${p.cognome}`;
 
   const testo =
-    `Gentile ${nome}, il suo appuntamento del ${data} alle ore ${ora} ` +
+    `Gentile paziente, il suo appuntamento del ${data} alle ore ${ora} ` +
     `è stato annullato.` +
     (TEL ? ` Per info o nuova prenotazione: ${TEL}.` : '');
 
