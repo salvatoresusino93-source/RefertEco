@@ -8,6 +8,7 @@ const cron    = require('node-cron');
 const supabase = require('./supabase');
 const { inviaPromemoria, inviaPromemoria1Ora } = require('./sms');
 const { popolaFestivita } = require('./festivita');
+const { leggiEventiPersonali, getCreds } = require('./googleCalendar');
 
 // ─── Carica appuntamenti di domani da Supabase ────────────────────────────
 async function appuntamentiDomani() {
@@ -106,6 +107,61 @@ async function controllaSmsUnaOra() {
   }
 }
 
+// ─── Sincronizza impegni personali da Google Calendar → blocchi_agenda ───
+async function sincronizzaBlocchiGoogleCalendar() {
+  if (!getCreds()) {
+    console.log('[GCal Sync] Credenziali non configurate, skip.');
+    return;
+  }
+
+  // Importa i prossimi 30 giorni
+  const da = new Date();
+  da.setHours(0, 0, 0, 0);
+  const a = new Date(da);
+  a.setDate(a.getDate() + 30);
+
+  let eventi;
+  try {
+    eventi = await leggiEventiPersonali(da.toISOString(), a.toISOString());
+  } catch (e) {
+    console.error('[GCal Sync] Errore lettura eventi:', e.message);
+    return;
+  }
+
+  if (!eventi.length) {
+    console.log('[GCal Sync] Nessun impegno personale nei prossimi 30 giorni.');
+    return;
+  }
+
+  // Rimuovi blocchi google_calendar esistenti nel periodo (per aggiornare)
+  await supabase
+    .from('blocchi_agenda')
+    .delete()
+    .eq('tipo', 'google_calendar')
+    .gte('data_ora_inizio', da.toISOString())
+    .lte('data_ora_inizio', a.toISOString());
+
+  let inseriti = 0;
+  for (const ev of eventi) {
+    // Evento tutto il giorno
+    const tuttoIlGiorno = !!(ev.start?.date && !ev.start?.dateTime);
+    const inizio = ev.start?.dateTime || (ev.start?.date + 'T00:00:00.000Z');
+    const fine   = ev.end?.dateTime   || (ev.end?.date   + 'T23:59:59.000Z');
+
+    const { error } = await supabase.from('blocchi_agenda').insert({
+      data_ora_inizio: inizio,
+      data_ora_fine:   fine,
+      motivo:          ev.summary || 'Impegno personale',
+      tipo:            'google_calendar',
+      tutto_il_giorno: tuttoIlGiorno,
+    });
+
+    if (!error) inseriti++;
+  }
+
+  console.log(`[GCal Sync] Importati ${inseriti} impegni da Google Calendar`);
+}
+
 // ─── Avvia i cron job ────────────────────────────────────────────────────
 function avviaReminder() {
   // Ogni giorno alle 19:00 ora italiana → promemoria per domani
@@ -123,7 +179,10 @@ function avviaReminder() {
     popolaFestivita(anno + 1).catch(e => console.error('[Festività]', e.message));
   }, { timezone: 'Europe/Rome' });
 
-  console.log('[SMS Reminder] Cron job attivi — 19:00 serale + 1 ora prima + festività (Europe/Rome)');
+  // Ogni mattina alle 06:00 → importa impegni personali da Google Calendar come blocchi
+  cron.schedule('0 6 * * *', sincronizzaBlocchiGoogleCalendar, { timezone: 'Europe/Rome' });
+
+  console.log('[SMS Reminder] Cron job attivi — 19:00 serale + 1 ora prima + festività + sync GCal (Europe/Rome)');
 
   // All'avvio: popola festività anno corrente e prossimo se non già presenti
   const annoOra = new Date().getFullYear();
