@@ -767,13 +767,19 @@ async function apriDettaglioPaziente(id) {
       $('pd-storico-list').innerHTML = '<span class="paz-storico-vuoto">Nessun appuntamento registrato</span>';
     } else {
       $('pd-storico-list').innerHTML = apps.map(a => {
-        const data  = new Date(a.data_ora_inizio).toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
-        const ora   = fmtTime(a.data_ora_inizio);
-        const esame = a.tipi_prestazione?.nome || '—';
+        const dataStr = new Date(a.data_ora_inizio).toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
+        const ora     = fmtTime(a.data_ora_inizio);
+        const esame   = a.tipi_prestazione?.nome || '—';
+        const stato   = a.stato || 'prenotato';
+        const statoStyle = stato === 'annullato'
+          ? 'background:#fce4e4;color:#c62828'
+          : stato === 'completato'
+          ? 'background:#e8f5e9;color:#2e7d32'
+          : 'background:#e3f2fd;color:#1565c0';
         return `<div class="paz-storico-item">
-          <span class="paz-storico-data">${data} ${ora}</span>
+          <span class="paz-storico-data">${dataStr} ${ora}</span>
           <span class="paz-storico-esame">${esc(esame)}</span>
-          <span class="paz-storico-stato">${esc(a.stato || 'prenotato')}</span>
+          <span class="paz-storico-stato" style="${statoStyle}">${esc(stato)}</span>
         </div>`;
       }).join('');
     }
