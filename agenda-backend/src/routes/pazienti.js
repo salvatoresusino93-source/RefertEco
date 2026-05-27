@@ -170,11 +170,13 @@ router.get('/:id/appuntamenti', async (req, res) => {
 
 // ─── DELETE /api/pazienti/:id ────────────────────────────────────────────
 router.delete('/:id', async (req, res) => {
-  // Blocca se ci sono appuntamenti NON annullati associati
+  const id = req.params.id;
+
+  // Blocca se ci sono appuntamenti NON annullati (prenotato, confermato, completato…)
   const { data: attivi } = await supabase
     .from('appuntamenti')
     .select('id')
-    .eq('paziente_id', req.params.id)
+    .eq('paziente_id', id)
     .neq('stato', 'annullato')
     .limit(1);
 
@@ -184,10 +186,19 @@ router.delete('/:id', async (req, res) => {
     });
   }
 
+  // Elimina prima gli appuntamenti annullati (vincolo FK) poi il paziente
+  const { error: errApp } = await supabase
+    .from('appuntamenti')
+    .delete()
+    .eq('paziente_id', id)
+    .eq('stato', 'annullato');
+
+  if (errApp) return res.status(500).json({ error: errApp.message });
+
   const { error } = await supabase
     .from('pazienti')
     .delete()
-    .eq('id', req.params.id);
+    .eq('id', id);
 
   if (error) return res.status(500).json({ error: error.message });
   res.json({ ok: true });
