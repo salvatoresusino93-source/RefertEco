@@ -4,22 +4,23 @@
 
 // ─── Stato globale ────────────────────────────────────────────────────────
 const ST = {
-  step:        1,
-  esami:       [],          // lista esami dal server
-  esameId:     null,
-  esameName:   null,
-  giorni:      [],          // disponibilità fetched
-  dataScelta:  null,        // "YYYY-MM-DD"
-  dataLabel:   null,        // "martedì 3 giugno"
-  slotScelta:  null,        // { data_ora_inizio, data_ora_fine, ora }
+  step:             1,
+  esami:            [],
+  esameId:          null,
+  esameName:        null,
+  giorni:           [],
+  dataScelta:       null,
+  dataLabel:        null,
+  slotScelta:       null,
+  privacyAccettata: false,
   form: {
-    cognome:         '',
-    nome:            '',
-    data_nascita:    '',
-    sesso:           '',
-    telefono:        '',
-    codice_fiscale:  '',
-    note:            '',
+    cognome:        '',
+    nome:           '',
+    data_nascita:   '',
+    sesso:          '',
+    telefono:       '',
+    codice_fiscale: '',
+    note:           '',
   }
 };
 
@@ -270,6 +271,18 @@ function goStep3() {
             <textarea id="f-note" rows="2" placeholder="Es. allergie, particolarità cliniche…">${esc(f.note)}</textarea>
           </div>
         </div>
+        <!-- Privacy consent — obbligatorio GDPR -->
+        <div class="privacy-wrap">
+          <label class="privacy-label">
+            <input type="checkbox" id="f-privacy" ${ST.privacyAccettata ? 'checked' : ''}
+              onchange="ST.privacyAccettata=this.checked">
+            <span>
+              Ho letto l'<a href="/privacy" target="_blank" class="pr-link">informativa sulla privacy</a>
+              e acconsento al trattamento dei miei dati personali, inclusi i dati sanitari,
+              per la gestione della prenotazione.
+            </span>
+          </label>
+        </div>
         <div id="form-err" class="pr-error hidden"></div>
         <div class="pr-btn-row">
           <button class="pr-btn-ghost" onclick="goStep2b()">←</button>
@@ -300,6 +313,10 @@ function avanzaStep4() {
   if (!cognome || !nome) { showFormErr(errEl, 'Inserisci cognome e nome.'); return; }
   if (!data_nascita)     { showFormErr(errEl, 'Inserisci la data di nascita.'); return; }
   if (!telefono)         { showFormErr(errEl, 'Inserisci il numero di telefono.'); return; }
+  if (!ST.privacyAccettata) {
+    showFormErr(errEl, 'Devi accettare l\'informativa sulla privacy per procedere.');
+    return;
+  }
 
   Object.assign(ST.form, { cognome, nome, data_nascita, sesso, telefono, codice_fiscale, note });
   goStep4();

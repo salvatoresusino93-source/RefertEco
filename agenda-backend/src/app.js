@@ -133,6 +133,11 @@ app.get('/prenota', (req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, 'prenota.html'));
 });
 
+// ─── Informativa privacy GDPR (URL pulito: /privacy) ─────────────────────
+app.get('/privacy', (req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, 'privacy.html'));
+});
+
 // ─── Fallback SPA ────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
   res.sendFile(path.join(FRONTEND_PATH, 'index.html'));
