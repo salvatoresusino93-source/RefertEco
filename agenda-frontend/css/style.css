@@ -169,7 +169,7 @@ button { font-family:inherit; }
 /* ─── MODAL ───────────────────────────────────────────────────────────── */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5);
   display:flex; align-items:center; justify-content:center;
-  z-index:100; backdrop-filter:blur(2px); }
+  z-index:10000; backdrop-filter:blur(2px); }
 .modal { background:var(--surface); border-radius:14px; width:100%; max-width:540px;
   max-height:92vh; display:flex; flex-direction:column; box-shadow:var(--shadow-lg); }
 .modal-hdr { display:flex; align-items:center; justify-content:space-between;
@@ -360,8 +360,11 @@ button { font-family:inherit; }
   .modal-body    { overflow-y:auto; max-height:60vh; }
   .arch-modal    { border-radius:16px 16px 0 0; }
 
+  /* Safe area iPhone X+: evita che la barra home copra il footer */
+  .modal-ftr { padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px)) !important; }
+
   /* iOS fix: quando JS imposta l'altezza dell'overlay via visualViewport,
      il modal usa % invece di vh così il footer resta sempre visibile */
   .modal-overlay[data-vv] .modal      { max-height:98% !important; }
-  .modal-overlay[data-vv] .modal-body { max-height:calc(100% - 130px) !important; }
+  .modal-overlay[data-vv] .modal-body { max-height:calc(100% - 140px) !important; }
 }
