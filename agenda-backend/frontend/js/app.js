@@ -850,12 +850,14 @@ async function eliminaPaziente() {
 
 function nuovoAppDaPaziente() {
   if (!_pdId) return;
+  // Salva i valori PRIMA di chiudere il modal (chiudiDettaglioPaziente azzera _pdId)
+  const idPaz   = _pdId;
   const cognome = $('pd-cognome').value.trim();
   const nome    = $('pd-nome').value.trim();
   chiudiDettaglioPaziente();
   openModal({});
   // Pre-seleziona il paziente nel modal appuntamento
-  _pazienteId = _pdId;
+  _pazienteId = idPaz;
   $('paziente-search').style.display = 'none';
   $('paz-results').classList.add('hidden');
   $('paz-nome-display').textContent = `${cognome} ${nome}`;
