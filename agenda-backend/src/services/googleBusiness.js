@@ -323,9 +323,42 @@ async function aggiornaOreSettimana() {
   }
 }
 
+// ─── Imposta URL prenotazione online su Google Business Profile ───────────
+// Usa l'attributo "url_appointment" — visibile come pulsante "Prenota" su Google
+async function impostaUrlPrenotazione(bookingUrl) {
+  const token        = await refreshAccessToken();
+  const locationName = await getLocationName(token); // es. "locations/12345678901234567"
+
+  const body = {
+    name:       `${locationName}/attributes`,
+    attributes: [
+      {
+        name:      `${locationName}/attributes/url_appointment`,
+        uriValues: [{ uri: bookingUrl }],
+      },
+    ],
+  };
+
+  const res = await fetch(
+    `https://mybusinessbusinessinformation.googleapis.com/v1/${locationName}/attributes?attributeMask=url_appointment`,
+    {
+      method:  'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }
+  );
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(`GBP attributes error: ${JSON.stringify(data)}`);
+
+  console.log(`[GBP] ✓ URL prenotazione impostato: ${bookingUrl}`);
+  return data;
+}
+
 module.exports = {
   aggiornaOreSettimana,
   impostaOrariBase,
+  impostaUrlPrenotazione,
   generaAuthUrl,
   scambiaCodePerToken,
   refreshAccessToken,

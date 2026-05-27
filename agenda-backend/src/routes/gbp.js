@@ -7,6 +7,7 @@ const { requireAuth } = require('../middleware/auth');
 const {
   aggiornaOreSettimana,
   impostaOrariBase,
+  impostaUrlPrenotazione,
   generaAuthUrl,
   scambiaCodePerToken,
 } = require('../services/googleBusiness');
@@ -161,6 +162,21 @@ router.post('/aggiorna-orari', requireAuth, async (req, res) => {
     const result = await aggiornaOreSettimana();
     res.json(result);
   } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── POST /api/gbp/set-booking-url — imposta URL prenotazione su GBP ──────
+// Imposta il pulsante "Prenota" su Google che punta a /prenota
+// (può richiedere l'approvazione API GBP se GBP_LOCATION_NAME non è impostato)
+router.post('/set-booking-url', requireAuth, async (req, res) => {
+  const APP_URL   = process.env.APP_URL || 'https://referteco-production.up.railway.app';
+  const bookingUrl = req.body.url || `${APP_URL}/prenota`;
+  try {
+    const result = await impostaUrlPrenotazione(bookingUrl);
+    res.json({ ok: true, url: bookingUrl, result });
+  } catch (e) {
+    // Manda l'errore completo così si capisce se manca l'approvazione API
     res.status(500).json({ error: e.message });
   }
 });
