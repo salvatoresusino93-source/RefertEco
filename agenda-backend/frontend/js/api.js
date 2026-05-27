@@ -47,4 +47,7 @@ const api = {
 
   // Prestazioni
   prestazioni: () => api._req('GET', '/prestazioni'),
+
+  // Blocchi agenda (festività, impegni, manuali)
+  blocchi: (from, to) => api._req('GET', `/blocchi?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
 };

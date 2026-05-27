@@ -23,6 +23,7 @@ let _viewStart    = null;   // lunedì della settimana visualizzata
 let _mobileDay    = null;   // giorno corrente in vista mobile
 let _appointments = [];
 let _prestazioni  = [];
+let _blocchi      = [];     // blocchi agenda (festività, impegni)
 let _editId       = null;   // id appuntamento in modifica
 let _pazienteId   = null;   // paziente selezionato nel modal
 let _searchTimer  = null;
@@ -116,12 +117,10 @@ function initSocket() {
 
 // ─── Calendar load & render ───────────────────────────────────────────────
 async function refreshWeek() {
-  try {
-    _appointments = await api.appuntamenti(
-      toISO(_viewStart),
-      toISO(addDays(_viewStart, 7))
-    );
-  } catch { _appointments = []; }
+  const from = toISO(_viewStart);
+  const to   = toISO(addDays(_viewStart, 7));
+  try { _appointments = await api.appuntamenti(from, to); } catch { _appointments = []; }
+  try { _blocchi      = await api.blocchi(from, to);      } catch { _blocchi = []; }
   renderCalendar();
   renderPeriod();
 }
@@ -157,6 +156,22 @@ function renderCalendar() {
   }
   timeLbls += `</div>`;
 
+  // ── Header con indicatore festività
+  // Ricostruiamo l'header aggiungendo il badge festivo
+  hdr = `<div class="cal-header"><div class="cal-th-time"></div>`;
+  for (let i=0; i<7; i++) {
+    const d       = addDays(_viewStart, i);
+    const dateStr = toDateStr(d);
+    const bloccoGiorno = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
+    const cls = (isToday(d) ? ' today' : '') + (bloccoGiorno ? ' festivo' : '');
+    hdr += `<div class="cal-th-day${cls}">
+      <span class="cal-th-dayname">${GIORNI[i]}</span>
+      <span class="cal-th-daynum">${d.getDate()}</span>
+      ${bloccoGiorno ? `<span class="cal-th-festivo" title="${esc(bloccoGiorno.motivo)}">🔴</span>` : ''}
+    </div>`;
+  }
+  hdr += `</div>`;
+
   // ── Day columns
   let days = '';
   for (let i=0; i<7; i++) {
@@ -164,21 +179,37 @@ function renderCalendar() {
     const dateStr = toDateStr(d);
     const todayCls = isToday(d) ? ' today' : '';
 
+    // Blocco tutto il giorno per questa data?
+    const bloccoGiorno = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
+    const festivoCls   = bloccoGiorno ? ' festivo' : '';
+
     // Hour lines
     let lines = '';
     for (let m=0; m<=totalMin; m+=20) {
       lines += `<div class="cal-hline${m%60===0?' major':''}" style="top:${m*PX_PER_MIN}px"></div>`;
     }
 
-    // Click slots
+    // Click slots (bloccati se giorno festivo)
     let slots = '';
     for (let m=0; m<totalMin; m+=SLOT_MIN) {
       const absMin = CAL_START*60 + m;
       const hh = String(Math.floor(absMin/60)).padStart(2,'0');
       const mm = String(absMin%60).padStart(2,'0');
-      slots += `<div class="cal-slot" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
-        onclick="onSlotClick('${dateStr}','${hh}:${mm}')"></div>`;
+      if (bloccoGiorno) {
+        slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
+          onclick="onSlotBlockedClick('${esc(bloccoGiorno.motivo)}')"></div>`;
+      } else {
+        slots += `<div class="cal-slot" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
+          onclick="onSlotClick('${dateStr}','${hh}:${mm}')"></div>`;
+      }
     }
+
+    // Overlay blocco giorno intero
+    const bloccoOverlay = bloccoGiorno
+      ? `<div class="cal-blocco-overlay" title="${esc(bloccoGiorno.motivo)}">
+           <span class="cal-blocco-label">${esc(bloccoGiorno.motivo)}</span>
+         </div>`
+      : '';
 
     // Appointments
     let appHtml = '';
@@ -203,7 +234,7 @@ function renderCalendar() {
       </div>`;
     }
 
-    days += `<div class="cal-day${todayCls}" style="height:${totalPx}px">${lines}${slots}${appHtml}</div>`;
+    days += `<div class="cal-day${todayCls}${festivoCls}" style="height:${totalPx}px">${lines}${slots}${bloccoOverlay}${appHtml}</div>`;
   }
 
   $('cal-wrap').innerHTML = `${hdr}
@@ -589,6 +620,9 @@ async function salvaNuovoPaz() {
 
 // ─── Slot / App click ─────────────────────────────────────────────────────
 function onSlotClick(date, time) { openModal({ date, time }); }
+function onSlotBlockedClick(motivo) {
+  alert(`⛔ Giorno non disponibile: ${motivo}\n\nIl centro è chiuso in questa data.`);
+}
 function onAppClick(id, e) { if(e) e.stopPropagation(); openModal({ id }); }
 
 // ─── Stampa lista giornaliera ─────────────────────────────────────────────

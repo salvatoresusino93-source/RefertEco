@@ -7,6 +7,7 @@
 const cron    = require('node-cron');
 const supabase = require('./supabase');
 const { inviaPromemoria, inviaPromemoria1Ora } = require('./sms');
+const { popolaFestivita } = require('./festivita');
 
 // ─── Carica appuntamenti di domani da Supabase ────────────────────────────
 async function appuntamentiDomani() {
@@ -115,7 +116,19 @@ function avviaReminder() {
   // Ogni minuto → controlla appuntamenti tra 1 ora
   cron.schedule('* * * * *', controllaSmsUnaOra);
 
-  console.log('[SMS Reminder] Cron job attivi — 19:00 serale + 1 ora prima (Europe/Rome)');
+  // Ogni 1 gennaio alle 09:00 → popola festività anno nuovo
+  cron.schedule('0 9 1 1 *', () => {
+    const anno = new Date().getFullYear();
+    popolaFestivita(anno).catch(e => console.error('[Festività]', e.message));
+    popolaFestivita(anno + 1).catch(e => console.error('[Festività]', e.message));
+  }, { timezone: 'Europe/Rome' });
+
+  console.log('[SMS Reminder] Cron job attivi — 19:00 serale + 1 ora prima + festività (Europe/Rome)');
+
+  // All'avvio: popola festività anno corrente e prossimo se non già presenti
+  const annoOra = new Date().getFullYear();
+  popolaFestivita(annoOra).catch(e => console.error('[Festività avvio]', e.message));
+  popolaFestivita(annoOra + 1).catch(e => console.error('[Festività avvio]', e.message));
 }
 
 module.exports = { avviaReminder, inviaPromemoriDomani };

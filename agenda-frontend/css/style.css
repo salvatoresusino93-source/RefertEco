@@ -140,6 +140,28 @@ button { font-family:inherit; }
 .cal-slot { position:absolute; left:0; right:0; cursor:pointer; }
 .cal-slot:hover { background:rgba(37,99,235,.06); }
 
+/* ─── BLOCCHI AGENDA (festività, impegni) ──────────────────────────────── */
+.cal-day.festivo { background:repeating-linear-gradient(
+  135deg, #fef2f2, #fef2f2 4px, #fff5f5 4px, #fff5f5 12px); }
+.cal-slot-blocked { cursor:not-allowed !important; }
+.cal-slot-blocked:hover { background:rgba(239,68,68,.06) !important; }
+
+.cal-blocco-overlay {
+  position:absolute; inset:0; z-index:1;
+  display:flex; align-items:flex-start; justify-content:center;
+  padding-top:8px; pointer-events:none;
+}
+.cal-blocco-label {
+  background:rgba(239,68,68,.15); color:#b91c1c;
+  font-size:9px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.04em; padding:2px 6px; border-radius:4px;
+  white-space:nowrap; max-width:90%; overflow:hidden; text-overflow:ellipsis;
+}
+
+/* Header festivo */
+.cal-th-day.festivo { background:#fef2f2; color:#b91c1c; }
+.cal-th-festivo { display:block; font-size:9px; line-height:1; }
+
 /* Appointment blocks */
 .cal-app { position:absolute; left:2px; right:2px; border-radius:6px;
   padding:3px 6px; cursor:pointer; overflow:hidden; z-index:2;

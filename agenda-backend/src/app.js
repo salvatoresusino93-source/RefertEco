@@ -12,6 +12,7 @@ const pazientiRoutes     = require('./routes/pazienti');
 const appuntamentiRoutes = require('./routes/appuntamenti');
 const prestazioniRoutes  = require('./routes/prestazioni');
 const syncRoutes         = require('./routes/sync');
+const blocchiRoutes      = require('./routes/blocchi');
 
 const app    = express();
 const server = http.createServer(app);
@@ -32,6 +33,7 @@ app.use('/api/pazienti',      pazientiRoutes);
 app.use('/api/appuntamenti',  appuntamentiRoutes);
 app.use('/api/prestazioni',   prestazioniRoutes);
 app.use('/api/sync',          syncRoutes);
+app.use('/api/blocchi',       blocchiRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

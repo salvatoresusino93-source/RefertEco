@@ -83,6 +83,22 @@ router.post('/', async (req, res) => {
     });
   }
 
+  // Verifica blocchi agenda (festività, impegni, manuali)
+  const { data: blocchi } = await supabase
+    .from('blocchi_agenda')
+    .select('id, motivo, tipo')
+    .lt('data_ora_inizio', data_ora_fine)
+    .gt('data_ora_fine',   data_ora_inizio);
+
+  if (blocchi && blocchi.length > 0) {
+    const b = blocchi[0];
+    return res.status(409).json({
+      error: `Impossibile prenotare: "${b.motivo}" — il centro è chiuso`,
+      tipo: 'blocco',
+      motivo: b.motivo,
+    });
+  }
+
   const accession_number = await generaAccessionNumber();
 
   const { data, error } = await supabase
