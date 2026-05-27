@@ -4,7 +4,7 @@
 > fare qualsiasi modifica. Contiene il contesto delle conversazioni precedenti, le
 > decisioni prese, e i prossimi passi.
 
-Ultimo aggiornamento: **2026-05-27**, sessione serale (fix SMS delivery).
+Ultimo aggiornamento: **2026-05-27**, sessione pomeriggio/sera (GBP + festività + GCal + SMS).
 
 ---
 
@@ -85,7 +85,76 @@ C:\Program Files\Orthanc Server\             ← Orthanc 1.12.11 come servizio W
 
 ---
 
-## 3. FIX SESSIONE 2026-05-27 (questo PC — agenda iOS)
+## 3. FIX SESSIONE 2026-05-27 POMERIGGIO/SERA — Google Calendar + Festività + GBP
+
+### Festività italiane in agenda (blocco prenotazioni)
+- Nuovo file: `agenda-backend/src/services/festivita.js`
+  - Calcola tutte le festività italiane inclusa Pasqua (algoritmo Anonymous Gregoriano)
+  - `popolaFestivita(anno)`: inserisce festività in `blocchi_agenda` (tipo='festivo'), skip se già presenti
+  - Avviata a ogni boot del server + cron 1 gennaio 09:00 per anno nuovo
+- Nuova tabella Supabase: `blocchi_agenda` (id, data_ora_inizio, data_ora_fine, motivo, tipo, tutto_il_giorno)
+  - tipo: 'festivo' | 'manuale' | 'google_calendar'
+- Nuove route `agenda-backend/src/routes/blocchi.js`: GET/POST/DELETE /api/blocchi
+- Frontend: giorni festivi mostrati in rosso, slot bloccati, click mostra alert invece del modal
+
+### Google Calendar sync
+- Nuovo servizio: `agenda-backend/src/services/googleCalendar.js`
+  - Service Account JWT auth (RS256 + jsonwebtoken) — NO googleapis package
+  - `creaEvento(appuntamento)`: crea evento con `extendedProperties.private.agendaStudioId`
+  - `eliminaEventoByAgendaId(id)`: cerca e cancella evento per ID (senza colonna DB)
+  - `leggiEventiPersonali(da, a)`: legge eventi NON creati da Agenda Studio
+  - `aggiornaEvento(googleEventId, app)`: aggiorna evento esistente (PATCH)
+- `appuntamenti.js`: crea evento GCal su POST, elimina su DELETE
+- `reminder.js`: cron 06:00 → `sincronizzaBlocchiGoogleCalendar()` importa impegni personali
+  come blocchi tipo='google_calendar' per i prossimi 30 giorni
+- Variabili Railway: `GOOGLE_PRIVATE_KEY` (JSON completo service account), `GOOGLE_CLIENT_EMAIL`,
+  `GOOGLE_CALENDAR_ID` (=salvatoresusino.md@gmail.com)
+- Service account: `agenda-calendar@agendastudio-497611.iam.gserviceaccount.com`
+
+### Google Business Profile — orari automatici
+- Nuovo servizio: `agenda-backend/src/services/googleBusiness.js`
+  - Orari base: Martedì + Venerdì 9:00-13:00 e 15:00-19:00
+  - `impostaOrariBase()`: setta regularHours su GBP (da chiamare una tantum)
+  - `aggiornaOreSettimana()`: calcola specialHours per i prossimi 30 giorni
+    - Festivi (blocchi_agenda tipo='festivo') → mostra chiuso
+    - Impegni personali GCal su Mar/Ven → riduce orari (es. impegno 10-12 → aperto 9-10 e 12-13)
+    - Giorni normali → nessun override (regularHours già corretto)
+  - OAuth2 refresh token flow per account `salvatoresusino.md@gmail.com`
+- Nuove route: `agenda-backend/src/routes/gbp.js`
+  - GET /api/gbp/setup — pagina HTML per autorizzazione OAuth una tantum
+  - GET /api/gbp/callback — riceve code, mostra refresh token
+  - POST /api/gbp/set-regular-hours — imposta orari base GBP
+  - POST /api/gbp/aggiorna-orari — trigger manuale aggiornamento
+  - GET /api/gbp/status — verifica configurazione
+- Cron domenica 20:00 Europe/Rome → aggiorna specialHours GBP
+- Variabili Railway GBP (già impostate):
+  ```
+  GOOGLE_OAUTH_CLIENT_ID     = <da Railway dashboard>
+  GOOGLE_OAUTH_CLIENT_SECRET = <da Railway dashboard>
+  GOOGLE_OAUTH_REFRESH_TOKEN = <da Railway dashboard>
+  GOOGLE_OAUTH_REDIRECT_URI  = https://referteco-production.up.railway.app/api/gbp/callback
+  GBP_LOCATION_NAME          = (opzionale, si scopre automaticamente)
+  ```
+
+### ⚠️ PENDING — API access GBP in attesa di approvazione Google
+- La `mybusinessaccountmanagement.googleapis.com` ha quota=0 di default (richiede allowlist)
+- **Richiesta inviata il 2026-05-27** — Case ID: **1-7862000040720**
+- Tempo stimato: 7-10 giorni lavorativi
+- Quando arriva l'email di approvazione da Google:
+  1. Eseguire: `railway run node scripts/setup-gbp-hours.js`
+     (il file è già scritto, lo ricreo se serve)
+  2. Oppure chiamare POST `/api/gbp/set-regular-hours` e poi `/api/gbp/aggiorna-orari`
+- Prima di quel momento, tutto il resto funziona (SMS, Calendar, festività)
+
+### Fix SMS delivery (sessione stessa)
+- `sms.js`: rimosso parametro `from` — SMS Hosting usa numero fisso 394390009000
+- `appuntamenti.js`: aggiunto import e chiamata `inviaSmsConferma` su POST (era mancante)
+- Testo SMS: "presso lo Studio" (non "il Studio")
+- Testato su WindTre (351 374 6102) ✓ — Spusu non compatibile (MVNO)
+
+---
+
+## 4. FIX SESSIONE 2026-05-27 (questo PC — agenda iOS)
 
 ### Fix pulsante Salva non raggiungibile su iPhone
 - **Problema**: su iOS Safari il modal dell'agenda sale dal basso (bottom sheet).
@@ -99,7 +168,7 @@ C:\Program Files\Orthanc Server\             ← Orthanc 1.12.11 come servizio W
 
 ---
 
-## 4. FIX SESSIONE 2026-05-26 MATTINA (questo PC — agenda)
+## 5. FIX SESSIONE 2026-05-26 MATTINA (questo PC — agenda)
 
 ### Merge Mac → Windows
 - Il branch locale era indietro di 23 commit (fast-forward pulito)
@@ -121,7 +190,7 @@ C:\Program Files\Orthanc Server\             ← Orthanc 1.12.11 come servizio W
 
 ---
 
-## 5. FIX SESSIONE 2026-05-26 POMERIGGIO/SERA (workstation in studio)
+## 6. FIX SESSIONE 2026-05-26 POMERIGGIO/SERA (workstation in studio)
 
 > ⚠️ Queste modifiche sono state fatte sulla **workstation in studio** (PC separato).
 > Alcuni di questi fix potrebbero non essere ancora in sync con questo PC.
@@ -184,7 +253,7 @@ Endpoint aggiunti:
 
 ---
 
-## 6. FIX SESSIONE 2026-05-19 (questo PC)
+## 7. FIX SESSIONE 2026-05-19 (questo PC)
 
 - Bug DICOM JPEG Lossless: decoder + fallback manuale
 - Import cartelle DICOM con sottocartelle (drag-and-drop ricorsivo)
@@ -194,19 +263,29 @@ Endpoint aggiunti:
 
 ---
 
-## 7. CONFIGURAZIONE CORRENTE
+## 8. CONFIGURAZIONE CORRENTE
 
 ### Variabili Railway (non committare — valori reali su Railway dashboard o su .env locale)
 ```
-SUPABASE_URL           = <da Railway dashboard>
-SUPABASE_SERVICE_KEY   = <da Railway dashboard>
-JWT_SECRET             = <da Railway dashboard>
-RESEND_API_KEY         = <da Railway dashboard>
-SMSHOSTING_API_KEY     = <da Railway dashboard>
-SMSHOSTING_API_SECRET  = <da Railway dashboard>
-SMS_SENDER             = (non più usato dal codice — mittente fisso 394390009000)
-STUDIO_NOME            = Studio Dr. Susino
-STUDIO_TELEFONO        = <opzionale, appare negli SMS>
+SUPABASE_URL                = <da Railway dashboard>
+SUPABASE_SERVICE_KEY        = <da Railway dashboard>
+JWT_SECRET                  = <da Railway dashboard>
+RESEND_API_KEY              = <da Railway dashboard>
+SMSHOSTING_API_KEY          = <da Railway dashboard>
+SMSHOSTING_API_SECRET       = <da Railway dashboard>
+SMS_SENDER                  = (non più usato — mittente fisso 394390009000)
+STUDIO_NOME                 = Studio Dr. Susino
+STUDIO_TELEFONO             = 339-4028454
+# Google Calendar (service account agendastudio-497611)
+GOOGLE_PRIVATE_KEY          = <JSON completo service account>
+GOOGLE_CLIENT_EMAIL         = agenda-calendar@agendastudio-497611.iam.gserviceaccount.com
+GOOGLE_CALENDAR_ID          = salvatoresusino.md@gmail.com
+# Google Business Profile (OAuth2 — account salvatoresusino.md@gmail.com)
+GOOGLE_OAUTH_CLIENT_ID      = <da Railway dashboard — formato: XXXXXXXXX.apps.googleusercontent.com>
+GOOGLE_OAUTH_CLIENT_SECRET  = <da Railway dashboard — formato: GOCSPX-XXXXXXXXXX>
+GOOGLE_OAUTH_REFRESH_TOKEN  = <da Railway dashboard — formato: 1//XXXXXXXXXX>
+GOOGLE_OAUTH_REDIRECT_URI   = https://referteco-production.up.railway.app/api/gbp/callback
+GBP_LOCATION_NAME           = (opzionale — si scopre auto alla prima chiamata)
 ```
 
 ### File locali (non committare)
@@ -215,7 +294,7 @@ STUDIO_TELEFONO        = <opzionale, appare negli SMS>
 
 ---
 
-## 8. COSE DA NON FARE / TRAPPOLE NOTE
+## 9. COSE DA NON FARE / TRAPPOLE NOTE
 
 1. **Frontend Agenda in due posti**: sorgente `agenda-frontend/`, copia `agenda-backend/frontend/`.
    Modificare SEMPRE entrambi insieme.
@@ -237,7 +316,7 @@ STUDIO_TELEFONO        = <opzionale, appare negli SMS>
 
 ---
 
-## 9. ⚠️ ATTENZIONE — WORKSTATION IN STUDIO: NON SOVRASCRIVERE LE SUE MODIFICHE
+## 10. ⚠️ ATTENZIONE — WORKSTATION IN STUDIO: NON SOVRASCRIVERE LE SUE MODIFICHE
 
 La workstation in studio ha modifiche proprie (formattazione stampa, UI fix, Orthanc, worklist)
 che non esistono completamente su questo PC e viceversa.
@@ -253,7 +332,7 @@ che non esistono completamente su questo PC e viceversa.
 
 ---
 
-## 10. COME RIPRENDERE (su qualsiasi PC)
+## 11. COME RIPRENDERE (su qualsiasi PC)
 
 ```bash
 git clone https://github.com/salvatoresusino93-source/RefertEco.git
@@ -267,6 +346,6 @@ Crea `agenda-backend/.env` con le credenziali (recupera da Google Drive o dall'a
 
 ---
 
-## 11. CONTATTO
+## 12. CONTATTO
 
 Repository: https://github.com/salvatoresusino93-source/RefertEco
