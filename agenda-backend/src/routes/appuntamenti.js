@@ -3,7 +3,7 @@ const supabase  = require('../services/supabase');
 const { requireAuth, requireMedico } = require('../middleware/auth');
 const { getIO }  = require('../socket');
 const { notificaNuovoAppuntamento, notificaAppuntamentoAnnullato } = require('../services/email');
-const { inviaPromemoria, inviaSmsAnnullamento } = require('../services/sms');
+const { inviaPromemoria, inviaSmsConferma, inviaSmsAnnullamento } = require('../services/sms');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -109,10 +109,12 @@ router.post('/', async (req, res) => {
   // Notifica email al medico
   notificaNuovoAppuntamento(data).catch(() => {});
 
+  // SMS conferma prenotazione al paziente (immediato)
+  inviaSmsConferma(data).catch(e => console.error('[SMS] Conferma prenotazione:', e.message));
+
   // SMS promemoria immediato se l'appuntamento è domani e siamo già oltre le 19:00
   // (il cron serale è già passato e non lo manderebbe più)
   try {
-    const ora_it = new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' });
     const adesso = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
     const domani = new Date(adesso);
     domani.setDate(domani.getDate() + 1);
