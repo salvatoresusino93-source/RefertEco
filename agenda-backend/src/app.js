@@ -1,5 +1,5 @@
 require('dotenv').config({ path: require('path').resolve(__dirname, '..', '.env') });
-// v20260526b
+// v20260527a
 const express = require('express');
 const http    = require('http');
 const cors    = require('cors');
@@ -13,6 +13,7 @@ const appuntamentiRoutes = require('./routes/appuntamenti');
 const prestazioniRoutes  = require('./routes/prestazioni');
 const syncRoutes         = require('./routes/sync');
 const blocchiRoutes      = require('./routes/blocchi');
+const gbpRoutes          = require('./routes/gbp');
 
 const app    = express();
 const server = http.createServer(app);
@@ -34,6 +35,7 @@ app.use('/api/appuntamenti',  appuntamentiRoutes);
 app.use('/api/prestazioni',   prestazioniRoutes);
 app.use('/api/sync',          syncRoutes);
 app.use('/api/blocchi',       blocchiRoutes);
+app.use('/api/gbp',           gbpRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

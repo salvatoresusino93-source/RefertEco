@@ -9,6 +9,7 @@ const supabase = require('./supabase');
 const { inviaPromemoria, inviaPromemoria1Ora } = require('./sms');
 const { popolaFestivita } = require('./festivita');
 const { leggiEventiPersonali, getCreds } = require('./googleCalendar');
+const { aggiornaOreSettimana } = require('./googleBusiness');
 
 // ─── Carica appuntamenti di domani da Supabase ────────────────────────────
 async function appuntamentiDomani() {
@@ -182,7 +183,12 @@ function avviaReminder() {
   // Ogni mattina alle 06:00 → importa impegni personali da Google Calendar come blocchi
   cron.schedule('0 6 * * *', sincronizzaBlocchiGoogleCalendar, { timezone: 'Europe/Rome' });
 
-  console.log('[SMS Reminder] Cron job attivi — 19:00 serale + 1 ora prima + festività + sync GCal (Europe/Rome)');
+  // Ogni domenica alle 20:00 → aggiorna orari Google Business Profile per i prossimi 30 giorni
+  cron.schedule('0 20 * * 0', () => {
+    aggiornaOreSettimana().catch(e => console.error('[GBP] Errore cron domenicale:', e.message));
+  }, { timezone: 'Europe/Rome' });
+
+  console.log('[SMS Reminder] Cron job attivi — 19:00 SMS + 1h prima + sync GCal 06:00 + GBP domenica 20:00 (Europe/Rome)');
 
   // All'avvio: popola festività anno corrente e prossimo se non già presenti
   const annoOra = new Date().getFullYear();
