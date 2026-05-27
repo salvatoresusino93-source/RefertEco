@@ -57,7 +57,51 @@ app.post('/api/test-email', async (req, res) => {
   }
 });
 
-// ─── Test invio SMS manuale (solo in sviluppo o da admin) ────────────────
+// ─── Test invio SMS diretto — manda un SMS a un numero specifico ─────────
+// POST /api/test-sms  { "numero": "333XXXXXXX" }
+// Utile per verificare che le credenziali SMS Hosting funzionino
+app.post('/api/test-sms', async (req, res) => {
+  const apiKey    = process.env.SMSHOSTING_API_KEY;
+  const apiSecret = process.env.SMSHOSTING_API_SECRET;
+  const sender    = (process.env.SMS_SENDER || 'Studio').slice(0, 11);
+
+  if (!apiKey || !apiSecret) {
+    return res.status(500).json({ error: 'SMSHOSTING_API_KEY o SMSHOSTING_API_SECRET mancanti su Railway' });
+  }
+
+  const numero = req.body.numero;
+  if (!numero) return res.status(400).json({ error: 'Campo "numero" obbligatorio nel body' });
+
+  const auth   = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+  const params = new URLSearchParams({
+    to:   numero,
+    text: `Test SMS da Agenda Studio. Se ricevi questo messaggio le credenziali SMS Hosting funzionano correttamente.`,
+    from: sender,
+  });
+
+  try {
+    const r = await fetch('https://api.smshosting.it/rest/api/sms/send', {
+      method:  'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type':  'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+    const json = await r.json().catch(() => ({}));
+    // Restituiamo tutto: status HTTP, body completo, e i parametri inviati
+    res.json({
+      http_status: r.status,
+      http_ok:     r.ok,
+      risposta_smshosting: json,
+      parametri_inviati: { numero, from: sender, apiKey_prefix: apiKey.slice(0, 6) + '...' }
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Test promemoria SMS (appuntamenti di domani) ─────────────────────────
 app.post('/api/reminder/test', async (req, res) => {
   try {
     const result = await inviaPromemoriDomani();
