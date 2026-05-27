@@ -87,7 +87,7 @@ async function inviaPromemoria(appuntamento) {
   const testo =
     `PROMEMORIA: Gentile paziente, le ricordiamo il suo appuntamento ` +
     `di domani ${data} alle ore ${ora} ` +
-    `per ${esame} presso il ${STUDIO}.` +
+    `per ${esame} presso lo ${STUDIO}.` +
     (TEL ? ` Per info: ${TEL}.` : '');
 
   const result = await inviaSms(numero, testo);
@@ -108,7 +108,7 @@ async function inviaPromemoria1Ora(appuntamento) {
   const testo =
     `PROMEMORIA: Gentile paziente, il suo appuntamento per ${esame} ` +
     `è tra un'ora, alle ore ${ora} ` +
-    `presso il ${STUDIO}.` +
+    `presso lo ${STUDIO}.` +
     (TEL ? ` Per info: ${TEL}.` : '');
 
   const result = await inviaSms(numero, testo);
@@ -130,7 +130,7 @@ async function inviaSmsConferma(appuntamento) {
   const testo =
     `Gentile paziente, la sua prenotazione è confermata: ` +
     `${data} alle ore ${ora} (${esame}) ` +
-    `presso il ${STUDIO}.` +
+    `presso lo ${STUDIO}.` +
     (TEL ? ` Per info: ${TEL}.` : '');
 
   const result = await inviaSms(numero, testo);
