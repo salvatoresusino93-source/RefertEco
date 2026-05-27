@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prenota un esame — Studio Medico</title>
+  <meta name="description" content="Prenota il tuo esame ecografico online">
+  <meta name="theme-color" content="#2563eb">
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────────────────── */
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{height:100%}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      font-size:15px;color:#1e293b;background:#f0f4f8;min-height:100%;
+    }
+    button,input,select,textarea{font-family:inherit;font-size:inherit}
+    .hidden{display:none!important}
+
+    /* ── Layout ──────────────────────────────────────────────────────── */
+    #prenota-app{max-width:540px;margin:0 auto;padding:0 0 40px}
+
+    /* ── Header ─────────────────────────────────────────────────────── */
+    .pr-header{
+      background:linear-gradient(135deg,#1e40af 0%,#2563eb 100%);
+      color:#fff;padding:24px 20px 20px;text-align:center;
+    }
+    .pr-header-logo{font-size:40px;margin-bottom:8px;line-height:1}
+    .pr-header h1{font-size:20px;font-weight:700;margin-bottom:4px}
+    .pr-header p{font-size:13px;opacity:.85}
+
+    /* ── Step indicator ─────────────────────────────────────────────── */
+    .pr-steps{
+      display:flex;align-items:center;justify-content:center;
+      background:#fff;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,.08);
+      position:sticky;top:0;z-index:10;
+    }
+    .pr-step{display:flex;flex-direction:column;align-items:center;gap:4px}
+    .pr-step span{
+      width:30px;height:30px;border-radius:50%;border:2px solid #cbd5e1;
+      display:flex;align-items:center;justify-content:center;
+      font-size:13px;font-weight:700;color:#94a3b8;background:#f8fafc;
+      transition:all .2s;
+    }
+    .pr-step small{font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+    .pr-step.done span{background:#dbeafe;border-color:#3b82f6;color:#2563eb}
+    .pr-step.active span{background:#2563eb;border-color:#2563eb;color:#fff}
+    .pr-step.active small{color:#2563eb}
+    .pr-step-line{flex:1;height:2px;background:#e2e8f0;max-width:36px;margin:0 4px;margin-bottom:14px}
+
+    /* ── Card ────────────────────────────────────────────────────────── */
+    .pr-card{
+      background:#fff;border-radius:16px;margin:16px 12px 0;
+      box-shadow:0 2px 8px rgba(0,0,0,.08);overflow:hidden;
+    }
+    .pr-card-title{
+      padding:18px 20px 14px;border-bottom:1px solid #f1f5f9;
+      font-size:16px;font-weight:700;color:#1e293b;
+    }
+    .pr-card-title span{color:#2563eb}
+    .pr-card-body{padding:16px 20px}
+
+    /* ── Esame card ─────────────────────────────────────────────────── */
+    .esame-grid{display:flex;flex-direction:column;gap:10px}
+    .esame-item{
+      display:flex;align-items:center;gap:14px;padding:14px 16px;
+      border:2px solid #e2e8f0;border-radius:12px;cursor:pointer;
+      background:#fafafa;transition:all .15s;
+    }
+    .esame-item:hover{border-color:#93c5fd;background:#eff6ff}
+    .esame-item.selected{border-color:#2563eb;background:#eff6ff}
+    .esame-icon{font-size:28px;flex-shrink:0}
+    .esame-nome{font-weight:600;font-size:15px;color:#1e293b;margin-bottom:2px}
+    .esame-durata{font-size:12px;color:#64748b}
+    .esame-arrow{margin-left:auto;color:#94a3b8;font-size:18px}
+
+    /* ── Date chips ─────────────────────────────────────────────────── */
+    .date-list{display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;padding-right:4px}
+    .date-item{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:12px 16px;border:2px solid #e2e8f0;border-radius:10px;
+      cursor:pointer;background:#fafafa;transition:all .15s;
+    }
+    .date-item:hover{border-color:#93c5fd;background:#eff6ff}
+    .date-item.selected{border-color:#2563eb;background:#eff6ff}
+    .date-item-txt{font-weight:600;font-size:14px;text-transform:capitalize}
+    .date-item-cnt{font-size:12px;color:#64748b;background:#f1f5f9;padding:3px 8px;border-radius:20px}
+
+    /* ── Orario ─────────────────────────────────────────────────────── */
+    .ora-section{margin-bottom:16px}
+    .ora-section-lbl{font-size:12px;font-weight:700;color:#64748b;
+      text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+    .ora-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    .ora-btn{
+      padding:10px 6px;border:2px solid #e2e8f0;border-radius:8px;
+      background:#fafafa;cursor:pointer;font-size:14px;font-weight:600;
+      color:#334155;transition:all .15s;text-align:center;
+    }
+    .ora-btn:hover{border-color:#93c5fd;background:#eff6ff}
+    .ora-btn.selected{border-color:#2563eb;background:#2563eb;color:#fff}
+
+    /* ── Form campi ─────────────────────────────────────────────────── */
+    .field{display:flex;flex-direction:column;gap:5px;flex:1}
+    .field label{
+      font-size:11px;font-weight:700;color:#64748b;
+      text-transform:uppercase;letter-spacing:.04em;
+    }
+    .field input,.field select,.field textarea{
+      border:1px solid #e2e8f0;border-radius:8px;
+      padding:10px 12px;font-size:15px;color:#1e293b;background:#fafafa;
+      width:100%;transition:border-color .15s;
+    }
+    .field input:focus,.field select:focus,.field textarea:focus{
+      outline:none;border-color:#2563eb;background:#fff;box-shadow:0 0 0 3px rgba(37,99,235,.1);
+    }
+    .field-row{display:flex;gap:12px;margin-bottom:12px}
+    .field-full{margin-bottom:12px}
+
+    /* ── Riepilogo ───────────────────────────────────────────────────── */
+    .recap{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px}
+    .recap-row{display:flex;gap:12px;padding:7px 0;border-bottom:1px solid #f1f5f9}
+    .recap-row:last-child{border-bottom:none}
+    .recap-icon{font-size:18px;flex-shrink:0;width:24px;text-align:center}
+    .recap-lbl{font-size:12px;color:#64748b;margin-bottom:1px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+    .recap-val{font-size:14px;color:#1e293b;font-weight:500}
+    .recap-note{
+      margin-top:14px;padding:12px;background:#fffbeb;border:1px solid #fde68a;
+      border-radius:8px;font-size:13px;color:#92400e;line-height:1.5;
+    }
+
+    /* ── Success ─────────────────────────────────────────────────────── */
+    .pr-success{
+      text-align:center;padding:48px 24px;
+    }
+    .pr-success-icon{font-size:72px;margin-bottom:20px;line-height:1}
+    .pr-success h2{font-size:22px;font-weight:700;color:#1e293b;margin-bottom:12px}
+    .pr-success p{color:#475569;font-size:15px;line-height:1.6;margin-bottom:8px}
+    .pr-success .tel{font-weight:700;color:#2563eb}
+
+    /* ── Buttons ─────────────────────────────────────────────────────── */
+    .pr-btn-pri{
+      display:block;width:100%;padding:14px;background:#2563eb;color:#fff;
+      border:none;border-radius:10px;font-size:15px;font-weight:700;
+      cursor:pointer;transition:background .15s;
+    }
+    .pr-btn-pri:hover{background:#1d4ed8}
+    .pr-btn-pri:disabled{background:#93c5fd;cursor:not-allowed}
+    .pr-btn-ghost{
+      display:block;width:100%;padding:12px;background:none;color:#64748b;
+      border:1px solid #e2e8f0;border-radius:10px;font-size:14px;
+      cursor:pointer;transition:all .15s;
+    }
+    .pr-btn-ghost:hover{background:#f8fafc}
+    .pr-btn-row{display:flex;gap:10px;margin-top:16px}
+    .pr-btn-row .pr-btn-ghost{flex:0 0 80px}
+    .pr-btn-row .pr-btn-pri{flex:1}
+
+    /* ── Loader ──────────────────────────────────────────────────────── */
+    .pr-loader{text-align:center;padding:32px;color:#64748b;font-size:14px}
+    .pr-spinner{
+      display:inline-block;width:32px;height:32px;
+      border:3px solid #e2e8f0;border-top-color:#2563eb;
+      border-radius:50%;animation:spin .7s linear infinite;
+      margin-bottom:10px;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ── Error ───────────────────────────────────────────────────────── */
+    .pr-error{
+      background:#fef2f2;color:#991b1b;border:1px solid #fca5a5;
+      border-radius:8px;padding:12px 14px;margin-top:14px;font-size:13px;
+    }
+
+    /* ── Vuoto ───────────────────────────────────────────────────────── */
+    .pr-empty{text-align:center;padding:32px 20px;color:#64748b;font-size:14px}
+    .pr-empty-icon{font-size:40px;margin-bottom:12px}
+
+    /* ── Mobile tweaks ───────────────────────────────────────────────── */
+    @media(max-width:400px){
+      .ora-grid{grid-template-columns:repeat(3,1fr)}
+    }
+  </style>
+</head>
+<body>
+
+<div id="prenota-app">
+
+  <!-- Header -->
+  <header class="pr-header">
+    <div class="pr-header-logo">🏥</div>
+    <h1>Prenota un esame</h1>
+    <p>Studio Medico Ecografico</p>
+  </header>
+
+  <!-- Step indicator -->
+  <div class="pr-steps" id="pr-steps">
+    <div class="pr-step active" id="dot-1"><span>1</span><small>Esame</small></div>
+    <div class="pr-step-line"></div>
+    <div class="pr-step"        id="dot-2"><span>2</span><small>Data</small></div>
+    <div class="pr-step-line"></div>
+    <div class="pr-step"        id="dot-3"><span>3</span><small>Dati</small></div>
+    <div class="pr-step-line"></div>
+    <div class="pr-step"        id="dot-4"><span>4</span><small>Conferma</small></div>
+  </div>
+
+  <!-- Main content — rendered by JS -->
+  <main id="pr-main"></main>
+
+</div>
+
+<script src="/js/prenota.js?v=20260527b"></script>
+</body>
+</html>

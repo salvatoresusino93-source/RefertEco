@@ -135,4 +135,98 @@ async function notificaAppuntamentoAnnullato(appuntamento) {
   }
 }
 
-module.exports = { notificaNuovoAppuntamento, notificaAppuntamentoAnnullato };
+// ─── EMAIL: Nuova prenotazione online (richiede approvazione) ────────────
+async function notificaPrenotazioneOnline(appuntamento, tokenJwt) {
+  const resend = getResend();
+  if (!resend) return;
+
+  const BASE_URL  = process.env.APP_URL || 'https://referteco-production.up.railway.app';
+  const paziente  = appuntamento.pazienti;
+  const esame     = appuntamento.tipi_prestazione;
+  const nome      = paziente ? `${paziente.cognome} ${paziente.nome}` : '—';
+  const tipoEsame = esame?.nome || '—';
+  const data      = formatData(appuntamento.data_ora_inizio);
+  const ora       = formatOra(appuntamento.data_ora_inizio);
+  const telefono  = paziente?.telefono || '—';
+  const nascita   = paziente?.data_nascita
+    ? new Date(paziente.data_nascita + 'T00:00:00').toLocaleDateString('it-IT')
+    : '—';
+
+  const urlConferma = `${BASE_URL}/api/prenota/conferma/${tokenJwt}`;
+  const urlRifiuta  = `${BASE_URL}/api/prenota/rifiuta/${tokenJwt}`;
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#f9f9f9;border-radius:10px;overflow:hidden;">
+      <div style="background:#d97706;padding:20px 24px;">
+        <h2 style="color:#fff;margin:0;font-size:18px;">🌐 Nuova prenotazione online</h2>
+        <p style="color:#fef3c7;margin:6px 0 0;font-size:13px;">In attesa di approvazione — rispondere il prima possibile</p>
+      </div>
+      <div style="padding:24px;background:#fff;">
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <td style="padding:8px 0;color:#777;font-size:13px;width:120px;">Paziente</td>
+            <td style="padding:8px 0;font-weight:bold;font-size:15px;color:#222;">${nome}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;color:#777;font-size:13px;">Telefono</td>
+            <td style="padding:8px 0;font-size:14px;color:#333;">${telefono}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;color:#777;font-size:13px;">Nascita</td>
+            <td style="padding:8px 0;font-size:14px;color:#333;">${nascita}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;color:#777;font-size:13px;">Esame</td>
+            <td style="padding:8px 0;font-size:14px;color:#333;">${tipoEsame}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;color:#777;font-size:13px;">Data</td>
+            <td style="padding:8px 0;font-size:14px;color:#333;">${data}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 0;color:#777;font-size:13px;">Ora</td>
+            <td style="padding:8px 0;font-size:14px;color:#333;">${ora}</td>
+          </tr>
+        </table>
+      </div>
+      <div style="padding:22px 24px;background:#fffbeb;text-align:center;">
+        <p style="margin:0 0 18px;font-size:14px;color:#78350f;font-weight:600;">Approva o rifiuta la prenotazione:</p>
+        <table style="margin:0 auto;border-spacing:16px 0;border-collapse:separate;">
+          <tr>
+            <td>
+              <a href="${urlConferma}"
+                 style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;
+                        padding:13px 32px;border-radius:8px;font-size:16px;font-weight:700;">
+                ✅ Conferma
+              </a>
+            </td>
+            <td>
+              <a href="${urlRifiuta}"
+                 style="display:inline-block;background:#ef4444;color:#fff;text-decoration:none;
+                        padding:13px 32px;border-radius:8px;font-size:16px;font-weight:700;">
+                ❌ Rifiuta
+              </a>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:14px 0 0;font-size:11px;color:#92400e;">I link scadono tra 7 giorni.</p>
+      </div>
+      <div style="padding:12px 24px;background:#f0f9e8;font-size:11px;color:#888;text-align:center;">
+        Agenda Studio — prenotazione online
+      </div>
+    </div>
+  `;
+
+  try {
+    await resend.emails.send({
+      from:    'Agenda Studio <onboarding@resend.dev>',
+      to:      MEDICO_EMAIL,
+      subject: `🌐 ONLINE: ${nome} — ${tipoEsame} — ${data} ore ${ora}`,
+      html,
+    });
+  } catch (e) {
+    console.error('[email] Errore notifica prenotazione online:', e.message);
+  }
+}
+
+module.exports = { notificaNuovoAppuntamento, notificaAppuntamentoAnnullato, notificaPrenotazioneOnline };

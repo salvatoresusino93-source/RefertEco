@@ -180,13 +180,16 @@ button { font-family:inherit; }
 .stato-in_corso  { background:#d1fae5; color:#065f46; border-left-color:#10b981; }
 .stato-refertato { background:#f1f5f9; color:#475569; border-left-color:#94a3b8; }
 .stato-annullato { background:#fee2e2; color:#991b1b; border-left-color:#ef4444; opacity:.55; }
+.stato-in_attesa { background:#fef3c7; color:#78350f; border-left-color:#f59e0b;
+                   border-left-style:dashed; }
 
 /* Sidebar border colors */
-.sidebar-item.stato-prenotato { border-left-color:#3b82f6; }
-.sidebar-item.stato-arrivato  { border-left-color:#f59e0b; }
-.sidebar-item.stato-in_corso  { border-left-color:#10b981; }
-.sidebar-item.stato-refertato { border-left-color:#94a3b8; }
-.sidebar-item.stato-annullato { border-left-color:#ef4444; opacity:.6; }
+.sidebar-item.stato-prenotato  { border-left-color:#3b82f6; }
+.sidebar-item.stato-arrivato   { border-left-color:#f59e0b; }
+.sidebar-item.stato-in_corso   { border-left-color:#10b981; }
+.sidebar-item.stato-refertato  { border-left-color:#94a3b8; }
+.sidebar-item.stato-annullato  { border-left-color:#ef4444; opacity:.6; }
+.sidebar-item.stato-in_attesa  { border-left-color:#f59e0b; }
 
 /* ─── MODAL ───────────────────────────────────────────────────────────── */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5);

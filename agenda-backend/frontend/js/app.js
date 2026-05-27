@@ -9,6 +9,7 @@ const SLOT_MIN  = 30;         // slot cliccabili ogni 30 min
 const SLOT_H    = SLOT_MIN * PX_PER_MIN; // 40px
 
 const STATI = {
+  in_attesa: '🌐 Online (in attesa)',
   prenotato: 'Prenotato',
   arrivato:  'Arrivato',
   in_corso:  'In corso',
@@ -433,7 +434,15 @@ async function loadAppInModal(id) {
 }
 
 function renderStatoBtns(attuale) {
-  $('stato-btns').innerHTML = ['prenotato','arrivato','in_corso','refertato'].map(s =>
+  // Banner informativo per prenotazioni online in attesa
+  const banner = attuale === 'in_attesa'
+    ? `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:6px;
+         padding:8px 10px;margin-bottom:8px;font-size:12px;color:#78350f;">
+         🌐 Prenotazione online — in attesa di approvazione.<br>
+         Clicca <strong>Prenotato</strong> per confermare manualmente.
+       </div>`
+    : '';
+  $('stato-btns').innerHTML = banner + ['prenotato','arrivato','in_corso','refertato'].map(s =>
     `<button class="stato-btn stato-${s}${s===attuale?' active':''}"
       data-stato="${s}" onclick="clickStato(this,'${s}')">${STATI[s]}</button>`
   ).join('');
@@ -649,6 +658,7 @@ td{padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:13px}
 .badge{padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700}
 .stato-prenotato{background:#dbeafe;color:#1e40af}.stato-arrivato{background:#fef3c7;color:#92400e}
 .stato-in_corso{background:#d1fae5;color:#065f46}.stato-refertato{background:#f1f5f9;color:#475569}
+.stato-in_attesa{background:#fef3c7;color:#78350f}
 </style></head><body>
 <h1>🏥 Lista appuntamenti</h1>
 <p class="sub">${data} — ${list.length} appuntament${list.length===1?'o':'i'}</p>
@@ -775,6 +785,8 @@ async function apriDettaglioPaziente(id) {
           ? 'background:#fce4e4;color:#c62828'
           : stato === 'completato'
           ? 'background:#e8f5e9;color:#2e7d32'
+          : stato === 'in_attesa'
+          ? 'background:#fef3c7;color:#78350f'
           : 'background:#e3f2fd;color:#1565c0';
         return `<div class="paz-storico-item">
           <span class="paz-storico-data">${dataStr} ${ora}</span>

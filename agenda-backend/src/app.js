@@ -1,5 +1,5 @@
 require('dotenv').config({ path: require('path').resolve(__dirname, '..', '.env') });
-// v20260527a
+// v20260527b
 const express = require('express');
 const http    = require('http');
 const cors    = require('cors');
@@ -14,6 +14,8 @@ const prestazioniRoutes  = require('./routes/prestazioni');
 const syncRoutes         = require('./routes/sync');
 const blocchiRoutes      = require('./routes/blocchi');
 const gbpRoutes          = require('./routes/gbp');
+const publicRoutes       = require('./routes/public');
+const prenotaRoutes      = require('./routes/prenota');
 
 const app    = express();
 const server = http.createServer(app);
@@ -36,6 +38,8 @@ app.use('/api/prestazioni',   prestazioniRoutes);
 app.use('/api/sync',          syncRoutes);
 app.use('/api/blocchi',       blocchiRoutes);
 app.use('/api/gbp',           gbpRoutes);
+app.use('/api/public',        publicRoutes);  // no auth — prenotazione online
+app.use('/api/prenota',       prenotaRoutes); // no auth — conferma/rifiuto via email
 
 // ─── Health check ────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
@@ -122,6 +126,11 @@ app.post('/api/reminder/test', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ─── Pagina prenotazione online (URL pulito: /prenota) ───────────────────
+app.get('/prenota', (req, res) => {
+  res.sendFile(path.join(FRONTEND_PATH, 'prenota.html'));
 });
 
 // ─── Fallback SPA ────────────────────────────────────────────────────────
