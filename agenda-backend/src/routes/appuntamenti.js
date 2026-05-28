@@ -112,8 +112,8 @@ router.post('/', async (req, res) => {
 
   if (fasce && fasce.length > 0) {
     const FASCE_ORARIE = {
-      mattina:    { start: '08:00', end: '13:00' },
-      pomeriggio: { start: '13:00', end: '20:00' },
+      mattina:    { start: '08:00', end: '14:00' },
+      pomeriggio: { start: '14:00', end: '20:00' },
       giornata:   { start: '08:00', end: '20:00' },
     };
     for (const f of fasce) {

@@ -8,8 +8,8 @@ router.use(requireAuth);
 
 // Fasce orarie fisse (ora locale Italia)
 const FASCE = {
-  mattina:    { startH: 8,  endH: 13 },
-  pomeriggio: { startH: 13, endH: 20 },
+  mattina:    { startH: 8,  endH: 14 },
+  pomeriggio: { startH: 14, endH: 20 },
   giornata:   { startH: 8,  endH: 20 },
 };
 

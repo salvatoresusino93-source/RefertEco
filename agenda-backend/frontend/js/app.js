@@ -19,8 +19,8 @@ const STATI = {
 const GIORNI = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
 
 const BLOCCO_TIPI = {
-  mattina:    { label: 'Mattina bloccata',    startH: 8,  endH: 13 },
-  pomeriggio: { label: 'Pomeriggio bloccato', startH: 13, endH: 20 },
+  mattina:    { label: 'Mattina bloccata',    startH: 8,  endH: 14 },
+  pomeriggio: { label: 'Pomeriggio bloccato', startH: 14, endH: 20 },
   giornata:   { label: 'Giornata bloccata',   startH: 8,  endH: 20 },
 };
 
