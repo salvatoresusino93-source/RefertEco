@@ -50,6 +50,7 @@ let _editId           = null;   // id appuntamento in modifica
 let _pazienteId       = null;   // paziente selezionato nel modal
 let _searchTimer      = null;
 let _bloccoTipo       = null;   // tipo selezionato nel modal blocco fascia
+let _pazCache         = {};     // cache pazienti: id → oggetto completo
 let _scrollShift      = null;   // px da sommare allo scrollLeft corrente dopo re-render
 let _firstRender      = true;   // primo render mobile: posiziona su settimana corrente
 let _scrollDebounce   = null;
@@ -511,7 +512,9 @@ async function loadAppInModal(id) {
     const a = await api.appuntamento(id);
     if (a.pazienti) {
       _pazienteId = a.paziente_id;
+      _pazCache[a.paziente_id] = a.pazienti;   // aggiungi alla cache
       showPazSelezionato(`${a.pazienti.cognome} ${a.pazienti.nome}`);
+      showPazInfo(a.pazienti);
     }
     $('app-tipo').value = a.tipo_id || '';
     checkPreparazione();
@@ -601,6 +604,7 @@ function resetPaziente() {
   $('paziente-search').style.display = '';
   $('paz-results').classList.add('hidden');
   $('paz-selezionato').classList.add('hidden');
+  $('paz-info-panel').classList.add('hidden');
   $('btn-nuovo-paz-toggle').style.display = '';
 }
 
@@ -610,6 +614,19 @@ function showPazSelezionato(nome) {
   $('paziente-search').style.display = 'none';
   $('btn-nuovo-paz-toggle').style.display = 'none';
   $('paz-results').classList.add('hidden');
+}
+
+function showPazInfo(p) {
+  if (!p) return;
+  const nasc = p.data_nascita
+    ? '📅 ' + new Date(p.data_nascita).toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit',year:'numeric'})
+    : '';
+  const tel = p.telefono ? '📱 ' + p.telefono : '';
+  const cf  = p.codice_fiscale ? '🪪 ' + p.codice_fiscale.toUpperCase() : '';
+  $('paz-info-nascita').textContent = nasc;
+  $('paz-info-tel').textContent     = tel;
+  $('paz-info-cf').textContent      = cf;
+  $('paz-info-panel').classList.remove('hidden');
 }
 
 async function onPazSearch() {
@@ -625,24 +642,34 @@ async function onPazSearch() {
 }
 
 function renderPazResults(list) {
+  // Metti in cache tutti i pazienti trovati (id → oggetto)
+  list.forEach(p => { _pazCache[p.id] = p; });
   const el = $('paz-results');
   if (!list.length) {
     el.innerHTML = '<div class="paz-item"><em>Nessun risultato</em></div>';
   } else {
     el.innerHTML = list.map(p => {
       const nasc = p.data_nascita ? new Date(p.data_nascita).toLocaleDateString('it-IT') : '';
-      return `<div class="paz-item" onclick="selezionaPaz('${p.id}','${esc(p.cognome)} ${esc(p.nome)}')">
+      const tel  = p.telefono ? ' · ' + p.telefono : '';
+      return `<div class="paz-item" onclick="selezionaPaz('${p.id}')">
         <div class="paz-nome">${esc(p.cognome)} ${esc(p.nome)}</div>
-        <div class="paz-info">${nasc?'Nato: '+nasc:''} ${p.codice_fiscale||''}</div>
+        <div class="paz-info">${nasc ? '📅 ' + nasc : ''}${tel}</div>
       </div>`;
     }).join('');
   }
   el.classList.remove('hidden');
 }
 
-function selezionaPaz(id, nome) {
+async function selezionaPaz(id) {
   _pazienteId = id;
+  // Usa la cache se disponibile, altrimenti fetch
+  let p = _pazCache[id];
+  if (!p) {
+    try { p = await api.paziente(id); _pazCache[id] = p; } catch {}
+  }
+  const nome = p ? `${p.cognome} ${p.nome}` : id;
   showPazSelezionato(nome);
+  showPazInfo(p);
 }
 
 async function salvaNuovoPaz() {
@@ -984,19 +1011,25 @@ async function eliminaPaziente() {
 
 function nuovoAppDaPaziente() {
   if (!_pdId) return;
-  // Salva i valori PRIMA di chiudere il modal (chiudiDettaglioPaziente azzera _pdId)
   const idPaz   = _pdId;
   const cognome = $('pd-cognome').value.trim();
   const nome    = $('pd-nome').value.trim();
   chiudiDettaglioPaziente();
   openModal({});
-  // Pre-seleziona il paziente nel modal appuntamento
+  // Pre-seleziona il paziente con i dati anagrafici
   _pazienteId = idPaz;
   $('paziente-search').style.display = 'none';
   $('paz-results').classList.add('hidden');
   $('paz-nome-display').textContent = `${cognome} ${nome}`;
   $('paz-selezionato').classList.remove('hidden');
   $('btn-nuovo-paz-toggle').style.display = 'none';
+  // Mostra i dati anagrafici (dalla cache se disponibile, altrimenti fetch)
+  const cached = _pazCache[idPaz];
+  if (cached) {
+    showPazInfo(cached);
+  } else {
+    api.paziente(idPaz).then(p => { _pazCache[idPaz] = p; showPazInfo(p); }).catch(() => {});
+  }
 }
 
 // ─── Reminder preparazione ────────────────────────────────────────────────

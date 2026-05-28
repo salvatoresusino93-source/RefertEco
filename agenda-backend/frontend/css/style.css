@@ -234,6 +234,15 @@ button { font-family:inherit; }
   border-radius:var(--radius); padding:8px 12px; display:flex;
   align-items:center; justify-content:space-between; font-weight:600; }
 
+/* Pannello dati anagrafici paziente selezionato */
+.paz-info-panel {
+  display:flex; flex-wrap:wrap; gap:4px 16px;
+  background:#f8fafc; border:1px solid var(--border);
+  border-radius:var(--radius); padding:8px 12px; margin-top:4px;
+  font-size:12px; color:var(--muted);
+}
+.paz-info-panel span:empty { display:none; }
+
 .nuovo-paz-form { background:var(--bg); border:1px solid var(--border);
   border-radius:var(--radius); padding:14px; display:flex; flex-direction:column; gap:10px; }
 
