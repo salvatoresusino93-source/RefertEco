@@ -17,15 +17,23 @@ const STATI = {
 };
 const GIORNI = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
 
+const BLOCCO_TIPI = {
+  mattina:    { label: 'Mattina bloccata',    startH: 8,  endH: 13 },
+  pomeriggio: { label: 'Pomeriggio bloccato', startH: 13, endH: 20 },
+  giornata:   { label: 'Giornata bloccata',   startH: 8,  endH: 20 },
+};
+
 // ─── Stato ────────────────────────────────────────────────────────────────
-let _user         = null;
-let _viewStart    = null;   // lunedì della settimana visualizzata
-let _mobileDay    = null;   // giorno corrente in vista mobile
-let _appointments = [];
-let _prestazioni  = [];
-let _editId       = null;   // id appuntamento in modifica
-let _pazienteId   = null;   // paziente selezionato nel modal
-let _searchTimer  = null;
+let _user             = null;
+let _viewStart        = null;   // lunedì della settimana visualizzata
+let _mobileDay        = null;   // giorno corrente in vista mobile
+let _appointments     = [];
+let _indisponibilita  = [];     // blocchi fascia oraria
+let _prestazioni      = [];
+let _editId           = null;   // id appuntamento in modifica
+let _pazienteId       = null;   // paziente selezionato nel modal
+let _searchTimer      = null;
+let _bloccoTipo       = null;   // tipo selezionato nel modal blocco
 
 function isMobile() { return window.innerWidth <= 768; }
 
@@ -111,17 +119,19 @@ function initSocket() {
     s.on('appuntamento:nuovo',      refresh);
     s.on('appuntamento:aggiornato', refresh);
     s.on('appuntamento:annullato',  refresh);
+    s.on('indisponibilita:creata',  () => refreshWeek());
+    s.on('indisponibilita:rimossa', () => refreshWeek());
   } catch {}
 }
 
 // ─── Calendar load & render ───────────────────────────────────────────────
 async function refreshWeek() {
-  try {
-    _appointments = await api.appuntamenti(
-      toISO(_viewStart),
-      toISO(addDays(_viewStart, 7))
-    );
-  } catch { _appointments = []; }
+  const from = toDateStr(_viewStart);
+  const to   = toDateStr(addDays(_viewStart, 6));
+  try { _appointments     = await api.appuntamenti(toISO(_viewStart), toISO(addDays(_viewStart, 7))); }
+  catch { _appointments   = []; }
+  try { _indisponibilita  = await api.indisponibilita(from, to); }
+  catch { _indisponibilita = []; }
   renderCalendar();
   renderPeriod();
 }
@@ -203,7 +213,26 @@ function renderCalendar() {
       </div>`;
     }
 
-    days += `<div class="cal-day${todayCls}" style="height:${totalPx}px">${lines}${slots}${appHtml}</div>`;
+    // Blocchi indisponibilità (z-index 1, sotto gli appuntamenti)
+    let blocchiHtml = '';
+    for (const b of _indisponibilita.filter(x => x.data === dateStr)) {
+      const bt = BLOCCO_TIPI[b.tipo];
+      if (!bt) continue;
+      const top    = (bt.startH - CAL_START) * 60 * PX_PER_MIN;
+      const height = (bt.endH - bt.startH) * 60 * PX_PER_MIN;
+      const motivo = b.motivo ? esc(b.motivo) : '';
+      const tooltip = `${bt.label}${motivo ? ' — ' + motivo : ''}\n\nClicca per rimuovere il blocco`;
+      blocchiHtml += `<div class="cal-blocco"
+        style="top:${top}px;height:${height}px"
+        onclick="onBloccoClick('${b.id}',event)"
+        title="${tooltip}">
+        <span class="cal-blocco-icon">🔒</span>
+        <span class="cal-blocco-label">${bt.label}</span>
+        ${motivo ? `<span class="cal-blocco-motivo">${motivo}</span>` : ''}
+      </div>`;
+    }
+
+    days += `<div class="cal-day${todayCls}" style="height:${totalPx}px">${lines}${slots}${blocchiHtml}${appHtml}</div>`;
   }
 
   $('cal-wrap').innerHTML = `${hdr}
@@ -567,7 +596,17 @@ async function salvaNuovoPaz() {
 }
 
 // ─── Slot / App click ─────────────────────────────────────────────────────
-function onSlotClick(date, time) { openModal({ date, time }); }
+function onSlotClick(date, time) {
+  // Blocco se lo slot cade in una fascia indisponibile
+  const [hh, mm] = time.split(':').map(Number);
+  const slotMin  = hh * 60 + mm;
+  for (const b of _indisponibilita.filter(x => x.data === date)) {
+    const bt = BLOCCO_TIPI[b.tipo];
+    if (!bt) continue;
+    if (slotMin >= bt.startH * 60 && slotMin < bt.endH * 60) return;
+  }
+  openModal({ date, time });
+}
 function onAppClick(id, e) { if(e) e.stopPropagation(); openModal({ id }); }
 
 // ─── Stampa lista giornaliera ─────────────────────────────────────────────
@@ -626,6 +665,11 @@ function menuLogout() {
 function menuArchivio() {
   chiudiMenu();
   apriArchivio();
+}
+
+function menuBlocco() {
+  chiudiMenu();
+  openModalBlocco(toDateStr(new Date()));
 }
 
 // ─── Archivio Pazienti ─────────────────────────────────────────────────────
@@ -715,6 +759,64 @@ function checkPreparazione() {
 
   const richiede = PREP_KEYWORDS.some(k => nome.includes(k));
   reminder.classList.toggle('hidden', !richiede);
+}
+
+// ─── Blocco fascia oraria ─────────────────────────────────────────────────
+
+function openModalBlocco(dateStr) {
+  _bloccoTipo = null;
+  $('blocco-data').value  = dateStr || toDateStr(new Date());
+  $('blocco-motivo').value = '';
+  document.querySelectorAll('.blocco-tipo-btn').forEach(b => b.classList.remove('active'));
+  $('blocco-overlay').onclick = e => { if (e.target === e.currentTarget) chiudiBlocco(); };
+  $('blocco-overlay').classList.remove('hidden');
+}
+
+function chiudiBlocco() {
+  $('blocco-overlay').classList.add('hidden');
+  _bloccoTipo = null;
+}
+
+function selezionaTipoBlocco(tipo, btn) {
+  _bloccoTipo = tipo;
+  document.querySelectorAll('.blocco-tipo-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+async function salvaBlocco() {
+  const dataVal = $('blocco-data').value;
+  if (!dataVal)    { alert('Seleziona una data'); return; }
+  if (!_bloccoTipo) { alert('Seleziona la fascia oraria'); return; }
+
+  const btn = $('btn-salva-blocco');
+  btn.textContent = 'Salvataggio…'; btn.disabled = true;
+  try {
+    await api.creaIndisponibilita({
+      data:   dataVal,
+      tipo:   _bloccoTipo,
+      motivo: $('blocco-motivo').value.trim() || null
+    });
+    chiudiBlocco();
+    await refreshWeek();
+  } catch(ex) {
+    alert((ex.status === 409 ? '⚠️ ' : '❌ Errore: ') + ex.message);
+  } finally {
+    btn.textContent = '🔒 Blocca'; btn.disabled = false;
+  }
+}
+
+async function onBloccoClick(id, e) {
+  e.stopPropagation();
+  const b  = _indisponibilita.find(x => x.id === id);
+  if (!b) return;
+  const bt = BLOCCO_TIPI[b.tipo];
+  const label = bt?.label || b.tipo;
+  const msg = `Rimuovere il blocco?\n\n📅 ${new Date(b.data + 'T12:00:00').toLocaleDateString('it-IT', { weekday:'long', day:'2-digit', month:'long' })}\n🔒 ${label}${b.motivo ? '\n📝 ' + b.motivo : ''}`;
+  if (!confirm(msg)) return;
+  try {
+    await api.eliminaIndisponibilita(id);
+    await refreshWeek();
+  } catch(ex) { alert('Errore: ' + ex.message); }
 }
 
 // ─── Shortcut ─────────────────────────────────────────────────────────────

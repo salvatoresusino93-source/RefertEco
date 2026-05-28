@@ -298,6 +298,45 @@ button { font-family:inherit; }
 .mbb-icon { font-size:22px; line-height:1; }
 .mbb-lbl  { font-size:11px; font-weight:600; }
 
+/* ─── BLOCCO INDISPONIBILITÀ ─────────────────────────────────────────── */
+.cal-blocco {
+  position: absolute; left: 0; right: 0; z-index: 1;
+  background: repeating-linear-gradient(-45deg,
+    rgba(239,68,68,.07), rgba(239,68,68,.07) 10px,
+    rgba(239,68,68,.02) 10px, rgba(239,68,68,.02) 20px);
+  border-left: 3px solid rgba(239,68,68,.55);
+  border-top: 1px dashed rgba(239,68,68,.4);
+  cursor: pointer; overflow: hidden;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 3px;
+  transition: background .15s;
+}
+.cal-blocco:hover {
+  background: repeating-linear-gradient(-45deg,
+    rgba(239,68,68,.16), rgba(239,68,68,.16) 10px,
+    rgba(239,68,68,.07) 10px, rgba(239,68,68,.07) 20px);
+}
+.cal-blocco-icon  { font-size: 18px; line-height: 1; }
+.cal-blocco-label { font-size: 11px; font-weight: 700; color: rgba(153,27,27,.85);
+  text-align: center; padding: 0 4px; }
+.cal-blocco-motivo { font-size: 10px; color: rgba(153,27,27,.6); text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 90%; padding: 0 4px; }
+
+/* Tipo selector nel modal blocco */
+.blocco-tipo-btns { display: flex; gap: 8px; }
+.blocco-tipo-btn {
+  flex: 1; padding: 10px 6px; border-radius: var(--radius);
+  border: 2px solid var(--border); background: var(--surface);
+  cursor: pointer; font-size: 12px; font-weight: 600;
+  text-align: center; line-height: 1.5; color: var(--text);
+  transition: border-color .15s, background .15s;
+}
+.blocco-tipo-btn small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
+.blocco-tipo-btn:hover { background: var(--bg); border-color: var(--muted); }
+.blocco-tipo-btn.active { border-color: #ef4444; background: #fef2f2; color: #991b1b; }
+.blocco-tipo-btn.active small { color: #b91c1c; }
+
 /* ─── RESPONSIVE ──────────────────────────────────────────────────────── */
 @media (max-width:768px) {
   /* Mostra elementi mobile */

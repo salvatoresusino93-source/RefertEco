@@ -81,6 +81,36 @@ router.post('/', async (req, res) => {
     });
   }
 
+  // Verifica indisponibilità — usa ora locale Italia (en-CA → YYYY-MM-DD)
+  const italyDate  = new Date(data_ora_inizio).toLocaleDateString('en-CA', { timeZone: 'Europe/Rome' });
+  const italyStart = new Date(data_ora_inizio).toLocaleTimeString('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' });
+  const italyEnd   = new Date(data_ora_fine).toLocaleTimeString('en-GB',   { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' });
+
+  const { data: blocchi } = await supabase
+    .from('indisponibilita')
+    .select('tipo, motivo')
+    .eq('data', italyDate);
+
+  if (blocchi && blocchi.length > 0) {
+    const FASCE = {
+      mattina:    { start: '08:00', end: '13:00' },
+      pomeriggio: { start: '13:00', end: '20:00' },
+      giornata:   { start: '08:00', end: '20:00' },
+    };
+    for (const b of blocchi) {
+      const f = FASCE[b.tipo];
+      if (!f) continue;
+      // Sovrapposizione: start < blkEnd AND end > blkStart
+      if (italyStart < f.end && italyEnd > f.start) {
+        const motivo = b.motivo ? ` — ${b.motivo}` : '';
+        return res.status(409).json({
+          error: `Fascia oraria non disponibile (${b.tipo}${motivo})`,
+          tipo:  'indisponibilita'
+        });
+      }
+    }
+  }
+
   const accession_number = await generaAccessionNumber();
 
   const { data, error } = await supabase

@@ -47,4 +47,9 @@ const api = {
 
   // Prestazioni
   prestazioni: () => api._req('GET', '/prestazioni'),
+
+  // Indisponibilità
+  indisponibilita:        (from, to) => api._req('GET',    `/indisponibilita?from=${from}&to=${to}`),
+  creaIndisponibilita:    (data)     => api._req('POST',   '/indisponibilita', data),
+  eliminaIndisponibilita: (id)       => api._req('DELETE', `/indisponibilita/${id}`),
 };

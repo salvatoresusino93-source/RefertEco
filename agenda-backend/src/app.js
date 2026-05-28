@@ -7,11 +7,12 @@ const path    = require('path');
 
 const { initSocket } = require('./socket');
 const { avviaReminder, inviaPromemoriDomani } = require('./services/reminder');
-const authRoutes         = require('./routes/auth');
-const pazientiRoutes     = require('./routes/pazienti');
-const appuntamentiRoutes = require('./routes/appuntamenti');
-const prestazioniRoutes  = require('./routes/prestazioni');
-const syncRoutes         = require('./routes/sync');
+const authRoutes              = require('./routes/auth');
+const pazientiRoutes          = require('./routes/pazienti');
+const appuntamentiRoutes      = require('./routes/appuntamenti');
+const prestazioniRoutes       = require('./routes/prestazioni');
+const syncRoutes              = require('./routes/sync');
+const indisponibilitaRoutes   = require('./routes/indisponibilita');
 
 const app    = express();
 const server = http.createServer(app);
@@ -28,11 +29,12 @@ const FRONTEND_PATH = path.resolve(__dirname, '..', '..', 'agenda-frontend');
 app.use(express.static(FRONTEND_PATH));
 
 // ─── API Routes ───────────────────────────────────────────────────────────
-app.use('/api/auth',          authRoutes);
-app.use('/api/pazienti',      pazientiRoutes);
-app.use('/api/appuntamenti',  appuntamentiRoutes);
-app.use('/api/prestazioni',   prestazioniRoutes);
-app.use('/api/sync',          syncRoutes);
+app.use('/api/auth',              authRoutes);
+app.use('/api/pazienti',          pazientiRoutes);
+app.use('/api/appuntamenti',      appuntamentiRoutes);
+app.use('/api/prestazioni',       prestazioniRoutes);
+app.use('/api/sync',              syncRoutes);
+app.use('/api/indisponibilita',   indisponibilitaRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
