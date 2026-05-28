@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS indisponibilita (
   data        DATE        NOT NULL,
   tipo        VARCHAR(20) NOT NULL CHECK (tipo IN ('mattina', 'pomeriggio', 'giornata')),
   motivo      TEXT,
-  created_by  INTEGER REFERENCES utenti(id),
+  created_by  UUID REFERENCES utenti(id),
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
