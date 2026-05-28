@@ -6,7 +6,10 @@
 
 const cron    = require('node-cron');
 const supabase = require('./supabase');
-const { inviaPromemoria } = require('./sms');
+const { inviaPromemoria, inviaPromemoria1Ora } = require('./sms');
+const { popolaFestivita } = require('./festivita');
+const { leggiEventiPersonali, getCreds } = require('./googleCalendar');
+const { aggiornaOreSettimana } = require('./googleBusiness');
 
 // ─── Carica appuntamenti di domani da Supabase ────────────────────────────
 async function appuntamentiDomani() {
@@ -60,6 +63,12 @@ async function inviaPromemoriDomani() {
       continue;
     }
 
+    if (app.invia_sms_promemoria === false) {
+      console.log(`  [SALTATO] ${nome} — promemoria SMS disattivato per questo appuntamento`);
+      saltati++;
+      continue;
+    }
+
     try {
       const result = await inviaPromemoria(app);
       console.log(`  [OK] ${nome} → ${result.numero} (SID: ${result.sid})`);
@@ -74,14 +83,127 @@ async function inviaPromemoriDomani() {
   return { ok: true, inviati, saltati, errori, totale: lista.length };
 }
 
-// ─── Avvia il cron job ───────────────────────────────────────────────────
+// ─── Invia promemoria 1 ora prima dell'appuntamento ──────────────────────
+async function controllaSmsUnaOra() {
+  const ora = new Date();
+
+  // Finestra: appuntamenti che iniziano tra 59 e 61 minuti da adesso
+  const da = new Date(ora.getTime() + 59 * 60 * 1000);
+  const a  = new Date(ora.getTime() + 61 * 60 * 1000);
+
+  const { data, error } = await supabase
+    .from('appuntamenti')
+    .select('*, pazienti(*), tipi_prestazione(*)')
+    .neq('stato', 'annullato')
+    .gte('data_ora_inizio', da.toISOString())
+    .lte('data_ora_inizio', a.toISOString());
+
+  if (error || !data || data.length === 0) return;
+
+  for (const app of data) {
+    const telefono = app.pazienti?.telefono;
+    const nome     = app.pazienti ? `${app.pazienti.nome} ${app.pazienti.cognome}` : app.id;
+    if (!telefono) continue;
+    if (app.invia_sms_promemoria === false) {
+      console.log(`[SMS 1h] Saltato ${nome} — promemoria SMS disattivato`);
+      continue;
+    }
+
+    try {
+      await inviaPromemoria1Ora(app);
+      console.log(`[SMS 1h] Inviato a ${nome}`);
+    } catch (e) {
+      console.error(`[SMS 1h] Errore ${nome}: ${e.message}`);
+    }
+  }
+}
+
+// ─── Sincronizza impegni personali da Google Calendar → blocchi_agenda ───
+async function sincronizzaBlocchiGoogleCalendar() {
+  if (!getCreds()) {
+    console.log('[GCal Sync] Credenziali non configurate, skip.');
+    return;
+  }
+
+  // Importa i prossimi 30 giorni
+  const da = new Date();
+  da.setHours(0, 0, 0, 0);
+  const a = new Date(da);
+  a.setDate(a.getDate() + 30);
+
+  let eventi;
+  try {
+    eventi = await leggiEventiPersonali(da.toISOString(), a.toISOString());
+  } catch (e) {
+    console.error('[GCal Sync] Errore lettura eventi:', e.message);
+    return;
+  }
+
+  if (!eventi.length) {
+    console.log('[GCal Sync] Nessun impegno personale nei prossimi 30 giorni.');
+    return;
+  }
+
+  // Rimuovi blocchi google_calendar esistenti nel periodo (per aggiornare)
+  await supabase
+    .from('blocchi_agenda')
+    .delete()
+    .eq('tipo', 'google_calendar')
+    .gte('data_ora_inizio', da.toISOString())
+    .lte('data_ora_inizio', a.toISOString());
+
+  let inseriti = 0;
+  for (const ev of eventi) {
+    // Evento tutto il giorno
+    const tuttoIlGiorno = !!(ev.start?.date && !ev.start?.dateTime);
+    const inizio = ev.start?.dateTime || (ev.start?.date + 'T00:00:00.000Z');
+    const fine   = ev.end?.dateTime   || (ev.end?.date   + 'T23:59:59.000Z');
+
+    const { error } = await supabase.from('blocchi_agenda').insert({
+      data_ora_inizio: inizio,
+      data_ora_fine:   fine,
+      motivo:          ev.summary || 'Impegno personale',
+      tipo:            'google_calendar',
+      tutto_il_giorno: tuttoIlGiorno,
+    });
+
+    if (!error) inseriti++;
+  }
+
+  console.log(`[GCal Sync] Importati ${inseriti} impegni da Google Calendar`);
+}
+
+// ─── Avvia i cron job ────────────────────────────────────────────────────
 function avviaReminder() {
-  // Ogni giorno alle 19:00 ora italiana (Europe/Rome)
+  // Ogni giorno alle 19:00 ora italiana → promemoria per domani
   cron.schedule('0 19 * * *', inviaPromemoriDomani, {
     timezone: 'Europe/Rome'
   });
 
-  console.log('[SMS Reminder] Cron job attivo — invio SMS ogni giorno alle 19:00 (Europe/Rome)');
+  // Ogni minuto → controlla appuntamenti tra 1 ora
+  cron.schedule('* * * * *', controllaSmsUnaOra);
+
+  // Ogni 1 gennaio alle 09:00 → popola festività anno nuovo
+  cron.schedule('0 9 1 1 *', () => {
+    const anno = new Date().getFullYear();
+    popolaFestivita(anno).catch(e => console.error('[Festività]', e.message));
+    popolaFestivita(anno + 1).catch(e => console.error('[Festività]', e.message));
+  }, { timezone: 'Europe/Rome' });
+
+  // Ogni mattina alle 06:00 → importa impegni personali da Google Calendar come blocchi
+  cron.schedule('0 6 * * *', sincronizzaBlocchiGoogleCalendar, { timezone: 'Europe/Rome' });
+
+  // Ogni domenica alle 20:00 → aggiorna orari Google Business Profile per i prossimi 30 giorni
+  cron.schedule('0 20 * * 0', () => {
+    aggiornaOreSettimana().catch(e => console.error('[GBP] Errore cron domenicale:', e.message));
+  }, { timezone: 'Europe/Rome' });
+
+  console.log('[SMS Reminder] Cron job attivi — 19:00 SMS + 1h prima + sync GCal 06:00 + GBP domenica 20:00 (Europe/Rome)');
+
+  // All'avvio: popola festività anno corrente e prossimo se non già presenti
+  const annoOra = new Date().getFullYear();
+  popolaFestivita(annoOra).catch(e => console.error('[Festività avvio]', e.message));
+  popolaFestivita(annoOra + 1).catch(e => console.error('[Festività avvio]', e.message));
 }
 
 module.exports = { avviaReminder, inviaPromemoriDomani };

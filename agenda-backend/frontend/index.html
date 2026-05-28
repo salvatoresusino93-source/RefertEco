@@ -49,6 +49,7 @@
           <button class="menu-item" onclick="menuNuovoApp()">➕&nbsp; Nuovo appuntamento</button>
           <button class="menu-item" onclick="menuArchivio()">👥&nbsp; Archivio pazienti</button>
           <button class="menu-item" onclick="menuStampa()">🖨&nbsp; Stampa giornata</button>
+          <button class="menu-item" onclick="menuBlocco()">🔒&nbsp; Blocca fascia oraria</button>
           <div class="menu-divider"></div>
           <button class="menu-item menu-item--danger" onclick="menuLogout()">🚪&nbsp; Esci</button>
         </div>
@@ -351,6 +352,55 @@
       <div class="modal-ftr-r">
         <button class="btn-ghost" onclick="chiudiDettaglioPaziente()">Chiudi</button>
         <button class="btn-primary" id="pd-btn-salva" onclick="salvaPaziente()">Salva modifiche</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ MODAL BLOCCO FASCIA ══════════════════════════ -->
+<div id="blocco-overlay" class="modal-overlay hidden">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-hdr">
+      <h2>🔒 Blocca fascia oraria</h2>
+      <button class="btn-icon modal-close" onclick="chiudiBlocco()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="field">
+        <label>Data *</label>
+        <input type="date" id="blocco-data" required>
+      </div>
+
+      <div class="field">
+        <label>Fascia oraria *</label>
+        <div class="blocco-tipo-btns">
+          <button class="blocco-tipo-btn" data-tipo="mattina"
+            onclick="selezionaTipoBlocco('mattina',this)">
+            🌅 Mattina<br><small>08:00 – 13:00</small>
+          </button>
+          <button class="blocco-tipo-btn" data-tipo="pomeriggio"
+            onclick="selezionaTipoBlocco('pomeriggio',this)">
+            🌆 Pomeriggio<br><small>13:00 – 20:00</small>
+          </button>
+          <button class="blocco-tipo-btn" data-tipo="giornata"
+            onclick="selezionaTipoBlocco('giornata',this)">
+            📅 Giornata intera<br><small>08:00 – 20:00</small>
+          </button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Motivo (opzionale — visibile solo lato admin)</label>
+        <input type="text" id="blocco-motivo"
+          placeholder="es. Assenza studio, Formazione, Chiusura straordinaria…">
+      </div>
+
+    </div>
+    <div class="modal-ftr">
+      <div></div>
+      <div class="modal-ftr-r">
+        <button class="btn-ghost" onclick="chiudiBlocco()">Annulla</button>
+        <button class="btn-danger" id="btn-salva-blocco" onclick="salvaBlocco()">🔒 Blocca</button>
       </div>
     </div>
   </div>

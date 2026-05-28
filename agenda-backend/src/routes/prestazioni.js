@@ -39,7 +39,7 @@ router.post('/', requireMedico, async (req, res) => {
     .from('tipi_prestazione')
     .insert({
       nome:          nome.trim(),
-      durata_minuti: Number(durata_minuti) || 20,
+      durata_minuti: Number(durata_minuti) || 30,
       codice_dicom:  codice_dicom?.trim() || null,
       attivo:        true
     })

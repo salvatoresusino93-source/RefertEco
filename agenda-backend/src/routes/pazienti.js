@@ -41,6 +41,9 @@ router.post('/', async (req, res) => {
   if (!cognome?.trim() || !nome?.trim()) {
     return res.status(400).json({ error: 'Cognome e nome sono obbligatori' });
   }
+  if (!data_nascita) {
+    return res.status(400).json({ error: 'La data di nascita è obbligatoria' });
+  }
   if (!telefono?.trim()) {
     return res.status(400).json({ error: 'Il numero di telefono è obbligatorio' });
   }
@@ -152,17 +155,53 @@ router.put('/:id', async (req, res) => {
 });
 
 // ─── GET /api/pazienti/:id/appuntamenti ──────────────────────────────────
+// Restituisce TUTTI gli appuntamenti (inclusi annullati) per storico completo
 router.get('/:id/appuntamenti', async (req, res) => {
   const { data, error } = await supabase
     .from('appuntamenti')
     .select('*, tipi_prestazione(*)')
     .eq('paziente_id', req.params.id)
-    .neq('stato', 'annullato')
     .order('data_ora_inizio', { ascending: false })
     .limit(50);
 
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data);
+  res.json(data || []);
+});
+
+// ─── DELETE /api/pazienti/:id ────────────────────────────────────────────
+router.delete('/:id', async (req, res) => {
+  const id = req.params.id;
+
+  // Blocca se ci sono appuntamenti NON annullati (prenotato, confermato, completato…)
+  const { data: attivi } = await supabase
+    .from('appuntamenti')
+    .select('id')
+    .eq('paziente_id', id)
+    .neq('stato', 'annullato')
+    .limit(1);
+
+  if (attivi && attivi.length > 0) {
+    return res.status(409).json({
+      error: 'Impossibile eliminare: il paziente ha appuntamenti attivi. Annullali prima di procedere.'
+    });
+  }
+
+  // Elimina prima gli appuntamenti annullati (vincolo FK) poi il paziente
+  const { error: errApp } = await supabase
+    .from('appuntamenti')
+    .delete()
+    .eq('paziente_id', id)
+    .eq('stato', 'annullato');
+
+  if (errApp) return res.status(500).json({ error: errApp.message });
+
+  const { error } = await supabase
+    .from('pazienti')
+    .delete()
+    .eq('id', id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ ok: true });
 });
 
 module.exports = router;

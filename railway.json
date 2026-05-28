@@ -5,6 +5,6 @@
     "buildCommand": "cd agenda-backend && npm install --production"
   },
   "deploy": {
-    "startCommand": "node agenda-backend/src/app.js"
+    "startCommand": "cd agenda-backend && node src/app.js"
   }
 }

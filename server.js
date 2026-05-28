@@ -38,12 +38,55 @@ const upload = multer({ storage: imgStorage, limits: { fileSize: 100 * 1024 * 10
 
 app.get('/api/referti/:id/immagini', (req, res) => {
   const dir = getImgDir(req.params.id);
-  if (!fs.existsSync(dir)) return res.json([]);
-  res.json(fs.readdirSync(dir).filter(f => !f.startsWith('.')).sort());
+  try {
+    if (!fs.existsSync(dir)) return res.json([]);
+    const files = fs.readdirSync(dir).filter(f => !f.startsWith('.')).sort();
+    const r = db.get().referti.find(x => x.id === req.params.id);
+    const hasCustomOrder = r && Array.isArray(r.immaginiOrdine) && r.immaginiOrdine.length > 0;
+    if (hasCustomOrder) {
+      const idx = new Map(r.immaginiOrdine.map((f, i) => [f, i]));
+      files.sort((a, b) => {
+        const ia = idx.has(a) ? idx.get(a) : Infinity;
+        const ib = idx.has(b) ? idx.get(b) : Infinity;
+        return ia !== ib ? ia - ib : a.localeCompare(b, undefined, { numeric: true });
+      });
+    } else {
+      files.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    }
+    res.setHeader('X-Custom-Order', hasCustomOrder ? 'true' : 'false');
+    return res.json(files);
+  } catch (e) {
+    console.error('[immagini list] errore lettura ' + dir + ':', e.message);
+    return res.status(500).json({ error: 'Impossibile leggere cartella immagini', dir: dir, dettaglio: e.message });
+  }
 });
 
-app.post('/api/referti/:id/immagini', upload.array('files', 50), (req, res) => {
-  res.json({ importate: req.files.length, files: req.files.map(f => f.filename) });
+app.post('/api/referti/:id/immagini/ordine', (req, res) => {
+  const { ordine } = req.body;
+  if (!Array.isArray(ordine)) return res.status(400).json({ error: 'ordine deve essere un array' });
+  const state = db.get();
+  const r = state.referti.find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: 'Non trovato' });
+  r.immaginiOrdine = ordine;
+  db.persist();
+  res.json({ ok: true });
+});
+
+app.post('/api/referti/:id/immagini', upload.array('files', 2000), (req, res) => {
+  const dest = getImgDir(req.params.id);
+  const isOnDrive = /drive|cloudstorage/i.test(dest);
+  console.log('[upload] referto=' + req.params.id + ' destinazione=' + dest +
+    ' (' + (isOnDrive ? 'GOOGLE DRIVE' : 'locale') + ') file_ricevuti=' + req.files.length);
+  if (req.files.length > 0) {
+    console.log('[upload] primo file: ' + req.files[0].filename + ' (' + req.files[0].size + ' B)');
+    console.log('[upload] ultimo file: ' + req.files[req.files.length - 1].filename);
+  }
+  res.json({
+    importate: req.files.length,
+    files: req.files.map(f => f.filename),
+    dest: dest,
+    syncedToDrive: isOnDrive
+  });
 });
 
 app.delete('/api/referti/:id/immagini/:filename', (req, res) => {
@@ -131,8 +174,77 @@ app.delete('/api/referti/:id', (req, res) => {
   const state = db.get();
   const before = state.referti.length;
   state.referti = state.referti.filter(x => x.id !== req.params.id);
-  if (state.referti.length < before) db.persist();
-  res.json({ ok: true });
+  const wasDeleted = state.referti.length < before;
+  if (wasDeleted) db.persist();
+
+  // Cancella anche la cartella immagini associata (su Google Drive o locale)
+  let immaginiEliminate = 0;
+  const imgDir = getImgDir(req.params.id);
+  if (fs.existsSync(imgDir)) {
+    try {
+      // Conta i file prima della cancellazione per logging
+      try { immaginiEliminate = fs.readdirSync(imgDir).filter(f => !f.startsWith('.')).length; } catch(e) {}
+      fs.rmSync(imgDir, { recursive: true, force: true });
+      const isOnDrive = /drive|cloudstorage/i.test(imgDir);
+      console.log('[delete] referto=' + req.params.id + ' cartella eliminata=' + imgDir +
+        ' (' + (isOnDrive ? 'GOOGLE DRIVE' : 'locale') + ') file_rimossi=' + immaginiEliminate);
+    } catch (e) {
+      console.error('[delete] errore rimozione ' + imgDir + ':', e.message);
+      return res.status(500).json({
+        ok: false,
+        recordEliminato: wasDeleted,
+        error: 'Record eliminato ma cartella immagini non rimossa: ' + e.message,
+        cartella: imgDir
+      });
+    }
+  } else {
+    console.log('[delete] referto=' + req.params.id + ' (nessuna cartella immagini)');
+  }
+
+  res.json({ ok: true, recordEliminato: wasDeleted, immaginiEliminate: immaginiEliminate });
+});
+
+// Pulisce le cartelle immagini orfane (cartelle senza referto corrispondente nel DB)
+app.post('/api/referti/pulisci-orfane', (req, res) => {
+  const imgRoot = path.join(config.getDataDir(), 'immagini');
+  if (!fs.existsSync(imgRoot)) return res.json({ orfane: 0, eliminate: [], spazioMB: 0 });
+
+  const idsValidi = new Set(db.get().referti.map(r => r.id));
+  const eliminate = [];
+  let spazioByte = 0;
+  let errori = [];
+
+  try {
+    const cartelle = fs.readdirSync(imgRoot, { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => d.name);
+
+    for (const id of cartelle) {
+      if (idsValidi.has(id)) continue; // referto esistente, salta
+      const dir = path.join(imgRoot, id);
+      try {
+        // Calcola size
+        const sub = fs.readdirSync(dir);
+        for (const f of sub) {
+          try { spazioByte += fs.statSync(path.join(dir, f)).size; } catch(e) {}
+        }
+        fs.rmSync(dir, { recursive: true, force: true });
+        eliminate.push(id);
+        console.log('[pulisci-orfane] rimossa ' + dir);
+      } catch (e) {
+        errori.push({ id, err: e.message });
+      }
+    }
+  } catch (e) {
+    return res.status(500).json({ error: 'Errore scansione: ' + e.message });
+  }
+
+  res.json({
+    orfane: eliminate.length,
+    eliminate: eliminate,
+    spazioMB: Math.round(spazioByte / 1024 / 1024 * 10) / 10,
+    errori: errori
+  });
 });
 
 app.post('/api/referti/import', (req, res) => {
@@ -269,11 +381,9 @@ app.post('/api/ai/correggi', async (req, res) => {
 });
 
 // ── INTEGRAZIONE AGENDA ──────────────────────────────────────
-// Token di servizio a lunga durata per comunicazione RefertEco → Agenda
 const AGENDA_API_URL = 'https://referteco-production.up.railway.app/api';
 const AGENDA_TOKEN   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRlMzliY2YxLTRjZTctNDdiNy1iMzk2LTgyNmU4MTE1NTI0OSIsInVzZXJuYW1lIjoibWVkaWNvIiwicnVvbG8iOiJtZWRpY28iLCJpYXQiOjE3Nzk1NDMzMDAsImV4cCI6MjA5NTExOTMwMH0.siqAwgLKT7pN9zaGNnP6kcne-3lhEaQBIY30Z0X8ji0';
 
-// Pazienti con stato "arrivato" (ultimi 2 giorni, gestisce fusi orari)
 app.get('/api/agenda/pazienti-attesa', async (req, res) => {
   try {
     const from = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
@@ -285,25 +395,341 @@ app.get('/api/agenda/pazienti-attesa', async (req, res) => {
     if (!r.ok) return res.json([]);
     const lista = await r.json();
     res.json(lista.filter(a => a.stato === 'arrivato'));
+  } catch (e) { res.json([]); }
+});
+
+app.post('/api/agenda/marca-refertato/:id', async (req, res) => {
+  try {
+    await fetch(`${AGENDA_API_URL}/appuntamenti/${req.params.id}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${AGENDA_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stato: 'refertato' })
+    });
+    res.json({ ok: true });
+  } catch (e) { res.json({ ok: false, error: e.message }); }
+});
+
+// ── ORTHANC PROXY ────────────────────────────────────────────
+
+const ORTHANC_BASE = 'http://localhost:8042';
+const WORKLIST_DIR = 'K:\\OrthancWorklists';
+
+async function orthancFetch(path, opts) {
+  return fetch(ORTHANC_BASE + path, opts);
+}
+
+app.get('/api/orthanc/status', async (req, res) => {
+  try {
+    const r = await orthancFetch('/system');
+    if (!r.ok) return res.json({ online: false });
+    const data = await r.json();
+    res.json({ online: true, version: data.Version, aet: data.DicomAet });
+  } catch { res.json({ online: false }); }
+});
+
+app.get('/api/orthanc/studi', async (req, res) => {
+  try {
+    const r = await orthancFetch('/studies');
+    if (!r.ok) return res.status(503).json({ error: 'Orthanc: ' + r.status });
+    const ids = await r.json();
+    const recent = ids.slice(-40).reverse();
+    const studi = (await Promise.all(recent.map(async id => {
+      try {
+        const s = await (await orthancFetch('/studies/' + id)).json();
+        const pt = s.PatientMainDicomTags || {};
+        const st = s.MainDicomTags || {};
+        const rawName = (pt.PatientName || '').trim();
+        const nameParts = rawName.split('^').map(x => x.trim()).filter(Boolean);
+        const patientName = nameParts.slice(0, 2).join(' ');
+        const rawBirth = (pt.PatientBirthDate || '').replace(/\D/g, '');
+        const birthDate = rawBirth.length === 8
+          ? rawBirth.slice(6) + '/' + rawBirth.slice(4, 6) + '/' + rawBirth.slice(0, 4) : '';
+        const rawDate = (st.StudyDate || '').replace(/\D/g, '');
+        const studyDate = rawDate.length === 8
+          ? rawDate.slice(6) + '/' + rawDate.slice(4, 6) + '/' + rawDate.slice(0, 4) : '';
+        return {
+          id, patientName, patientId: pt.PatientID || '', birthDate, studyDate,
+          description: st.StudyDescription || st.RequestedProcedureDescription || '',
+          modality: st.ModalitiesInStudy || '',
+          nInstances: (s.Instances || []).length,
+          stabile: s.IsStable,
+        };
+      } catch { return null; }
+    }))).filter(Boolean);
+    res.json(studi);
+  } catch (e) {
+    res.status(503).json({ error: 'Orthanc non raggiungibile. Verificare che il servizio sia attivo.' });
+  }
+});
+
+app.post('/api/orthanc/importa/:studyId', async (req, res) => {
+  const { refertoId } = req.body;
+  if (!refertoId) return res.status(400).json({ error: 'refertoId mancante' });
+  try {
+    const study = await (await orthancFetch('/studies/' + req.params.studyId)).json();
+    const instanceIds = study.Instances || [];
+    if (instanceIds.length === 0) return res.json({ importati: 0, files: [], paziente: {} });
+
+    const dir = getImgDir(refertoId);
+    fs.mkdirSync(dir, { recursive: true });
+
+    const saved = [];
+    for (let i = 0; i < instanceIds.length; i++) {
+      try {
+        const r = await orthancFetch('/instances/' + instanceIds[i] + '/file');
+        if (!r.ok) continue;
+        const fname = 'orthanc_' + String(i + 1).padStart(4, '0') + '.dcm';
+        fs.writeFileSync(path.join(dir, fname), Buffer.from(await r.arrayBuffer()));
+        saved.push(fname);
+      } catch (e) {
+        console.error('[orthanc] istanza ' + instanceIds[i] + ':', e.message);
+      }
+    }
+
+    const pt = study.PatientMainDicomTags || {};
+    const st = study.MainDicomTags || {};
+    const rawName = (pt.PatientName || '').split('^').map(x => x.trim()).filter(Boolean);
+    const rawDate = (st.StudyDate || '').replace(/\D/g, '');
+    res.json({
+      importati: saved.length,
+      files: saved,
+      paziente: {
+        cognome: rawName[0] || '',
+        nome: rawName[1] || '',
+        nascita: pt.PatientBirthDate
+          ? pt.PatientBirthDate.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : '',
+        tipo: st.StudyDescription || st.RequestedProcedureDescription || '',
+        data: rawDate.length === 8
+          ? rawDate.slice(0, 4) + '-' + rawDate.slice(4, 6) + '-' + rawDate.slice(6) : '',
+      }
+    });
+  } catch (e) {
+    console.error('[orthanc importa]', e);
+    res.status(500).json({ error: 'Errore importazione: ' + e.message });
+  }
+});
+
+// ── WORKLIST DICOM (paziente arrivato → ecografo) ────────────
+// Crea una voce di worklist DICOM che il Samsung V5 vedrà al prossimo
+// "DICOM Worklist Query". Usa /tools/create-dicom di Orthanc per generare il file
+// DICOM con i tag corretti, poi lo salva in K:\OrthancWorklists.
+app.post('/api/worklist/crea', async (req, res) => {
+  const {
+    paziente_cognome,
+    paziente_nome,
+    paziente_data_nascita,
+    accession_number,
+    tipo_esame,
+    data_ora_inizio,
+  } = req.body;
+
+  if (!paziente_cognome || !paziente_nome || !accession_number) {
+    return res.status(400).json({ error: 'Mancano campi: cognome, nome, accession_number' });
+  }
+
+  const patientName = `${paziente_cognome.toUpperCase()}^${paziente_nome}`;
+  const patientId   = String(accession_number); // riusa accession come PatientID per ora
+  const dob         = (paziente_data_nascita || '').replace(/-/g, '');
+  const startDate   = data_ora_inizio
+    ? new Date(data_ora_inizio).toISOString().slice(0, 10).replace(/-/g, '')
+    : new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const startTime   = data_ora_inizio
+    ? new Date(data_ora_inizio).toTimeString().slice(0, 8).replace(/:/g, '')
+    : '090000';
+
+  try {
+    // Crea un'istanza DICOM minimale tramite Orthanc /tools/create-dicom
+    const tags = {
+      PatientName:               patientName,
+      PatientID:                 patientId,
+      PatientBirthDate:          dob,
+      AccessionNumber:           accession_number,
+      RequestedProcedureID:      accession_number,
+      RequestedProcedureDescription: tipo_esame || 'Ecografia',
+      // Scheduled Procedure Step Sequence — è una sequence DICOM
+      ScheduledProcedureStepSequence: [{
+        ScheduledStationAETitle:           'MEDISON',
+        ScheduledProcedureStepStartDate:   startDate,
+        ScheduledProcedureStepStartTime:   startTime,
+        Modality:                          'US',
+        ScheduledPerformingPhysicianName:  'SUSINO^SALVATORE',
+        ScheduledProcedureStepDescription: tipo_esame || 'Ecografia',
+        ScheduledProcedureStepID:          accession_number,
+      }],
+    };
+
+    const orthancRes = await orthancFetch('/tools/create-dicom', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ Tags: tags }),
+    });
+
+    if (!orthancRes.ok) {
+      const err = await orthancRes.text();
+      return res.status(500).json({ error: 'Orthanc create-dicom fallito: ' + err });
+    }
+
+    // L'istanza è stata creata; per la worklist serve il FILE DICOM raw
+    // Lo recupero e lo salvo come .wl nella cartella worklist
+    const json = await orthancRes.json();
+    const instanceId = json.ID;
+    const fileRes = await orthancFetch('/instances/' + instanceId + '/file');
+    if (!fileRes.ok) {
+      return res.status(500).json({ error: 'Impossibile recuperare il file DICOM' });
+    }
+    const buf = Buffer.from(await fileRes.arrayBuffer());
+
+    fs.mkdirSync(WORKLIST_DIR, { recursive: true });
+    const wlFile = path.join(WORKLIST_DIR, accession_number + '.wl');
+    fs.writeFileSync(wlFile, buf);
+
+    // Rimuovi l'istanza temporanea da Orthanc (era solo per generare il file)
+    await orthancFetch('/instances/' + instanceId, { method: 'DELETE' }).catch(() => {});
+
+    res.json({ ok: true, accession_number, file: wlFile });
+  } catch (e) {
+    console.error('[worklist crea]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Cerca studi Orthanc per AccessionNumber
+app.get('/api/orthanc/cerca-accession', async (req, res) => {
+  const n = req.query.n;
+  if (!n) return res.status(400).json({ error: 'Manca parametro n (accession number)' });
+  try {
+    const r = await orthancFetch('/tools/find', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        Level: 'Study',
+        Query: { AccessionNumber: n },
+      }),
+    });
+    if (!r.ok) return res.json([]);
+    const ids = await r.json();
+    res.json(ids || []);
   } catch (e) {
     res.json([]);
   }
 });
 
-// Segna un appuntamento come "refertato"
-app.post('/api/agenda/marca-refertato/:id', async (req, res) => {
+// Lista worklist attive
+app.get('/api/worklist', (req, res) => {
   try {
-    await fetch(`${AGENDA_API_URL}/appuntamenti/${req.params.id}`, {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${AGENDA_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ stato: 'refertato' })
-    });
+    if (!fs.existsSync(WORKLIST_DIR)) return res.json([]);
+    const files = fs.readdirSync(WORKLIST_DIR).filter(f => f.endsWith('.wl'));
+    res.json(files.map(f => ({
+      accession_number: f.replace(/\.wl$/, ''),
+      file: f,
+    })));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Rimuovi una worklist (es. quando esame completato o annullato)
+app.delete('/api/worklist/:accession', (req, res) => {
+  try {
+    const file = path.join(WORKLIST_DIR, req.params.accession + '.wl');
+    if (fs.existsSync(file)) fs.unlinkSync(file);
     res.json({ ok: true });
   } catch (e) {
-    res.json({ ok: false, error: e.message });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── ORTHANC ARCHIVIA REFERTO ─────────────────────────────────
+// Invia le immagini del referto a Orthanc con i dati del paziente
+app.post('/api/orthanc/archivia/:refertoId', async (req, res) => {
+  const { refertoId } = req.params;
+  try {
+    // Leggi dati referto dal database
+    const referti = db.getReferti();
+    const referto = referti.find(r => String(r.id) === String(refertoId));
+    if (!referto) return res.status(404).json({ error: 'Referto non trovato' });
+
+    const imgDir = getImgDir(refertoId);
+    if (!fs.existsSync(imgDir)) return res.json({ archiviati: 0, msg: 'Nessuna immagine da archiviare' });
+
+    const files = fs.readdirSync(imgDir).filter(f =>
+      /\.(dcm|DCM|jpg|jpeg|png|JPG|PNG)$/i.test(f)
+    );
+    if (files.length === 0) return res.json({ archiviati: 0, msg: 'Nessuna immagine da archiviare' });
+
+    // Dati paziente per i tag DICOM
+    const patientName = `${(referto.cognome || '').toUpperCase()}^${referto.nome || ''}`;
+    const patientDob  = (referto.nascita || '').replace(/-/g, '');  // YYYYMMDD
+    const studyDate   = (referto.data    || '').replace(/-/g, '');
+    const studyDesc   = referto.tipo || 'Ecografia';
+    const studyUID    = `2.25.${refertoId}`;
+
+    let archiviati = 0;
+    const errori = [];
+
+    for (const fname of files) {
+      const fpath = path.join(imgDir, fname);
+      const isDicom = /\.dcm$/i.test(fname);
+
+      try {
+        let dicomBuffer;
+
+        if (isDicom) {
+          // File DICOM: invia direttamente aggiornando solo i tag paziente
+          dicomBuffer = fs.readFileSync(fpath);
+        } else {
+          // JPEG/PNG: crea DICOM Secondary Capture minimale
+          const imgData = fs.readFileSync(fpath);
+          const base64  = imgData.toString('base64');
+
+          // Usa l'API /tools/create-dicom di Orthanc per creare DICOM da immagine
+          const createRes = await orthancFetch('/tools/create-dicom', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              Tags: {
+                PatientName:      patientName,
+                PatientID:        String(refertoId),
+                PatientBirthDate: patientDob,
+                StudyDate:        studyDate,
+                StudyDescription: studyDesc,
+                StudyInstanceUID: studyUID,
+                Modality:         'OT',
+                SOPClassUID:      '1.2.840.10008.5.1.4.1.1.7', // Secondary Capture
+              },
+              Content: `data:image/${isDicom ? 'dcm' : fname.match(/\.(\w+)$/)?.[1] || 'jpeg'};base64,${base64}`,
+            }),
+          });
+
+          if (!createRes.ok) {
+            errori.push(`${fname}: create-dicom fallito (${createRes.status})`);
+            continue;
+          }
+          archiviati++;
+          continue; // create-dicom salva direttamente in Orthanc, non serve upload separato
+        }
+
+        // Upload DICOM direttamente
+        const uploadRes = await orthancFetch('/instances', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/dicom' },
+          body: dicomBuffer,
+        });
+
+        if (uploadRes.ok) {
+          archiviati++;
+        } else {
+          errori.push(`${fname}: upload fallito (${uploadRes.status})`);
+        }
+      } catch (e) {
+        errori.push(`${fname}: ${e.message}`);
+      }
+    }
+
+    res.json({ ok: true, archiviati, totale: files.length, errori });
+  } catch (e) {
+    console.error('[orthanc archivia]', e);
+    res.status(500).json({ error: e.message });
   }
 });
 

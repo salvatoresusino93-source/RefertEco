@@ -4,7 +4,7 @@
 > fare qualsiasi modifica. Contiene il contesto delle conversazioni precedenti, le
 > decisioni prese, e i prossimi passi.
 
-Ultimo aggiornamento: **2026-05-19**, dopo la sessione di refactor e fix di Salvatore.
+Ultimo aggiornamento: **2026-05-27**, sessione notturna (privacy GDPR prenotazione online).
 
 ---
 
@@ -12,218 +12,434 @@ Ultimo aggiornamento: **2026-05-19**, dopo la sessione di refactor e fix di Salv
 
 **Dott. Salvatore Susino**, medico radiologo. Usa RefertEco nel suo ambulatorio
 privato per scrivere referti ecografici, importare immagini DICOM, esportare PDF.
+Ha anche un modulo **Agenda** (sistema prenotazioni) separato.
 
 Profilo:
 - **Non programmatore** — non sa leggere codice, ma capisce bene le spiegazioni a parole
 - Preferisce **soluzioni semplici e a un click**
-- Vuole sapere *cosa* fai e *perché*, non *come* lo fai tecnicamente
-- Lavora su **Windows 11** principalmente, ma installerà anche su Mac e su un altro PC Windows
+- Lavora su **Windows 11** (PC principale), ha anche un MacBook e un secondo PC Windows (workstation in studio)
 - Vuole **sincronizzazione automatica** tra PC tramite Google Drive
 
-Linee guida per parlare con lui:
+Linee guida:
 - Italiano, tono colloquiale ma chiaro
-- Spiega gli errori con cause e soluzioni, non con stack trace
-- Conferma sempre prima di operazioni distruttive (cancellazioni, force push, ecc.)
+- Spiega errori con cause e soluzioni, non stack trace
+- Conferma sempre prima di operazioni distruttive
 
 ---
 
 ## 2. ARCHITETTURA DEL PROGETTO
 
-### Stack
-- **Backend**: Node.js + Express
-- **Database**: file JSON (`referteco_data.json`) — non SQLite nonostante il BRIEFING originale
-- **Frontend**: HTML + CSS + JS vanilla
-- **Porta**: 3000
+Ci sono **due applicazioni distinte** e **due macchine**:
 
-### Struttura cartelle sul PC dello sviluppatore (questo)
+### A) RefertEco (referti ecografici)
+- **Backend**: Node.js + Express, porta 3000
+- **Database**: file JSON (`referteco_data.json`) — su Google Drive o `K:\RefertEco Dati Pazienti` (workstation)
+- **Frontend**: HTML + CSS + JS vanilla in `public/`
+- **Gira**: in locale su ogni PC (AppData + bat di avvio)
+- Serve anche come proxy per l'agenda: `/api/agenda/pazienti-attesa` e `/api/agenda/marca-refertato/:id`
+
+### B) Agenda Studio (prenotazioni)
+- **Backend**: Node.js + Express — `agenda-backend/`
+- **Database**: Supabase (PostgreSQL cloud)
+- **Frontend**: HTML + CSS + JS vanilla — `agenda-backend/frontend/`
+  *(⚠️ sorgente in `agenda-frontend/`, COPIA per Railway in `agenda-backend/frontend/` — modificare ENTRAMBI)*
+- **Gira**: su Railway (cloud) → https://referteco-production.up.railway.app/
+- **SMS**: SMS Hosting (smshosting.it)
+- **Email**: Resend (resend.com)
+- **Socket.io**: aggiornamento real-time
+
+### Struttura cartelle
 
 ```
-C:\Users\sunis\Desktop\RefertEco\            ← SORGENTE (per modifiche)
-├── server.js, config.js, database.js, ...
-├── public/                                   ← frontend
-├── dist/RefertEco-Windows/RefertEco-Windows\ ← installer pronto Windows
-├── dist/RefertEco-Mac-Intel/                 ← installer Mac Intel
-├── dist/RefertEco-Mac-M1/                    ← installer Mac Silicon
-├── dist/RefertEco-Windows.zip                ← installer pronto da distribuire
-└── .git/                                     ← repository git (remote = GitHub)
+Desktop\RefertEco\                            ← SORGENTE (questo PC)
+├── server.js, config.js, database.js, ...   ← RefertEco
+├── public/                                   ← frontend RefertEco
+├── agenda-backend/
+│   ├── src/app.js                            ← entry point Railway
+│   ├── src/routes/, src/services/
+│   ├── frontend/                             ← ⚠️ COPIA per Railway
+│   └── .env                                  ← credenziali (non in git)
+├── agenda-frontend/                          ← sorgente frontend agenda
+└── railway.json
 
-C:\Users\sunis\AppData\Local\RefertEco\      ← INSTALLAZIONE ATTIVA (in esecuzione)
-└── (copia del contenuto di dist\RefertEco-Windows\RefertEco-Windows\)
+AppData\Local\RefertEco\                      ← INSTALLAZIONE ATTIVA (questo PC)
+G:\Il mio Drive\RefertEco Dati Pazienti\     ← dati pazienti (Google Drive)
+G:\Il mio Drive\Installer RefertEco\         ← installer ZIP + RIPRENDI_QUI
+~\.referteco\config.json                      ← config locale (non in git)
+```
 
-G:\Il mio Drive\RefertEco Dati Pazienti\     ← DATI PAZIENTI (Google Drive)
-├── referteco_data.json                       ← DB
-└── immagini\<refertoId>\*.dcm                ← immagini DICOM
-
-G:\Il mio Drive\Installer RefertEco\         ← INSTALLER ZIP (per altri PC)
-└── RefertEco-Windows.zip
-
-C:\Users\sunis\.referteco\config.json        ← config locale (dataDir + apiKey)
+### Workstation in studio (PC separato)
+```
+K:\OrthancStorage\                            ← immagini DICOM da ecografo
+K:\OrthancWorklists\                          ← file .wl per DICOM Worklist
+K:\RefertEco Dati Pazienti\                  ← DB referti (invece di Google Drive)
+C:\Program Files\Orthanc Server\             ← Orthanc 1.12.11 come servizio Windows
+  └── Configuration\orthanc.json + worklists.json
 ```
 
 ### Repository GitHub
 - URL: **https://github.com/salvatoresusino93-source/RefertEco**
 - Branch: `main`
-- Identità git: `Salvatore Susino <salvatore.susino93@gmail.com>`
-- `.gitignore` esclude: `node_modules/`, `dist/`, `referteco.db`, `referteco_data.json`,
-  `config.json`, `immagini/`, ecc. (vedi file)
-
-### Workflow di rilascio
-Quando si fa una modifica:
-1. Modifica in `AppData\Local\RefertEco\` (funziona subito riavviando il server)
-2. Propaga in `Desktop\RefertEco\` (sorgente) e `Desktop\RefertEco\dist\...` (installer)
-3. Aggiorna cache-buster nei 3 `index.html` (`?v=YYYYMMDDx`)
-4. `git add -A && git commit && git push`
-5. **Solo se l'utente lo chiede esplicitamente**: ricostruisci lo ZIP in `dist/` e
-   copialo su `G:\Il mio Drive\Installer RefertEco\RefertEco-Windows.zip`
+- Auto-deploy Railway attivo su push a `main`
+- Root Directory Railway: `/agenda-backend`
 
 ---
 
-## 3. FUNZIONALITÀ E FIX FATTI IN QUESTA SESSIONE (19/05/2026)
+## 3. PRENOTAZIONE ONLINE PAZIENTI — 2026-05-27 sera
 
-### Bug DICOM JPEG Lossless
-- Problema: MRI/CT non visualizzati ("pixel bianchi e neri")
-- Causa: il codice trattava il JPEG Lossless come JPEG normale; il browser non sa decodificarlo
-- Causa secondaria: dicom-parser non popolava `el.items` per alcuni file → cadeva su path raw
-- Fix: aggiunto `jpeg-lossless-decoder.min.js` in `public/lib/`, funzioni
-  `_jpegIsBaseline()` + `_renderJpegLossless()`, fallback con scansione manuale degli
-  item delimiter (`FE FF 00 E0`) quando dicom-parser non popola `el.items`
+### Architettura
+Il paziente prenota direttamente dal link `/prenota` (da mettere su Google Business Profile):
+1. Il paziente sceglie esame → data → orario → inserisce i suoi dati → invia
+2. Viene creato un appuntamento con `stato='in_attesa'` (blocca lo slot)
+3. Il medico riceve email con pulsanti **✅ Conferma** / **❌ Rifiuta**
+4. Conferma → `stato='prenotato'` + SMS al paziente (usa `inviaSmsConferma` esistente)
+5. Rifiuta → `stato='annullato'` + nessun SMS (il medico chiama manualmente)
 
-### Import cartelle con sottocartelle
-- Drag-and-drop di intere cartelle DICOM (recursivo via `webkitGetAsEntry`)
-- Pulsante 📂 con `webkitdirectory` per selezione folder
-- Rilevamento DICOM via magic byte `DICM` all'offset 128 (per file senza estensione .dcm)
-- Nomi file univoci basati sul path (es. `Series1__IM00001.dcm`) per evitare collisioni
-- Upload batched a 30 file alla volta
-- **Applicato sia alla refertazione che all'archivio** (entrambi i flussi avevano funzioni separate, ora unificate)
+### File nuovi / modificati
+- `agenda-backend/src/routes/public.js` (NUOVO) — API pubblica, no auth:
+  - `GET /api/public/esami` — esami attivi
+  - `GET /api/public/disponibilita?tipo_id=UUID` — slot liberi Martedì/Venerdì, prossimi 45 giorni
+  - `POST /api/public/prenota` — crea appuntamento in_attesa, manda email al medico
+- `agenda-backend/src/routes/prenota.js` (NUOVO) — routes approvazione:
+  - `GET /api/prenota/conferma/:token` — conferma appuntamento
+  - `GET /api/prenota/rifiuta/:token` — rifiuta appuntamento
+- `agenda-backend/src/services/email.js` — aggiunta `notificaPrenotazioneOnline(app, token)`
+- `agenda-backend/src/app.js` — registrate nuove routes + route `/prenota` per `prenota.html`
+- `agenda-backend/frontend/prenota.html` (NUOVO) — pagina prenotazione pubblica (mobile-first, 4 step)
+- `agenda-backend/frontend/js/prenota.js` (NUOVO) — logic pagina prenotazione
+- `agenda-backend/frontend/css/style.css` — aggiunto `.stato-in_attesa` (ambra tratteggiato)
+- `agenda-backend/frontend/js/app.js` — `in_attesa` aggiunto a STATI, banner nel modal di modifica
+- Tutte le modifiche frontend replicate in `agenda-frontend/`
 
-### Bug "Caricamento..." eterno sui referti vecchi
-- `apiGet` non gestiva errori → promise rejected silenziosa
-- Fix: `apiGet` ora propaga errori, `loadImmagini` mostra messaggio + pulsante "Riprova"
+### Token approvazione
+- JWT stateless: `jwt.sign({ id: appointmentId }, JWT_SECRET, { expiresIn: '7d' })`
+- Nessuna colonna DB aggiuntiva necessaria
+- Gestisce correttamente doppio-click (idempotente: se già gestito, mostra messaggio)
 
-### Sincronizzazione Google Drive a 1-click
-- `detectGoogleDrive()` ora cerca **"RefertEco Dati Pazienti"** (default) e "RefertEco" (fallback)
-- Supporta "Il mio Drive" (italiano) e "My Drive" (inglese)
-- Supporta lettere drive G-K (Mirror Drive su Windows)
-- UI Impostazioni: box verde con percorso rilevato + pulsante "⚡ Usa questa cartella (1 click)"
-- Bug correlato fixato: `config.js` ora rimuove BOM UTF-8 in `load()` (PowerShell aggiungeva BOM rompendo JSON.parse)
+### Gestione paziente nella POST /api/public/prenota
+1. Cerca paziente per CF (se fornito)
+2. Cerca paziente per cognome+nome+data_nascita
+3. Se non trovato, crea nuovo paziente
 
-### Eliminazione referto pulisce anche immagini
-- Prima: DELETE rimuoveva solo il record DB, lasciando cartelle orfane su Drive
-- Fix: `fs.rmSync(dir, { recursive:true })` dopo cancellazione record
-- Endpoint `POST /api/referti/pulisci-orfane` per cleanup cartelle pre-esistenti
-- Pulsante "🧹 Cerca e cancella cartelle orfane" in Impostazioni > Manutenzione
+### URL pagina prenotazione
+`https://referteco-production.up.railway.app/prenota`
 
-### Altro
-- Icona RefertEco (file `.ico` multi-risoluzione 16/24/32/48/64/128/256 px)
-- Favicon nel browser (`favicon.ico`, `favicon-32.png`, `icon-192.png`)
-- `Installa.bat` aggiornato per applicare l'icona al collegamento Desktop
-- Server limite upload alzato a 2000 file (era 50, faceva fallire serie DICOM grandi)
-- Cache busting nei `<script>` per evitare problemi di cache browser
+### ⚠️ PENDING — Rimozione Mio Dottore da GBP
+- Su Google Business Profile appare ancora "Prenota con Google" che porta a **Mio Dottore** (miodottore.it)
+- Non è possibile rimuoverlo né dall'app GBP né dal pannello pro.miodottore.it
+- **Azione richiesta**: contattare il supporto Mio Dottore (trovare il vero contatto su pro.miodottore.it)
+  e chiedere di rimuovere l'integrazione "Prenota con Google"
+- Una volta rimossa, impostare il nuovo URL tramite `POST /api/gbp/set-booking-url`
+  (richiede `GBP_LOCATION_NAME` su Railway — vedi sezione GBP sotto)
+  oppure manualmente dal pannello GBP → Info → Prenotazioni
+
+### ⚠️ PENDING — API GBP in attesa approvazione Google
+- `mybusinessaccountmanagement.googleapis.com` quota=0 — Case ID: **1-7862000040720** (2026-05-27)
+- Se `GBP_LOCATION_NAME` è impostato su Railway, `/api/gbp/set-booking-url` funziona già ora
+
+### Disponibilità
+- Mostra solo Martedì (js day 2) e Venerdì (js day 5)
+- Fasce: 9:00-13:00 e 15:00-19:00, step = durata esame
+- Esclude: appuntamenti non annullati + blocchi_agenda (festivi, impegni GCal, manuali)
+- Timezone gestita correttamente con `getRomeOffsetMs()` (funziona sia CEST +02 che CET +01)
+
+### Stato in_attesa in agenda
+- Blocco calendario: ambra chiaro con bordo sinistro giallo tratteggiato
+- Sidebar "oggi": bordino giallo
+- Modal modifica: banner giallo con spiegazione, il medico può cliccare "Prenotato" per conferma manuale
+- Print view: badge ambra
 
 ---
 
-## 4. CONFIGURAZIONE CORRENTE
+## 4. PRIVACY GDPR — 2026-05-27 notturno ✅
 
-### `~/.referteco/config.json`
-```json
-{
-  "dataDir": "G:\\Il mio Drive\\RefertEco Dati Pazienti",
-  "anthropicApiKey": "sk-ant-api03-..."
-}
+### Cosa è stato fatto
+Implementata conformità GDPR art. 13 per la pagina di prenotazione online.
+
+### File nuovi / modificati
+- `agenda-backend/frontend/privacy.html` (NUOVO) — informativa completa in 10 sezioni:
+  titolare, dati raccolti, finalità+base giuridica, obbligatorietà, modalità, conservazione,
+  destinatari (Railway, Supabase, SMS Hosting, Resend), diritti dell'interessato, esercizio
+  diritti, reclamo al Garante. Link "← Torna alla prenotazione".
+- `agenda-backend/src/app.js` — aggiunta route `GET /privacy` → serve `privacy.html`
+- `agenda-backend/frontend/js/prenota.js` — aggiunto `privacyAccettata: false` in ST,
+  checkbox GDPR in step 3 (link `/privacy` apre in nuova tab), validazione in `avanzaStep4()`
+- `agenda-backend/frontend/prenota.html` — aggiunto CSS `.privacy-wrap`, `.privacy-label`, `.pr-link`
+- Tutte le modifiche replicate in `agenda-frontend/`
+- Commit pushato a `main` (deploy Railway attivo) — commit `742fd8f`
+
+### Dati sanitari come "categoria particolare" (art. 9 GDPR)
+Il tipo di esame ecografico è trattato come dato sanitario ex art. 9 GDPR.
+Base giuridica: art. 9(2)(a) consenso esplicito + art. 9(2)(h) finalità mediche.
+Il consenso è obbligatorio per procedere con la prenotazione.
+
+### Conservazione dati
+- Dati prenotazione: 10 anni (D.P.R. 128/1969 documentazione sanitaria)
+- Appuntamenti annullati: 2 anni (fini amministrativi)
+
+---
+
+## 5. FIX SESSIONE 2026-05-27 POMERIGGIO/SERA — Google Calendar + Festività + GBP
+
+### Festività italiane in agenda (blocco prenotazioni)
+- Nuovo file: `agenda-backend/src/services/festivita.js`
+  - Calcola tutte le festività italiane inclusa Pasqua (algoritmo Anonymous Gregoriano)
+  - `popolaFestivita(anno)`: inserisce festività in `blocchi_agenda` (tipo='festivo'), skip se già presenti
+  - Avviata a ogni boot del server + cron 1 gennaio 09:00 per anno nuovo
+- Nuova tabella Supabase: `blocchi_agenda` (id, data_ora_inizio, data_ora_fine, motivo, tipo, tutto_il_giorno)
+  - tipo: 'festivo' | 'manuale' | 'google_calendar'
+- Nuove route `agenda-backend/src/routes/blocchi.js`: GET/POST/DELETE /api/blocchi
+- Frontend: giorni festivi mostrati in rosso, slot bloccati, click mostra alert invece del modal
+
+### Google Calendar sync
+- Nuovo servizio: `agenda-backend/src/services/googleCalendar.js`
+  - Service Account JWT auth (RS256 + jsonwebtoken) — NO googleapis package
+  - `creaEvento(appuntamento)`: crea evento con `extendedProperties.private.agendaStudioId`
+  - `eliminaEventoByAgendaId(id)`: cerca e cancella evento per ID (senza colonna DB)
+  - `leggiEventiPersonali(da, a)`: legge eventi NON creati da Agenda Studio
+  - `aggiornaEvento(googleEventId, app)`: aggiorna evento esistente (PATCH)
+- `appuntamenti.js`: crea evento GCal su POST, elimina su DELETE
+- `reminder.js`: cron 06:00 → `sincronizzaBlocchiGoogleCalendar()` importa impegni personali
+  come blocchi tipo='google_calendar' per i prossimi 30 giorni
+- Variabili Railway: `GOOGLE_PRIVATE_KEY` (JSON completo service account), `GOOGLE_CLIENT_EMAIL`,
+  `GOOGLE_CALENDAR_ID` (=salvatoresusino.md@gmail.com)
+- Service account: `agenda-calendar@agendastudio-497611.iam.gserviceaccount.com`
+
+### Google Business Profile — orari automatici
+- Nuovo servizio: `agenda-backend/src/services/googleBusiness.js`
+  - Orari base: Martedì + Venerdì 9:00-13:00 e 15:00-19:00
+  - `impostaOrariBase()`: setta regularHours su GBP (da chiamare una tantum)
+  - `aggiornaOreSettimana()`: calcola specialHours per i prossimi 30 giorni
+    - Festivi (blocchi_agenda tipo='festivo') → mostra chiuso
+    - Impegni personali GCal su Mar/Ven → riduce orari (es. impegno 10-12 → aperto 9-10 e 12-13)
+    - Giorni normali → nessun override (regularHours già corretto)
+  - OAuth2 refresh token flow per account `salvatoresusino.md@gmail.com`
+- Nuove route: `agenda-backend/src/routes/gbp.js`
+  - GET /api/gbp/setup — pagina HTML per autorizzazione OAuth una tantum
+  - GET /api/gbp/callback — riceve code, mostra refresh token
+  - POST /api/gbp/set-regular-hours — imposta orari base GBP
+  - POST /api/gbp/aggiorna-orari — trigger manuale aggiornamento
+  - GET /api/gbp/status — verifica configurazione
+- Cron domenica 20:00 Europe/Rome → aggiorna specialHours GBP
+- Variabili Railway GBP (già impostate):
+  ```
+  GOOGLE_OAUTH_CLIENT_ID     = <da Railway dashboard>
+  GOOGLE_OAUTH_CLIENT_SECRET = <da Railway dashboard>
+  GOOGLE_OAUTH_REFRESH_TOKEN = <da Railway dashboard>
+  GOOGLE_OAUTH_REDIRECT_URI  = https://referteco-production.up.railway.app/api/gbp/callback
+  GBP_LOCATION_NAME          = (opzionale, si scopre automaticamente)
+  ```
+
+### ⚠️ PENDING — API access GBP in attesa di approvazione Google
+- La `mybusinessaccountmanagement.googleapis.com` ha quota=0 di default (richiede allowlist)
+- **Richiesta inviata il 2026-05-27** — Case ID: **1-7862000040720**
+- Tempo stimato: 7-10 giorni lavorativi
+- Quando arriva l'email di approvazione da Google:
+  1. Eseguire: `railway run node scripts/setup-gbp-hours.js`
+     (il file è già scritto, lo ricreo se serve)
+  2. Oppure chiamare POST `/api/gbp/set-regular-hours` e poi `/api/gbp/aggiorna-orari`
+- Prima di quel momento, tutto il resto funziona (SMS, Calendar, festività)
+
+### Fix SMS delivery (sessione stessa)
+- `sms.js`: rimosso parametro `from` — SMS Hosting usa numero fisso 394390009000
+- `appuntamenti.js`: aggiunto import e chiamata `inviaSmsConferma` su POST (era mancante)
+- Testo SMS: "presso lo Studio" (non "il Studio")
+- Testato su WindTre (351 374 6102) ✓ — Spusu non compatibile (MVNO)
+
+---
+
+## 6. FIX SESSIONE 2026-05-27 (questo PC — agenda iOS)
+
+### Fix pulsante Salva non raggiungibile su iPhone
+- **Problema**: su iOS Safari il modal dell'agenda sale dal basso (bottom sheet).
+  Quando si tocca un campo e appare la tastiera, la tastiera copre il footer col pulsante Salva.
+  `position:fixed` rimane ancorato alla layout viewport, non alla visual viewport.
+- **Fix**: Visual Viewport API — al resize del viewport (apertura tastiera) aggiorniamo
+  `top` e `height` dell'overlay così copre solo la zona visibile sopra la tastiera.
+  CSS `[data-vv]`: il modal usa `%` invece di `vh`.
+- File: `agenda-frontend/js/app.js` (e copia in `agenda-backend/frontend/js/app.js`)
+  + `agenda-frontend/css/style.css` + `agenda-backend/frontend/css/style.css`
+
+---
+
+## 7. FIX SESSIONE 2026-05-26 MATTINA (questo PC — agenda)
+
+### Merge Mac → Windows
+- Il branch locale era indietro di 23 commit (fast-forward pulito)
+
+### Slot prenotazione: 20 min → 30 min
+- `agenda-frontend/js/app.js` → `const SLOT_MIN = 30`
+- Database Supabase: tutti i 68 tipi di esame aggiornati a `durata_minuti = 30`
+
+### Data di nascita obbligatoria
+- Validazione frontend (alert) + backend (HTTP 400)
+
+### Duplicato telefono: solo avviso, salva comunque
+- Prima: `confirm()` confuso (OK=usa-esistente, Annulla=crea-nuovo)
+- Ora: `alert()` informativo → salvataggio automatico con `forza_creazione:true`
+
+### Fix build Railway
+- Frontend copiato in `agenda-backend/frontend/` (incluso nel build context)
+- `railway.json`: `npm install --production` e `node src/app.js` (senza prefisso)
+
+---
+
+## 8. FIX SESSIONE 2026-05-26 POMERIGGIO/SERA (workstation in studio)
+
+> ⚠️ Queste modifiche sono state fatte sulla **workstation in studio** (PC separato).
+> Alcuni di questi fix potrebbero non essere ancora in sync con questo PC.
+
+### Notifiche email (Agenda → Medico)
+- Email su nuovo appuntamento (verde) e annullamento (rossa) via **Resend**
+- File: `agenda-backend/src/services/email.js`
+- Variabile Railway: `RESEND_API_KEY = re_hGzWNiTr_...` (non committare mai)
+- Endpoint debug: `POST /api/test-email`
+- Fix orario: `timeZone: 'Europe/Rome'` (non più UTC)
+
+### SMS al paziente (SMS Hosting)
+- Promemoria serale (cron 19:00) per appuntamenti del giorno dopo
+- Promemoria 1 ora prima (cron ogni minuto)
+- Caso edge: prenotazione dopo le 19:00 per domani → SMS immediato
+- Annullamento → SMS al paziente
+- File: `agenda-backend/src/services/sms.js`
+- Variabili Railway: `SMSHOSTING_API_KEY`, `SMSHOSTING_API_SECRET`, `STUDIO_NOME`
+- **`SMS_SENDER` NON viene più usato** (vedi fix sotto)
+
+### Fix SMS delivery — 2026-05-27 sera
+- **Problema**: SMS non arrivavano nonostante `smsInserted:1` nell'API response.
+  Causa: il campo `from` con mittente alfanumerico ("Dr Susino") non è registrato su SMS Hosting
+  → viene rimpiazzato da `#RANDOMNUM#` → gli operatori italiani (TIM, Vodafone, WindTre, Iliad)
+  filtrano/bloccano questi SMS come spam.
+- **Fix**: rimosso il parametro `from` dalla chiamata API in `sms.js` e `/api/test-sms`.
+  Senza `from`, SMS Hosting usa il proprio numero fisso `394390009000`, già registrato
+  presso gli operatori, con consegna molto più affidabile.
+- Gli SMS appaiono ora sul cellulare come mittente `+39 439 000 9000` (SMS Hosting).
+- **Se in futuro si vuole un mittente personalizzato** (es. "StudioSus"):
+  contattare SMS Hosting support e richiedere la registrazione del nome mittente.
+  Nomi alphanumerici in Italia richiedono approvazione AGCOM. Max 11 caratteri, solo lettere/numeri.
+
+### Orthanc su workstation
+- Server Linux originale (192.168.1.77) irraggiungibile (btrfs corrotto)
+- Installato **Orthanc 1.12.11** sulla workstation come servizio Windows
+- Storage: `K:\OrthancStorage` — AET: `ORTHANC`, HTTP: 8042, DICOM: 4242
+- Plugin worklists 0.9.2 attivo (`K:\OrthancWorklists`)
+- Ecografo Samsung Medison V5: configurare DICOM Store/Worklist → 192.168.1.17:4242
+
+### Workflow DICOM Worklist (da completare)
+```
+Segretaria "Arrivato" in Agenda → RefertEco genera .wl → Ecografo legge Worklist
+→ Immagini arrivano con AccessionNumber → Auto-import nel referto in corso
+```
+Endpoint aggiunti:
+- `POST /api/worklist/crea` — crea voce worklist
+- `GET /api/worklist` — lista attive
+- `DELETE /api/worklist/:accession` — rimuove
+- `GET /api/orthanc/cerca-accession?n=...` — query studi per accession
+
+### Fix UI RefertEco (workstation)
+- **Pulsanti modal archivio in alto**: Elimina/Chiudi/Modifica spostati sopra `.m-body` con `position:sticky;top:0`
+- **Form referto espandibile**: rimosso `max-width:820px`, pulsante ◀/▶ collassa viewer
+- **F8 dettatura**: premi F8 sul form nuovo referto per avviare/fermare microfono
+
+### Pulizia repository
+- Rimossi: `referteco_data.json`, `config.json`, `node_modules/`, file obsoleti
+- `.gitignore` aggiornato — progetto da 66 MB → 2 MB
+
+---
+
+## 9. FIX SESSIONE 2026-05-19 (questo PC)
+
+- Bug DICOM JPEG Lossless: decoder + fallback manuale
+- Import cartelle DICOM con sottocartelle (drag-and-drop ricorsivo)
+- Bug "Caricamento..." eterno: `apiGet` propaga errori
+- Sincronizzazione Google Drive a 1-click
+- Eliminazione referto pulisce anche immagini
+
+---
+
+## 10. CONFIGURAZIONE CORRENTE
+
+### Variabili Railway (non committare — valori reali su Railway dashboard o su .env locale)
+```
+SUPABASE_URL                = <da Railway dashboard>
+SUPABASE_SERVICE_KEY        = <da Railway dashboard>
+JWT_SECRET                  = <da Railway dashboard>
+RESEND_API_KEY              = <da Railway dashboard>
+SMSHOSTING_API_KEY          = <da Railway dashboard>
+SMSHOSTING_API_SECRET       = <da Railway dashboard>
+SMS_SENDER                  = (non più usato — mittente fisso 394390009000)
+STUDIO_NOME                 = Studio Dr. Susino
+STUDIO_TELEFONO             = 339-4028454
+# Google Calendar (service account agendastudio-497611)
+GOOGLE_PRIVATE_KEY          = <JSON completo service account>
+GOOGLE_CLIENT_EMAIL         = agenda-calendar@agendastudio-497611.iam.gserviceaccount.com
+GOOGLE_CALENDAR_ID          = salvatoresusino.md@gmail.com
+# Google Business Profile (OAuth2 — account salvatoresusino.md@gmail.com)
+GOOGLE_OAUTH_CLIENT_ID      = <da Railway dashboard — formato: XXXXXXXXX.apps.googleusercontent.com>
+GOOGLE_OAUTH_CLIENT_SECRET  = <da Railway dashboard — formato: GOCSPX-XXXXXXXXXX>
+GOOGLE_OAUTH_REFRESH_TOKEN  = <da Railway dashboard — formato: 1//XXXXXXXXXX>
+GOOGLE_OAUTH_REDIRECT_URI   = https://referteco-production.up.railway.app/api/gbp/callback
+GBP_LOCATION_NAME           = (opzionale — si scopre auto alla prima chiamata)
 ```
 
-**⚠️ Importante**: la chiave API Anthropic è in questo file. **Mai loggarla, mai stamparla,
-mai committarla**. Il `.gitignore` esclude `config.json`. Se vedi che sta uscendo nei
-log o nelle risposte, avvisa l'utente di rigenerarla.
-
-### Google Drive
-- Cartella dati: `G:\Il mio Drive\RefertEco Dati Pazienti\`
-- Cartella installer: `G:\Il mio Drive\Installer RefertEco\`
-- Sull'altro PC (Mac/Win) si chiamerà con percorso diverso ma stesso nome cartella
-- Modalità richiesta: **Mirror file** (no Stream — il file deve essere fisicamente in locale)
+### File locali (non committare)
+- `~/.referteco/config.json` — `dataDir` + `anthropicApiKey`
+- `agenda-backend/.env` — tutte le credenziali Railway
 
 ---
 
-## 5. COSE DA NON FARE / TRAPPOLE NOTE
+## 11. COSE DA NON FARE / TRAPPOLE NOTE
 
-1. **PowerShell `Set-Content` o `Out-File` con `-Encoding utf8`** aggiungono BOM UTF-8.
-   Questo rompe `JSON.parse` di Node e mojibake i caratteri Unicode in HTML.
-   Usa sempre `[System.IO.File]::WriteAllText($path, $text, $utf8NoBom)` dove
-   `$utf8NoBom = New-Object System.Text.UTF8Encoding $false`.
+1. **Frontend Agenda in due posti**: sorgente `agenda-frontend/`, copia `agenda-backend/frontend/`.
+   Modificare SEMPRE entrambi insieme.
 
-2. **Non modificare** il file `referteco_data.json` o la cartella `immagini/`
-   direttamente dal codice. È il database dell'utente, ha referti VERI.
+2. **PowerShell encoding**: `Set-Content`/`Out-File` aggiungono BOM UTF-8. Usa `[System.IO.File]::WriteAllText`.
 
-3. **L'app gira sempre** da `C:\Users\sunis\AppData\Local\RefertEco\` (NON dal Desktop).
-   Quindi modificare solo i file in `Desktop\` non ha effetto immediato. Devi propagare
-   anche in `AppData\` per testare. Vedi sezione 2 → Workflow di rilascio.
+3. **Non modificare** `referteco_data.json` o `immagini/` direttamente (dati reali).
 
-4. **Cache browser**: dopo modifiche a `app.js`, il browser carica la versione vecchia.
-   Aggiorna il cache-buster (`?v=YYYYMMDDx`) in tutti gli `index.html`.
+4. **RefertEco gira da AppData**, non da Desktop. Propagare le modifiche anche lì.
 
-5. **Force push solo se richiesto esplicitamente**. Il branch `main` può contenere
-   commit di altri PC dell'utente (ha un MacBook). Verifica sempre prima.
+5. **Cache browser**: aggiornare il cache-buster `?v=YYYYMMDD` dopo modifiche a JS/CSS.
 
-6. **NON fare modifiche durante un upload in corso** o quando l'utente sta usando
-   l'app — può causare disconnessione del browser e perdita di lavoro.
+6. **Force push solo se richiesto esplicitamente**.
+
+7. **`.env` e `config.json` non vanno mai in git**.
+
+8. **git fileMode**: su Windows, i file `.sh` appaiono sempre "modificati" per i permessi Unix.
+   Già configurato `core.fileMode = false` in questo repo.
 
 ---
 
-## 6. PROGETTO IN SOSPESO: INTEGRAZIONE ORTHANC
+## 12. ⚠️ ATTENZIONE — WORKSTATION IN STUDIO: NON SOVRASCRIVERE LE SUE MODIFICHE
 
-L'utente ha un sistema Orthanc esistente (PACS) configurato da un ingegnere ora
-irreperibile. **Non funziona da un po' di tempo**.
+La workstation in studio ha modifiche proprie (formattazione stampa, UI fix, Orthanc, worklist)
+che non esistono completamente su questo PC e viceversa.
 
-Workflow originale (presunto):
-1. Ecografo invia DICOM via rete Ethernet al server Orthanc
-2. Orthanc riceve e (probabilmente) inoltra le immagini a un altro PC/server locale
-3. Da lì le immagini dovrebbero arrivare al PC di lavoro
+**NON fare mai:**
+- `git pull` + sovrascrittura cieca dei file locali
+- Copia di interi file da questa repo sopra i file della workstation
 
-Stato attuale:
-- L'utente **non sa dove sia fisicamente il PC server Orthanc**
-- Ha solo una scheda tecnica cartacea dell'ingegnere
-- Il PC di lavoro su cui dovrà operare è **SU UNA RETE DIVERSA** da quello attuale
-
-Roadmap futura (quando arriverà sull'altro PC):
-1. **Identificare** il PC server Orthanc (potrebbe essere lo stesso o un altro)
-2. **Diagnosticare** perché non funziona (servizio fermato, IP cambiato, firewall, disco pieno?)
-3. **Verificare** la web UI di Orthanc (`http://IP:8042` di default)
-4. **Riparare** o ricostruire la configurazione
-5. **Integrare** con RefertEco: cartella `inbox` su Google Drive dove Orthanc deposita
-   i nuovi DICOM, e RefertEco mostra una sezione "Immagini in arrivo da ecografo"
-   con matching automatico paziente↔referto basato su `PatientName + StudyDate`
-
-Alternativa proposta (se Orthanc è irrecuperabile):
-- Implementare DICOM Storage SCP **direttamente dentro RefertEco** usando
-  la libreria Node.js [`dcmjs-dimse`](https://github.com/PantelisGeorgiadis/dcmjs-dimse)
-- Roadmap ~30-35 ore di sviluppo
+**Come fare correttamente:**
+1. `git diff HEAD` e `git status` — vedi cosa c'è di diverso
+2. Porta solo le modifiche specifiche usando `git merge` o merge manuale riga per riga
+3. Verifica che stampa e funzioni personalizzate funzionino ancora dopo ogni merge
 
 ---
 
-## 7. COME RIPRENDERE LA SESSIONE SUL NUOVO PC
-
-Sul nuovo PC, dopo aver clonato la repo:
+## 13. COME RIPRENDERE (su qualsiasi PC)
 
 ```bash
 git clone https://github.com/salvatoresusino93-source/RefertEco.git
-cd RefertEco
-npm install
+cd RefertEco && npm install
+cd agenda-backend && npm install && cd ..
 ```
 
-Poi apri Claude Code in quella cartella e **come PRIMO messaggio scrivi**:
+Crea `agenda-backend/.env` con le credenziali (recupera da Google Drive o dall'altro PC).
 
-> Leggi `RIPRENDI_QUI.md` e `BRIEFING_ClaudeCode.md` prima di iniziare.
-> Poi conferma in 5 righe cosa è già stato fatto e cosa resta da fare.
-
-In questo modo il nuovo Claude:
-1. Sa chi sei
-2. Sa cosa è stato fatto
-3. Sa cosa devi ancora fare (Orthanc)
-4. Sa evitare le trappole note (cache, BOM, force push, ecc.)
+**Primo messaggio a Claude**: "Leggi `RIPRENDI_QUI.md` prima di iniziare."
 
 ---
 
-## 8. CONTATTO
+## 14. CONTATTO
 
 Repository: https://github.com/salvatoresusino93-source/RefertEco
-Issue tracker: nessuno (si parla direttamente in chat con Claude)
