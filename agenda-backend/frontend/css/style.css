@@ -350,6 +350,18 @@ button { font-family:inherit; }
 .mbb-icon { font-size:22px; line-height:1; }
 .mbb-lbl  { font-size:11px; font-weight:600; }
 
+/* ─── GIORNI ECOGRAFIA (Mar + Ven) ──────────────────────────────────── */
+.cal-th-day.ecografia { background: #f0fdf4; }
+.cal-th-day.ecografia .cal-th-dayname { color: #15803d; }
+.cal-th-day.ecografia .cal-th-daynum  { color: #166534; }
+.cal-day.ecografia { background: #f7fef9; }
+.cal-day.ecografia.today { background: #ecfdf5; }
+/* Badge "🩺" nell'intestazione del giorno ecografia */
+.cal-th-ecografia {
+  display: block; font-size: 11px; line-height: 1;
+  margin-top: 1px; opacity: .75;
+}
+
 /* ─── BLOCCO INDISPONIBILITÀ ─────────────────────────────────────────── */
 .cal-blocco {
   position: absolute; left: 0; right: 0; z-index: 1;

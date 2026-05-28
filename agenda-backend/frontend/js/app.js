@@ -176,13 +176,15 @@ function renderCalendar() {
     const dateStr = toDateStr(d);
     const bloccoGiorno  = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
     const isDomenica    = d.getDay() === 0;
+    const isEcografia   = d.getDay() === 2 || d.getDay() === 5; // Mar=2, Ven=5
     const isChiuso      = bloccoGiorno || isDomenica;
     const motivoChiuso  = isDomenica ? 'Domenica — giorno di chiusura' : (bloccoGiorno?.motivo || '');
-    const cls = (isToday(d) ? ' today' : '') + (isChiuso ? ' festivo' : '');
+    const cls = (isToday(d) ? ' today' : '') + (isChiuso ? ' festivo' : '') + (isEcografia && !isChiuso ? ' ecografia' : '');
     hdr += `<div class="cal-th-day${cls}">
       <span class="cal-th-dayname">${GIORNI[i]}</span>
       <span class="cal-th-daynum">${d.getDate()}</span>
-      ${isChiuso ? `<span class="cal-th-festivo" title="${esc(motivoChiuso)}">🔴</span>` : ''}
+      ${isChiuso    ? `<span class="cal-th-festivo" title="${esc(motivoChiuso)}">🔴</span>` : ''}
+      ${isEcografia && !isChiuso ? `<span class="cal-th-ecografia" title="Giorno ecografia">🩺</span>` : ''}
     </div>`;
   }
   hdr += `</div>`;
@@ -197,9 +199,10 @@ function renderCalendar() {
     // Blocco tutto il giorno: festività oppure domenica
     const bloccoGiorno  = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
     const isDomenica    = d.getDay() === 0;
+    const isEcografia   = d.getDay() === 2 || d.getDay() === 5; // Mar=2, Ven=5
     const isChiuso      = bloccoGiorno || isDomenica;
     const motivoChiuso  = isDomenica ? 'Domenica — giorno di chiusura' : (bloccoGiorno?.motivo || '');
-    const festivoCls    = isChiuso ? ' festivo' : '';
+    const festivoCls    = isChiuso ? ' festivo' : (isEcografia ? ' ecografia' : '');
 
     // Hour lines
     let lines = '';
