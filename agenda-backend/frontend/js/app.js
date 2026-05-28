@@ -512,9 +512,9 @@ async function loadAppInModal(id) {
     const a = await api.appuntamento(id);
     if (a.pazienti) {
       _pazienteId = a.paziente_id;
-      _pazCache[a.paziente_id] = a.pazienti;   // aggiungi alla cache
+      _pazCache[a.paziente_id] = a.pazienti;
       showPazSelezionato(`${a.pazienti.cognome} ${a.pazienti.nome}`);
-      showPazInfo(a.pazienti);
+      fillPazForm(a.pazienti);   // form editabile pre-compilato
     }
     $('app-tipo').value = a.tipo_id || '';
     checkPreparazione();
@@ -604,29 +604,34 @@ function resetPaziente() {
   $('paziente-search').style.display = '';
   $('paz-results').classList.add('hidden');
   $('paz-selezionato').classList.add('hidden');
-  $('paz-info-panel').classList.add('hidden');
   $('btn-nuovo-paz-toggle').style.display = '';
+  $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
+  // Nascondi e svuota il form paziente
+  $('nuovo-paz-form').classList.add('hidden');
+  ['np-cognome','np-nome','np-nascita','np-cf','np-telefono'].forEach(id => $(id).value = '');
+  $('np-sesso').value = '';
+  $('btn-salva-nuovo-paz').textContent = '✓ Salva paziente';
 }
 
 function showPazSelezionato(nome) {
   $('paz-nome-display').textContent = nome;
   $('paz-selezionato').classList.remove('hidden');
   $('paziente-search').style.display = 'none';
-  $('btn-nuovo-paz-toggle').style.display = 'none';
+  $('btn-nuovo-paz-toggle').style.display = 'none';  // nascosto: form sempre visibile
   $('paz-results').classList.add('hidden');
 }
 
-function showPazInfo(p) {
+// Compila il form con i dati del paziente esistente (modalità modifica)
+function fillPazForm(p) {
   if (!p) return;
-  const nasc = p.data_nascita
-    ? '📅 ' + new Date(p.data_nascita).toLocaleDateString('it-IT', {day:'2-digit',month:'2-digit',year:'numeric'})
-    : '';
-  const tel = p.telefono ? '📱 ' + p.telefono : '';
-  const cf  = p.codice_fiscale ? '🪪 ' + p.codice_fiscale.toUpperCase() : '';
-  $('paz-info-nascita').textContent = nasc;
-  $('paz-info-tel').textContent     = tel;
-  $('paz-info-cf').textContent      = cf;
-  $('paz-info-panel').classList.remove('hidden');
+  $('np-cognome').value  = p.cognome || '';
+  $('np-nome').value     = p.nome    || '';
+  $('np-nascita').value  = p.data_nascita ? p.data_nascita.split('T')[0] : '';
+  $('np-sesso').value    = p.sesso   || '';
+  $('np-cf').value       = (p.codice_fiscale || '').toUpperCase();
+  $('np-telefono').value = p.telefono || '';
+  $('nuovo-paz-form').classList.remove('hidden');
+  $('btn-salva-nuovo-paz').textContent = '✓ Aggiorna paziente';
 }
 
 async function onPazSearch() {
@@ -662,89 +667,85 @@ function renderPazResults(list) {
 
 async function selezionaPaz(id) {
   _pazienteId = id;
-  // Usa la cache se disponibile, altrimenti fetch
   let p = _pazCache[id];
   if (!p) {
     try { p = await api.paziente(id); _pazCache[id] = p; } catch {}
   }
   const nome = p ? `${p.cognome} ${p.nome}` : id;
   showPazSelezionato(nome);
-  showPazInfo(p);
+  fillPazForm(p);  // apre il form pre-compilato e modificabile
 }
 
 async function salvaNuovoPaz() {
-  const cognome   = $('np-cognome').value.trim();
-  const nome      = $('np-nome').value.trim();
-  const telefono  = $('np-telefono').value.trim();
-  if (!cognome || !nome)    { alert('Cognome e nome obbligatori'); return; }
+  const cognome  = $('np-cognome').value.trim();
+  const nome     = $('np-nome').value.trim();
+  const telefono = $('np-telefono').value.trim();
+  if (!cognome || !nome)      { alert('Cognome e nome obbligatori'); return; }
   if (!$('np-nascita').value) { alert('La data di nascita è obbligatoria'); $('np-nascita').focus(); return; }
-  if (!telefono)            { alert('Il numero di telefono è obbligatorio'); $('np-telefono').focus(); return; }
-  const btn = $('btn-salva-nuovo-paz');
+  if (!telefono)              { alert('Il numero di telefono è obbligatorio'); $('np-telefono').focus(); return; }
+
+  const btn  = $('btn-salva-nuovo-paz');
+  const dati = {
+    cognome, nome,
+    data_nascita:   $('np-nascita').value || null,
+    sesso:          $('np-sesso').value   || null,
+    codice_fiscale: $('np-cf').value.trim().toUpperCase() || null,
+    telefono,
+  };
+
   btn.textContent = 'Salvataggio…'; btn.disabled = true;
+
+  // ── MODALITÀ AGGIORNA (paziente già selezionato) ──────────────────────
+  if (_pazienteId) {
+    try {
+      const p = await api.aggiornaPaziente(_pazienteId, dati);
+      _pazCache[_pazienteId] = { ...dati, id: _pazienteId, ...p };
+      $('paz-nome-display').textContent = `${cognome} ${nome}`;
+      btn.textContent = '✓ Aggiornato!';
+      setTimeout(() => { btn.textContent = '✓ Aggiorna paziente'; btn.disabled = false; }, 1500);
+    } catch(ex) {
+      alert('Errore aggiornamento: ' + ex.message);
+      btn.textContent = '✓ Aggiorna paziente'; btn.disabled = false;
+    }
+    return;
+  }
+
+  // ── MODALITÀ CREA (nuovo paziente) ────────────────────────────────────
   try {
-    const p = await api.creaPaziente({
-      cognome, nome,
-      data_nascita:   $('np-nascita').value || null,
-      sesso:          $('np-sesso').value   || null,
-      codice_fiscale: $('np-cf').value.trim() || null,
-      telefono,
-    });
-    selezionaPaz(p.id, `${p.cognome} ${p.nome}`);
-    $('nuovo-paz-form').classList.add('hidden');
-    $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
-    ['np-cognome','np-nome','np-nascita','np-cf','np-telefono'].forEach(id => $(id).value='');
-    $('np-sesso').value = '';
+    const p = await api.creaPaziente(dati);
+    // Paziente creato: selezionalo e mostra il form in modalità modifica
+    _pazienteId = p.id;
+    _pazCache[p.id] = p;
+    showPazSelezionato(`${p.cognome} ${p.nome}`);
+    fillPazForm(p);
+    btn.textContent = '✓ Salvato!';
+    setTimeout(() => { btn.textContent = '✓ Aggiorna paziente'; btn.disabled = false; }, 1500);
   } catch(ex) {
     if (ex.status === 409 && ex.paziente) {
-      const p = ex.paziente;
-      const nascita = p.data_nascita
-        ? new Date(p.data_nascita + 'T12:00:00').toLocaleDateString('it-IT')
-        : 'non inserita';
+      const p   = ex.paziente;
+      const nasc = p.data_nascita
+        ? new Date(p.data_nascita + 'T12:00:00').toLocaleDateString('it-IT') : 'non inserita';
 
       if (ex.motivo === 'telefono') {
-        // Solo avviso — salva comunque il nuovo paziente
-        alert(
-          `⚠️ Attenzione: il numero ${p.telefono} è già associato al paziente:\n\n` +
-          `${p.cognome} ${p.nome} (nato/a il ${nascita})\n\n` +
-          `Il nuovo paziente verrà salvato ugualmente.`
-        );
+        alert(`⚠️ Il numero ${p.telefono} è già associato a:\n${p.cognome} ${p.nome} (nato/a il ${nasc})\n\nIl nuovo paziente verrà salvato ugualmente.`);
         try {
-          const p2 = await api.creaPaziente({
-            cognome, nome,
-            data_nascita:   $('np-nascita').value || null,
-            sesso:          $('np-sesso').value   || null,
-            codice_fiscale: $('np-cf').value.trim() || null,
-            telefono,
-            forza_creazione: true
-          });
-          selezionaPaz(p2.id, `${p2.cognome} ${p2.nome}`);
-          $('nuovo-paz-form').classList.add('hidden');
-          $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
-          ['np-cognome','np-nome','np-nascita','np-cf','np-telefono'].forEach(id => $(id).value='');
-          $('np-sesso').value = '';
-        } catch(ex2) {
-          alert('Errore: ' + ex2.message);
-        }
+          const p2 = await api.creaPaziente({ ...dati, forza_creazione: true });
+          _pazienteId = p2.id; _pazCache[p2.id] = p2;
+          showPazSelezionato(`${p2.cognome} ${p2.nome}`);
+          fillPazForm(p2);
+          btn.textContent = '✓ Aggiorna paziente'; btn.disabled = false;
+        } catch(ex2) { alert('Errore: ' + ex2.message); btn.textContent = '✓ Salva paziente'; btn.disabled = false; }
       } else {
-        // Nome+nascita: chiedi conferma uso paziente esistente
-        const msg = `⚠️ Attenzione — paziente già presente\n\nEsiste già un paziente con stesso nome e data di nascita:\n\n` +
-          `Nome: ${p.cognome} ${p.nome}\n` +
-          `Nato/a il: ${nascita}\n` +
-          `Tel: ${p.telefono || '—'}` +
-          `\n\nPremi OK per usare il paziente esistente, oppure Annulla per tornare al form.`;
+        const msg = `⚠️ Paziente già presente:\n\n${p.cognome} ${p.nome}\nNato/a il: ${nasc}\nTel: ${p.telefono||'—'}\n\nOK = usa il paziente esistente\nAnnulla = torna al form`;
         if (confirm(msg)) {
-          selezionaPaz(p.id, `${p.cognome} ${p.nome}`);
-          $('nuovo-paz-form').classList.add('hidden');
-          $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
-          ['np-cognome','np-nome','np-nascita','np-cf','np-telefono'].forEach(id => $(id).value='');
-          $('np-sesso').value = '';
+          await selezionaPaz(p.id);   // carica e mostra il paziente esistente
         }
+        btn.textContent = '✓ Salva paziente'; btn.disabled = false;
       }
     } else {
       alert('Errore: ' + ex.message);
+      btn.textContent = '✓ Salva paziente'; btn.disabled = false;
     }
-  } finally {
-    btn.textContent = '✓ Salva paziente'; btn.disabled = false;
   }
 }
 
@@ -1023,12 +1024,12 @@ function nuovoAppDaPaziente() {
   $('paz-nome-display').textContent = `${cognome} ${nome}`;
   $('paz-selezionato').classList.remove('hidden');
   $('btn-nuovo-paz-toggle').style.display = 'none';
-  // Mostra i dati anagrafici (dalla cache se disponibile, altrimenti fetch)
+  // Form editabile pre-compilato
   const cached = _pazCache[idPaz];
   if (cached) {
-    showPazInfo(cached);
+    fillPazForm(cached);
   } else {
-    api.paziente(idPaz).then(p => { _pazCache[idPaz] = p; showPazInfo(p); }).catch(() => {});
+    api.paziente(idPaz).then(p => { _pazCache[idPaz] = p; fillPazForm(p); }).catch(() => {});
   }
 }
 
