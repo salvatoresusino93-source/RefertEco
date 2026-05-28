@@ -538,7 +538,7 @@ function renderStatoBtns(attuale) {
          Clicca <strong>Prenotato</strong> per confermare manualmente.
        </div>`
     : '';
-  $('stato-btns').innerHTML = banner + ['prenotato','arrivato','in_corso','refertato'].map(s =>
+  $('stato-btns').innerHTML = banner + ['prenotato','arrivato','refertato'].map(s =>
     `<button class="stato-btn stato-${s}${s===attuale?' active':''}"
       data-stato="${s}" onclick="clickStato(this,'${s}')">${STATI[s]}</button>`
   ).join('');
