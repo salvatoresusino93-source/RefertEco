@@ -206,7 +206,7 @@ function renderCalendar() {
 
     // Hour lines
     let lines = '';
-    for (let m=0; m<=totalMin; m+=20) {
+    for (let m=0; m<=totalMin; m+=30) {
       lines += `<div class="cal-hline${m%60===0?' major':''}" style="top:${m*PX_PER_MIN}px"></div>`;
     }
 
