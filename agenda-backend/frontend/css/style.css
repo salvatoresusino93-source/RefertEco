@@ -428,10 +428,8 @@ button { font-family:inherit; }
     padding-bottom:calc(62px + env(safe-area-inset-bottom, 0px));
   }
 
-  /* Calendario: 7 colonne da 68px + colonna ore 44px = 520px scrollabile */
-  .cal-wrap   { width:calc(44px + 7 * 68px); min-width:0; }
-  .cal-header { grid-template-columns:44px repeat(7,68px); }
-  .cal-body   { grid-template-columns:44px repeat(7,68px); }
+  /* Calendario: larghezza e grid-template-columns impostati via JS (multi-settimana) */
+  .cal-wrap   { min-width:0; }
 
   /* Colonna ore sticky a sinistra (con prefisso webkit per iOS) */
   .cal-time-col {

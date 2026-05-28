@@ -24,9 +24,17 @@ const BLOCCO_TIPI = {
   giornata:   { label: 'Giornata bloccata',   startH: 8,  endH: 20 },
 };
 
+// ── Calendario continuo (mobile) ─────────────────────────────────────────
+const CAL_WEEKS_MOB = 3;   // settimane renderizzate in contemporanea su mobile
+const COL_W_MOB     = 68;  // larghezza colonna giorno mobile (px)
+const TIME_W_MOB    = 44;  // larghezza colonna ore mobile (px)
+// Nomi giorni indicizzati per d.getDay() (0=Dom…6=Sab)
+const GIORNI_IT = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+
 // ─── Stato ────────────────────────────────────────────────────────────────
 let _user         = null;
 let _viewStart    = null;   // lunedì della settimana visualizzata
+let _calStart     = null;   // inizio range renderizzato su mobile (CAL_WEEKS_MOB settimane)
 let _mobileDay    = null;   // giorno corrente in vista mobile
 let _appointments = [];
 let _prestazioni  = [];
@@ -36,6 +44,9 @@ let _editId           = null;   // id appuntamento in modifica
 let _pazienteId       = null;   // paziente selezionato nel modal
 let _searchTimer      = null;
 let _bloccoTipo       = null;   // tipo selezionato nel modal blocco fascia
+let _pendingScroll    = null;   // scrollLeft (px) da applicare dopo il prossimo render
+let _firstRender      = true;   // primo render mobile: posiziona su settimana corrente
+let _scrollDebounce   = null;
 
 function isMobile() { return window.innerWidth <= 768; }
 
@@ -104,12 +115,14 @@ async function onLoginOk(user) {
   $('user-badge').textContent = user.nome_display || user.username;
   try { _prestazioni = await api.prestazioni(); } catch { _prestazioni = []; }
   fillPrestazioni();
-  _viewStart = getMon(new Date());
+  _viewStart  = getMon(new Date());
+  _calStart   = addDays(_viewStart, -7); // 1 settimana prima (buffer mobile)
   await refreshWeek();
   await refreshSidebar();
   initSocket();
   bindEvents();
   initSwipe();
+  initScrollListener();
   window.addEventListener('resize', () => { renderCalendar(); renderPeriod(); });
 }
 
@@ -128,11 +141,23 @@ function initSocket() {
 
 // ─── Calendar load & render ───────────────────────────────────────────────
 async function refreshWeek() {
-  const from = toISO(_viewStart);
-  const to   = toISO(addDays(_viewStart, 7));
-  try { _appointments = await api.appuntamenti(from, to); } catch { _appointments = []; }
-  try { _blocchi         = await api.blocchi(from, to);                                                              } catch { _blocchi = []; }
-  try { _indisponibilita = await api.indisponibilita(toDateStr(_viewStart), toDateStr(addDays(_viewStart, 6))); } catch { _indisponibilita = []; }
+  const mobile = isMobile();
+  let fromDate, toDate;
+  if (mobile) {
+    if (!_calStart) _calStart = addDays(getMon(_viewStart), -7);
+    fromDate = _calStart;
+    toDate   = addDays(_calStart, CAL_WEEKS_MOB * 7);
+  } else {
+    fromDate = _viewStart;
+    toDate   = addDays(_viewStart, 7);
+  }
+  const from = toISO(fromDate);
+  const to   = toISO(toDate);
+  try { _appointments    = await api.appuntamenti(from, to); }   catch { _appointments = []; }
+  try { _blocchi         = await api.blocchi(from, to); }         catch { _blocchi = []; }
+  try { _indisponibilita = await api.indisponibilita(
+    toDateStr(fromDate), toDateStr(addDays(toDate, -1))
+  ); }                                                            catch { _indisponibilita = []; }
   renderCalendar();
   renderPeriod();
 }
@@ -145,94 +170,85 @@ function renderPeriod() {
 }
 
 function renderCalendar() {
+  const mobile    = isMobile();
+  const numDays   = mobile ? CAL_WEEKS_MOB * 7 : 7;
+  const timeW     = mobile ? TIME_W_MOB : 52;
+  const colW      = mobile ? COL_W_MOB  : null;   // null = 1fr su desktop
+  const startDate = mobile ? (_calStart || _viewStart) : _viewStart;
+  const gridCols  = mobile
+    ? `${timeW}px repeat(${numDays},${colW}px)`
+    : `${timeW}px repeat(7,1fr)`;
+
+  // Salva scroll corrente prima di ricostruire il DOM
+  const mainEl      = document.querySelector('.app-main');
+  const savedScroll = (mobile && mainEl) ? mainEl.scrollLeft : 0;
+
   const totalMin = (CAL_END - CAL_START) * 60;
   const totalPx  = totalMin * PX_PER_MIN;
 
-  // ── Header
-  let hdr = `<div class="cal-header"><div class="cal-th-time"></div>`;
-  for (let i=0; i<7; i++) {
-    const d = addDays(_viewStart, i);
-    const cls = isToday(d) ? ' today' : '';
+  // ── Header (con badge festività / ecografia)
+  let hdr = `<div class="cal-header" style="grid-template-columns:${gridCols}"><div class="cal-th-time"></div>`;
+  for (let i = 0; i < numDays; i++) {
+    const d          = addDays(startDate, i);
+    const dateStr    = toDateStr(d);
+    const bloccoGiorno = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
+    const isDomenica   = d.getDay() === 0;
+    const isEcografia  = d.getDay() === 2 || d.getDay() === 5;
+    const isChiuso     = bloccoGiorno || isDomenica;
+    const motivoCh     = isDomenica ? 'Domenica — giorno di chiusura' : (bloccoGiorno?.motivo || '');
+    const giorno       = GIORNI_IT[d.getDay()];
+    const cls = (isToday(d) ? ' today' : '') +
+                (isChiuso ? ' festivo' : '') +
+                (isEcografia && !isChiuso ? ' ecografia' : '');
     hdr += `<div class="cal-th-day${cls}">
-      <span class="cal-th-dayname">${GIORNI[i]}</span>
+      <span class="cal-th-dayname">${giorno}</span>
       <span class="cal-th-daynum">${d.getDate()}</span>
-    </div>`;
-  }
-  hdr += `</div>`;
-
-  // ── Time labels
-  let timeLbls = `<div class="cal-time-col" style="height:${totalPx}px">`;
-  for (let m=0; m<=totalMin; m+=60) {
-    const h = CAL_START + m/60;
-    timeLbls += `<div class="cal-lbl" style="top:${m*PX_PER_MIN}px">${String(h).padStart(2,'0')}:00</div>`;
-  }
-  timeLbls += `</div>`;
-
-  // ── Header con indicatore festività
-  // Ricostruiamo l'header aggiungendo il badge festivo
-  hdr = `<div class="cal-header"><div class="cal-th-time"></div>`;
-  for (let i=0; i<7; i++) {
-    const d       = addDays(_viewStart, i);
-    const dateStr = toDateStr(d);
-    const bloccoGiorno  = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
-    const isDomenica    = d.getDay() === 0;
-    const isEcografia   = d.getDay() === 2 || d.getDay() === 5; // Mar=2, Ven=5
-    const isChiuso      = bloccoGiorno || isDomenica;
-    const motivoChiuso  = isDomenica ? 'Domenica — giorno di chiusura' : (bloccoGiorno?.motivo || '');
-    const cls = (isToday(d) ? ' today' : '') + (isChiuso ? ' festivo' : '') + (isEcografia && !isChiuso ? ' ecografia' : '');
-    hdr += `<div class="cal-th-day${cls}">
-      <span class="cal-th-dayname">${GIORNI[i]}</span>
-      <span class="cal-th-daynum">${d.getDate()}</span>
-      ${isChiuso    ? `<span class="cal-th-festivo" title="${esc(motivoChiuso)}">🔴</span>` : ''}
+      ${isChiuso ? `<span class="cal-th-festivo" title="${esc(motivoCh)}">🔴</span>` : ''}
       ${isEcografia && !isChiuso ? `<span class="cal-th-ecografia" title="Giorno ecografia">🩺</span>` : ''}
     </div>`;
   }
   hdr += `</div>`;
 
-  // ── Day columns
+  // ── Colonna ore (sticky a sinistra)
+  let timeLbls = `<div class="cal-time-col" style="height:${totalPx}px">`;
+  for (let m = 0; m <= totalMin; m += 60) {
+    const h = CAL_START + m / 60;
+    timeLbls += `<div class="cal-lbl" style="top:${m*PX_PER_MIN}px">${String(h).padStart(2,'0')}:00</div>`;
+  }
+  timeLbls += `</div>`;
+
+  // ── Colonne giorno
   let days = '';
-  for (let i=0; i<7; i++) {
-    const d       = addDays(_viewStart, i);
-    const dateStr = toDateStr(d);
-    const todayCls = isToday(d) ? ' today' : '';
+  for (let i = 0; i < numDays; i++) {
+    const d          = addDays(startDate, i);
+    const dateStr    = toDateStr(d);
+    const todayCls   = isToday(d) ? ' today' : '';
+    const bloccoGiorno = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
+    const isDomenica   = d.getDay() === 0;
+    const isEcografia  = d.getDay() === 2 || d.getDay() === 5;
+    const isChiuso     = bloccoGiorno || isDomenica;
+    const motivoCh     = isDomenica ? 'Domenica — giorno di chiusura' : (bloccoGiorno?.motivo || '');
+    const festivoCls   = isChiuso ? ' festivo' : (isEcografia ? ' ecografia' : '');
 
-    // Blocco tutto il giorno: festività oppure domenica
-    const bloccoGiorno  = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
-    const isDomenica    = d.getDay() === 0;
-    const isEcografia   = d.getDay() === 2 || d.getDay() === 5; // Mar=2, Ven=5
-    const isChiuso      = bloccoGiorno || isDomenica;
-    const motivoChiuso  = isDomenica ? 'Domenica — giorno di chiusura' : (bloccoGiorno?.motivo || '');
-    const festivoCls    = isChiuso ? ' festivo' : (isEcografia ? ' ecografia' : '');
-
-    // Hour lines
     let lines = '';
-    for (let m=0; m<=totalMin; m+=30) {
+    for (let m = 0; m <= totalMin; m += 30)
       lines += `<div class="cal-hline${m%60===0?' major':''}" style="top:${m*PX_PER_MIN}px"></div>`;
-    }
 
-    // Click slots (bloccati se giorno chiuso)
     let slots = '';
-    for (let m=0; m<totalMin; m+=SLOT_MIN) {
-      const absMin = CAL_START*60 + m;
+    for (let m = 0; m < totalMin; m += SLOT_MIN) {
+      const absMin = CAL_START * 60 + m;
       const hh = String(Math.floor(absMin/60)).padStart(2,'0');
       const mm = String(absMin%60).padStart(2,'0');
-      if (isChiuso) {
-        slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
-          onclick="onSlotBlockedClick('${esc(motivoChiuso)}')"></div>`;
-      } else {
-        slots += `<div class="cal-slot" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
-          onclick="onSlotClick('${dateStr}','${hh}:${mm}')"></div>`;
-      }
+      slots += isChiuso
+        ? `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
+            onclick="onSlotBlockedClick('${esc(motivoCh)}')"></div>`
+        : `<div class="cal-slot" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
+            onclick="onSlotClick('${dateStr}','${hh}:${mm}')"></div>`;
     }
 
-    // Overlay blocco giorno intero (festività o domenica)
     const bloccoOverlay = isChiuso
-      ? `<div class="cal-blocco-overlay" title="${esc(motivoChiuso)}">
-           <span class="cal-blocco-label">${esc(motivoChiuso)}</span>
-         </div>`
-      : '';
+      ? `<div class="cal-blocco-overlay" title="${esc(motivoCh)}"><span class="cal-blocco-label">${esc(motivoCh)}</span></div>` : '';
 
-    // Appointments
     let appHtml = '';
     for (const a of _appointments.filter(x => x.data_ora_inizio.startsWith(dateStr))) {
       const startM = minFromMidnight(a.data_ora_inizio);
@@ -240,34 +256,27 @@ function renderCalendar() {
       const top    = (startM - CAL_START*60) * PX_PER_MIN;
       const height = Math.max((endM - startM) * PX_PER_MIN, 22);
       if (top < 0 || top >= totalPx) continue;
-
       const stato   = a.stato || 'prenotato';
       const pazNome = a.pazienti ? `${esc(a.pazienti.cognome)} ${esc(a.pazienti.nome)}` : '—';
       const esame   = esc(a.tipi_prestazione?.nome || '');
-
-      appHtml += `<div class="cal-app stato-${stato}"
-        style="top:${top}px;height:${height}px"
-        onclick="onAppClick('${a.id}',event)"
-        title="${pazNome} — ${esame}">
+      appHtml += `<div class="cal-app stato-${stato}" style="top:${top}px;height:${height}px"
+        onclick="onAppClick('${a.id}',event)" title="${pazNome} — ${esame}">
         <div class="cal-app-time">${fmtTime(a.data_ora_inizio)}</div>
         <div class="cal-app-nome">${pazNome}</div>
         ${height>=50?`<div class="cal-app-esame">${esame}</div>`:''}
       </div>`;
     }
 
-    // Blocchi indisponibilità fascia oraria (z-index 1, sotto gli appuntamenti)
     let fasceBlocchi = '';
     for (const b of _indisponibilita.filter(x => x.data === dateStr)) {
       const bt = BLOCCO_TIPI[b.tipo];
       if (!bt) continue;
       const top    = (bt.startH - CAL_START) * 60 * PX_PER_MIN;
       const height = (bt.endH - bt.startH) * 60 * PX_PER_MIN;
-      const motivo = b.motivo ? esc(b.motivo) : '';
+      const motivo  = b.motivo ? esc(b.motivo) : '';
       const tooltip = `${bt.label}${motivo ? ' — ' + motivo : ''}\n\nClicca per rimuovere il blocco`;
-      fasceBlocchi += `<div class="cal-blocco"
-        style="top:${top}px;height:${height}px"
-        onclick="onBloccoClick('${b.id}',event)"
-        title="${tooltip}">
+      fasceBlocchi += `<div class="cal-blocco" style="top:${top}px;height:${height}px"
+        onclick="onBloccoClick('${b.id}',event)" title="${tooltip}">
         <span class="cal-blocco-icon">🔒</span>
         <span class="cal-blocco-label">${bt.label}</span>
         ${motivo ? `<span class="cal-blocco-motivo">${motivo}</span>` : ''}
@@ -277,37 +286,105 @@ function renderCalendar() {
     days += `<div class="cal-day${todayCls}${festivoCls}" style="height:${totalPx}px">${lines}${slots}${bloccoOverlay}${fasceBlocchi}${appHtml}</div>`;
   }
 
-  $('cal-wrap').innerHTML = `${hdr}
-    <div class="cal-body">${timeLbls}${days}</div>`;
+  // ── Applica larghezza al wrapper (mobile: pixel fissi; desktop: auto)
+  const calWrap = $('cal-wrap');
+  if (mobile) {
+    calWrap.style.width    = `${timeW + numDays * colW}px`;
+    calWrap.style.minWidth = '0';
+  } else {
+    calWrap.style.width    = '';
+    calWrap.style.minWidth = '';
+  }
 
-  // Su mobile: scrolla in modo che la colonna di oggi sia visibile
-  if (isMobile()) {
-    requestAnimationFrame(() => {
-      const todayCol = $('cal-wrap').querySelector('.cal-day.today');
-      if (todayCol) todayCol.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'center' });
-    });
+  calWrap.innerHTML = `${hdr}<div class="cal-body" style="grid-template-columns:${gridCols}">${timeLbls}${days}</div>`;
+
+  // ── Gestione scroll mobile
+  if (mobile && mainEl) {
+    if (_pendingScroll !== null) {
+      // Posizione calcolata dopo edge re-center
+      mainEl.scrollLeft = _pendingScroll;
+      _pendingScroll    = null;
+      _firstRender      = false;
+    } else if (!_firstRender) {
+      // Re-render normale: mantieni posizione corrente
+      mainEl.scrollLeft = savedScroll;
+    } else {
+      // Primo render: posiziona sulla settimana corrente (_viewStart)
+      const dayIdx = Math.max(0, Math.round((getMon(_viewStart) - startDate) / 86400000));
+      mainEl.scrollLeft = dayIdx * colW;
+      _firstRender = false;
+    }
   }
 }
 
 // ─── Navigazione settimana (mobile: frecce, desktop: frecce + swipe) ─────
 function navMobileWeek(n) {
+  if (isMobile()) {
+    const el = document.querySelector('.app-main');
+    if (el) { el.scrollBy({ left: n * 7 * COL_W_MOB, behavior: 'smooth' }); return; }
+  }
   _viewStart = addDays(_viewStart, n * 7);
   refreshWeek();
 }
 
 function goToToday() {
-  _viewStart = getMon(new Date());
+  _viewStart   = getMon(new Date());
+  _calStart    = addDays(_viewStart, -7);
+  _firstRender = true;   // forza riposizionamento su oggi
   refreshWeek();
 }
 
 // ─── Tasto freccia (desktop) ──────────────────────────────────────────────
-// Su mobile lo swipe è rimosso: si usano le freccette della bottom nav
 function initSwipe() {
   document.addEventListener('keydown', e => {
     if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
     if (e.key === 'ArrowRight') { e.preventDefault(); _viewStart = addDays(_viewStart,  7); refreshWeek(); }
     if (e.key === 'ArrowLeft')  { e.preventDefault(); _viewStart = addDays(_viewStart, -7); refreshWeek(); }
   });
+}
+
+// ─── Scroll continuo multi-settimana (mobile) ─────────────────────────────
+function initScrollListener() {
+  const mainEl = document.querySelector('.app-main');
+  if (!mainEl) return;
+  mainEl.addEventListener('scroll', onCalMainScroll, { passive: true });
+}
+
+function onCalMainScroll() {
+  if (!isMobile() || !_calStart) return;
+  const el = document.querySelector('.app-main');
+  if (!el) return;
+
+  // Aggiorna etichetta periodo in base alla posizione di scroll
+  const dayIdx = Math.max(0, Math.floor(el.scrollLeft / COL_W_MOB));
+  const visMon = getMon(addDays(_calStart, dayIdx));
+  if (toDateStr(visMon) !== toDateStr(_viewStart)) {
+    _viewStart = visMon;
+    renderPeriod();
+  }
+
+  // Estendi il range quando si raggiunge il bordo (debounced 300ms)
+  clearTimeout(_scrollDebounce);
+  _scrollDebounce = setTimeout(async () => {
+    if (!isMobile() || !_calStart) return;
+    const el2 = document.querySelector('.app-main');
+    if (!el2) return;
+    const maxScroll = el2.scrollWidth - el2.clientWidth;
+    const edgePx    = 3 * COL_W_MOB;   // trigger a 3 colonne dal bordo
+    const saved     = el2.scrollLeft;
+
+    if (saved < edgePx) {
+      // Bordo sinistro: aggiungi 1 settimana all'inizio del range
+      _calStart      = addDays(_calStart, -7);
+      _pendingScroll = saved + 7 * COL_W_MOB;
+      await refreshWeek();
+    } else if (saved > maxScroll - edgePx) {
+      // Bordo destro: sposta il range in avanti di 1 settimana
+      _calStart      = addDays(_calStart, 7);
+      _pendingScroll = Math.max(0, saved - 7 * COL_W_MOB);
+      await refreshWeek();
+    }
+  }, 300);
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────
@@ -330,8 +407,14 @@ async function refreshSidebar() {
 
 // ─── Nav events ───────────────────────────────────────────────────────────
 function bindEvents() {
-  $('btn-prev').onclick  = () => { _viewStart = addDays(_viewStart,-7); refreshWeek(); };
-  $('btn-next').onclick  = () => { _viewStart = addDays(_viewStart, 7); refreshWeek(); };
+  $('btn-prev').onclick  = () => {
+    if (isMobile()) { const el=document.querySelector('.app-main'); if(el){ el.scrollBy({left:-7*COL_W_MOB,behavior:'smooth'}); return; } }
+    _viewStart = addDays(_viewStart,-7); refreshWeek();
+  };
+  $('btn-next').onclick  = () => {
+    if (isMobile()) { const el=document.querySelector('.app-main'); if(el){ el.scrollBy({left: 7*COL_W_MOB,behavior:'smooth'}); return; } }
+    _viewStart = addDays(_viewStart, 7); refreshWeek();
+  };
   $('btn-oggi').onclick  = () => goToToday();
   $('btn-nuovo').onclick = () => openModal();
   $('btn-stampa').onclick = stampaDiario;
