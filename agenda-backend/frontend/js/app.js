@@ -514,7 +514,7 @@ async function loadAppInModal(id) {
       _pazienteId = a.paziente_id;
       _pazCache[a.paziente_id] = a.pazienti;
       showPazSelezionato(`${a.pazienti.cognome} ${a.pazienti.nome}`);
-      fillPazForm(a.pazienti);   // form editabile pre-compilato
+      showPazInfo(a.pazienti);   // dati in sola lettura + link "Modifica"
     }
     $('app-tipo').value = a.tipo_id || '';
     checkPreparazione();
@@ -606,7 +606,8 @@ function resetPaziente() {
   $('paz-selezionato').classList.add('hidden');
   $('btn-nuovo-paz-toggle').style.display = '';
   $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
-  // Nascondi e svuota il form paziente
+  // Nascondi pannello info e form paziente
+  $('paz-info-panel').classList.add('hidden');
   $('nuovo-paz-form').classList.add('hidden');
   ['np-cognome','np-nome','np-nascita','np-cf','np-telefono'].forEach(id => $(id).value = '');
   $('np-sesso').value = '';
@@ -621,8 +622,24 @@ function showPazSelezionato(nome) {
   $('paz-results').classList.add('hidden');
 }
 
-// Compila il form con i dati del paziente esistente (modalità modifica)
-function fillPazForm(p) {
+// Mostra i dati del paziente in sola lettura con link "Modifica"
+function showPazInfo(p) {
+  if (!p) return;
+  const nasc = p.data_nascita
+    ? new Date(p.data_nascita + 'T12:00:00').toLocaleDateString('it-IT') : '—';
+  const sesso = p.sesso === 'M' ? 'Maschio' : p.sesso === 'F' ? 'Femmina' : '—';
+  $('paz-info-nascita').textContent = nasc;
+  $('paz-info-sesso').textContent   = sesso;
+  $('paz-info-tel').textContent     = p.telefono || '—';
+  $('paz-info-cf').textContent      = (p.codice_fiscale || '—').toUpperCase();
+  $('paz-info-panel').classList.remove('hidden');
+  $('btn-modifica-paz').style.display = '';   // mostra link modifica
+  $('nuovo-paz-form').classList.add('hidden'); // form nascosto (sola lettura)
+}
+
+// Quando l'utente clicca "Modifica dati paziente": mostra il form editabile
+function abilitaModificaPaz() {
+  const p = _pazCache[_pazienteId];
   if (!p) return;
   $('np-cognome').value  = p.cognome || '';
   $('np-nome').value     = p.nome    || '';
@@ -631,7 +648,9 @@ function fillPazForm(p) {
   $('np-cf').value       = (p.codice_fiscale || '').toUpperCase();
   $('np-telefono').value = p.telefono || '';
   $('nuovo-paz-form').classList.remove('hidden');
+  $('btn-modifica-paz').style.display = 'none'; // nasconde il link mentre il form è aperto
   $('btn-salva-nuovo-paz').textContent = '✓ Aggiorna paziente';
+  $('np-cognome').focus();
 }
 
 async function onPazSearch() {
@@ -673,7 +692,7 @@ async function selezionaPaz(id) {
   }
   const nome = p ? `${p.cognome} ${p.nome}` : id;
   showPazSelezionato(nome);
-  fillPazForm(p);  // apre il form pre-compilato e modificabile
+  showPazInfo(p);  // dati in sola lettura + link "Modifica"
 }
 
 async function salvaNuovoPaz() {

@@ -235,6 +235,16 @@ button { font-family:inherit; }
   align-items:center; justify-content:space-between; font-weight:600; }
 
 
+/* Pannello read-only dati paziente selezionato */
+.paz-info-panel {
+  background:#f8fafc; border:1px solid var(--border);
+  border-radius:var(--radius); padding:8px 12px; margin-top:4px;
+  display:flex; flex-direction:column; gap:3px;
+}
+.paz-info-row { display:flex; gap:8px; font-size:12px; align-items:baseline; }
+.paz-info-lbl { color:var(--muted); min-width:90px; font-size:11px; }
+.paz-info-edit { margin-top:6px; font-size:12px; }
+
 .nuovo-paz-form { background:var(--bg); border:1px solid var(--border);
   border-radius:var(--radius); padding:14px; display:flex; flex-direction:column; gap:10px; }
 

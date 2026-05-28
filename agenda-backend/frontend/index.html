@@ -12,7 +12,7 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
   <meta name="theme-color" content="#2563eb">
-  <link rel="stylesheet" href="/css/style.css?v=20260528j">
+  <link rel="stylesheet" href="/css/style.css?v=20260528k">
 </head>
 <body>
 
@@ -137,6 +137,14 @@
         <div id="paz-selezionato" class="paz-selezionato hidden">
           <span id="paz-nome-display"></span>
           <button class="btn-link" id="btn-cambia-paz">cambia</button>
+        </div>
+        <!-- Dati paziente esistente: sola lettura + link modifica -->
+        <div id="paz-info-panel" class="paz-info-panel hidden">
+          <div class="paz-info-row"><span class="paz-info-lbl">📅 Nascita</span><span id="paz-info-nascita">—</span></div>
+          <div class="paz-info-row"><span class="paz-info-lbl">⚧ Sesso</span><span id="paz-info-sesso">—</span></div>
+          <div class="paz-info-row"><span class="paz-info-lbl">📱 Telefono</span><span id="paz-info-tel">—</span></div>
+          <div class="paz-info-row"><span class="paz-info-lbl">🪪 Cod. Fiscale</span><span id="paz-info-cf">—</span></div>
+          <button class="btn-link paz-info-edit" id="btn-modifica-paz" onclick="abilitaModificaPaz()">✏️ Modifica dati paziente</button>
         </div>
         <button class="btn-link" id="btn-nuovo-paz-toggle">+ Crea nuovo paziente</button>
       </div>
@@ -455,7 +463,7 @@
 
 <!-- Scripts -->
 <script src="/socket.io/socket.io.js"></script>
-<script src="/js/api.js?v=20260528j"></script>
-<script src="/js/app.js?v=20260528j"></script>
+<script src="/js/api.js?v=20260528k"></script>
+<script src="/js/app.js?v=20260528k"></script>
 </body>
 </html>
