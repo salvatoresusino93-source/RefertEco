@@ -721,7 +721,8 @@ td{padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:13px}
 }
 
 // ─── Menu hamburger ────────────────────────────────────────────────────────
-function chiudiMenu() { $('menu-dropdown').classList.add('hidden'); }
+function chiudiMenu()  { $('menu-dropdown').classList.add('hidden'); }
+function toggleMenu()  { $('menu-dropdown').classList.toggle('hidden'); }
 
 function menuNuovoApp() {
   chiudiMenu();

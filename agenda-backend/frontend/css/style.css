@@ -455,7 +455,17 @@ button { font-family:inherit; }
   .cal-app-esame { display:none; }
 
   /* Dropdown non tagliato fuori schermo */
-  .menu-dropdown { left:0; right:auto; min-width:220px; }
+  /* Su mobile: menu fisso in basso sopra la bottom bar */
+  .menu-dropdown {
+    position: fixed !important;
+    left: 0 !important; right: 0 !important;
+    bottom: calc(62px + env(safe-area-inset-bottom, 0px)) !important;
+    top: auto !important;
+    width: 100% !important; min-width: 0 !important;
+    border-radius: 16px 16px 0 0 !important;
+    z-index: 10000 !important;
+    box-shadow: 0 -4px 24px rgba(0,0,0,.15) !important;
+  }
 
   /* Modal: sale dal basso a schermo pieno */
   .modal-overlay { padding:0 !important; align-items:flex-end !important; }
