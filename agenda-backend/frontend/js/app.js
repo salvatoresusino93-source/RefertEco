@@ -300,33 +300,13 @@ function goToToday() {
   refreshWeek();
 }
 
-// ─── Swipe gesture (mobile) + tasto freccia (desktop) ────────────────────
+// ─── Tasto freccia (desktop) ──────────────────────────────────────────────
+// Su mobile lo swipe è rimosso: si usano le freccette della bottom nav
 function initSwipe() {
-  let x0 = 0, y0 = 0, t0 = 0;
-  const el = document.querySelector('.app-main') || document.body;
-
-  el.addEventListener('touchstart', e => {
-    x0 = e.touches[0].clientX;
-    y0 = e.touches[0].clientY;
-    t0 = Date.now();
-  }, { passive: true });
-
-  el.addEventListener('touchend', e => {
-    const dx = e.changedTouches[0].clientX - x0;
-    const dy = e.changedTouches[0].clientY - y0;
-    const dt = Date.now() - t0;
-    // Swipe veloce e orizzontale: cambia settimana
-    if (dt < 400 && Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy) * 2) {
-      if (dx < 0) { _viewStart = addDays(_viewStart,  7); refreshWeek(); }
-      else        { _viewStart = addDays(_viewStart, -7); refreshWeek(); }
-    }
-  }, { passive: true });
-
-  // Frecce tastiera (desktop)
   document.addEventListener('keydown', e => {
     if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
-    if (e.key === 'ArrowRight') { e.preventDefault(); isMobile() ? navMobileDay(1)  : (() => { _viewStart=addDays(_viewStart, 7); refreshWeek(); })(); }
-    if (e.key === 'ArrowLeft')  { e.preventDefault(); isMobile() ? navMobileDay(-1) : (() => { _viewStart=addDays(_viewStart,-7); refreshWeek(); })(); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); _viewStart = addDays(_viewStart,  7); refreshWeek(); }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); _viewStart = addDays(_viewStart, -7); refreshWeek(); }
   });
 }
 
