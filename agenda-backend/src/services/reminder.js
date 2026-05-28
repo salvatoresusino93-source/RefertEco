@@ -63,6 +63,12 @@ async function inviaPromemoriDomani() {
       continue;
     }
 
+    if (app.invia_sms_promemoria === false) {
+      console.log(`  [SALTATO] ${nome} — promemoria SMS disattivato per questo appuntamento`);
+      saltati++;
+      continue;
+    }
+
     try {
       const result = await inviaPromemoria(app);
       console.log(`  [OK] ${nome} → ${result.numero} (SID: ${result.sid})`);
@@ -98,6 +104,10 @@ async function controllaSmsUnaOra() {
     const telefono = app.pazienti?.telefono;
     const nome     = app.pazienti ? `${app.pazienti.nome} ${app.pazienti.cognome}` : app.id;
     if (!telefono) continue;
+    if (app.invia_sms_promemoria === false) {
+      console.log(`[SMS 1h] Saltato ${nome} — promemoria SMS disattivato`);
+      continue;
+    }
 
     try {
       await inviaPromemoria1Ora(app);

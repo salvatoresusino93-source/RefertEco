@@ -392,6 +392,7 @@ function openModal(opts={}) {
   $('app-tipo').value   = '';
   $('app-durata').value = 30;
   $('app-note').value   = '';
+  $('app-invia-sms').checked = true; // default: invia promemoria
   $('prep-reminder').classList.add('hidden');
   $('field-stato').style.display = 'none';
   $('btn-annulla-app').classList.add('hidden');
@@ -428,6 +429,7 @@ async function loadAppInModal(id) {
     $('app-ora-inizio').value = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
     $('app-durata').value = Math.round((new Date(a.data_ora_fine)-new Date(a.data_ora_inizio))/60000);
     $('app-note').value = a.note_segreteria || '';
+    $('app-invia-sms').checked = a.invia_sms_promemoria !== false; // default true
     $('field-stato').style.display = '';
     renderStatoBtns(a.stato);
   } catch { alert('Errore nel caricamento'); closeModal(); }
@@ -475,7 +477,8 @@ async function salvaApp() {
     tipo_id,
     data_ora_inizio: inizio.toISOString(),
     data_ora_fine:   fine.toISOString(),
-    note_segreteria: $('app-note').value || null
+    note_segreteria: $('app-note').value || null,
+    invia_sms_promemoria: $('app-invia-sms').checked,
   };
   if (_editId) body.stato = getStatoAttivo();
 

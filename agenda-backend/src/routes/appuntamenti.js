@@ -61,7 +61,7 @@ router.get('/oggi', async (req, res) => {
 
 // ─── POST /api/appuntamenti ───────────────────────────────────────────────
 router.post('/', async (req, res) => {
-  const { paziente_id, tipo_id, data_ora_inizio, data_ora_fine, note_segreteria } = req.body;
+  const { paziente_id, tipo_id, data_ora_inizio, data_ora_fine, note_segreteria, invia_sms_promemoria } = req.body;
 
   if (!paziente_id || !tipo_id || !data_ora_inizio || !data_ora_fine) {
     return res.status(400).json({
@@ -110,6 +110,7 @@ router.post('/', async (req, res) => {
       data_ora_inizio,
       data_ora_fine,
       note_segreteria: note_segreteria || null,
+      invia_sms_promemoria: invia_sms_promemoria !== false, // default true
       accession_number,
       created_by: req.user.id,
       stato: 'prenotato',
@@ -171,7 +172,8 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const campiConsentiti = [
     'paziente_id', 'tipo_id', 'data_ora_inizio', 'data_ora_fine',
-    'stato', 'note_segreteria', 'note_medico', 'worklist_status'
+    'stato', 'note_segreteria', 'note_medico', 'worklist_status',
+    'invia_sms_promemoria'
   ];
 
   const updates = {};
