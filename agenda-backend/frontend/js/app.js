@@ -25,9 +25,10 @@ const BLOCCO_TIPI = {
 };
 
 // ── Calendario continuo (mobile) ─────────────────────────────────────────
-const CAL_WEEKS_MOB = 3;   // settimane renderizzate in contemporanea su mobile
-const COL_W_MOB     = 68;  // larghezza colonna giorno mobile (px)
-const TIME_W_MOB    = 44;  // larghezza colonna ore mobile (px)
+const CAL_WEEKS_MOB   = 5;   // settimane renderizzate (2 prima + corrente + 2 dopo)
+const CAL_SHIFT_DAYS  = 14;  // giorni di shift al re-center (2 settimane)
+const COL_W_MOB       = 68;  // larghezza colonna giorno mobile (px)
+const TIME_W_MOB      = 44;  // larghezza colonna ore mobile (px)
 // Nomi giorni indicizzati per d.getDay() (0=Dom…6=Sab)
 const GIORNI_IT = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
 
@@ -44,9 +45,10 @@ let _editId           = null;   // id appuntamento in modifica
 let _pazienteId       = null;   // paziente selezionato nel modal
 let _searchTimer      = null;
 let _bloccoTipo       = null;   // tipo selezionato nel modal blocco fascia
-let _pendingScroll    = null;   // scrollLeft (px) da applicare dopo il prossimo render
+let _scrollShift      = null;   // px da sommare allo scrollLeft corrente dopo re-render
 let _firstRender      = true;   // primo render mobile: posiziona su settimana corrente
 let _scrollDebounce   = null;
+let _extendingRange   = false;  // lock: evita doppio fetch contemporaneo
 
 function isMobile() { return window.innerWidth <= 768; }
 
@@ -116,7 +118,7 @@ async function onLoginOk(user) {
   try { _prestazioni = await api.prestazioni(); } catch { _prestazioni = []; }
   fillPrestazioni();
   _viewStart  = getMon(new Date());
-  _calStart   = addDays(_viewStart, -7); // 1 settimana prima (buffer mobile)
+  _calStart   = addDays(_viewStart, -CAL_SHIFT_DAYS); // 2 settimane prima (buffer 5 sett.)
   await refreshWeek();
   await refreshSidebar();
   initSocket();
@@ -300,13 +302,14 @@ function renderCalendar() {
 
   // ── Gestione scroll mobile
   if (mobile && mainEl) {
-    if (_pendingScroll !== null) {
-      // Posizione calcolata dopo edge re-center
-      mainEl.scrollLeft = _pendingScroll;
-      _pendingScroll    = null;
-      _firstRender      = false;
+    if (_scrollShift !== null) {
+      // Edge re-center: applica lo shift al scroll ATTUALE (non a quello al trigger,
+      // perché l'utente ha continuato a scorrere durante il fetch asincrono)
+      mainEl.scrollLeft = Math.max(0, savedScroll + _scrollShift);
+      _scrollShift  = null;
+      _firstRender  = false;
     } else if (!_firstRender) {
-      // Re-render normale: mantieni posizione corrente
+      // Re-render normale (es. nuovo appuntamento via socket): mantieni posizione
       mainEl.scrollLeft = savedScroll;
     } else {
       // Primo render: posiziona sulla settimana corrente (_viewStart)
@@ -328,9 +331,10 @@ function navMobileWeek(n) {
 }
 
 function goToToday() {
-  _viewStart   = getMon(new Date());
-  _calStart    = addDays(_viewStart, -7);
-  _firstRender = true;   // forza riposizionamento su oggi
+  _viewStart      = getMon(new Date());
+  _calStart       = addDays(_viewStart, -CAL_SHIFT_DAYS);
+  _firstRender    = true;
+  _extendingRange = false;
   refreshWeek();
 }
 
@@ -355,7 +359,7 @@ function onCalMainScroll() {
   const el = document.querySelector('.app-main');
   if (!el) return;
 
-  // Aggiorna etichetta periodo in base alla posizione di scroll
+  // Aggiorna etichetta periodo in tempo reale
   const dayIdx = Math.max(0, Math.floor(el.scrollLeft / COL_W_MOB));
   const visMon = getMon(addDays(_calStart, dayIdx));
   if (toDateStr(visMon) !== toDateStr(_viewStart)) {
@@ -363,28 +367,34 @@ function onCalMainScroll() {
     renderPeriod();
   }
 
-  // Estendi il range quando si raggiunge il bordo (debounced 300ms)
+  // Prefetch anticipato: trigger a 1 settimana dal bordo (non aspetta di arrivare al bordo!)
+  // L'utente ha ancora ~1-2s di contenuto davanti; il fetch dura ~300ms → zero attesa.
+  if (_extendingRange) return;
+
   clearTimeout(_scrollDebounce);
   _scrollDebounce = setTimeout(async () => {
-    if (!isMobile() || !_calStart) return;
+    if (!isMobile() || !_calStart || _extendingRange) return;
     const el2 = document.querySelector('.app-main');
     if (!el2) return;
     const maxScroll = el2.scrollWidth - el2.clientWidth;
-    const edgePx    = 3 * COL_W_MOB;   // trigger a 3 colonne dal bordo
-    const saved     = el2.scrollLeft;
+    const triggerPx = 7 * COL_W_MOB;   // 1 settimana dal bordo = trigger anticipato
 
-    if (saved < edgePx) {
-      // Bordo sinistro: aggiungi 1 settimana all'inizio del range
-      _calStart      = addDays(_calStart, -7);
-      _pendingScroll = saved + 7 * COL_W_MOB;
+    if (el2.scrollLeft < triggerPx) {
+      // Estendi a sinistra di 2 settimane (shift positivo → contenuto si sposta a destra)
+      _extendingRange = true;
+      _calStart       = addDays(_calStart, -CAL_SHIFT_DAYS);
+      _scrollShift    = CAL_SHIFT_DAYS * COL_W_MOB;
       await refreshWeek();
-    } else if (saved > maxScroll - edgePx) {
-      // Bordo destro: sposta il range in avanti di 1 settimana
-      _calStart      = addDays(_calStart, 7);
-      _pendingScroll = Math.max(0, saved - 7 * COL_W_MOB);
+      _extendingRange = false;
+    } else if (el2.scrollLeft > maxScroll - triggerPx) {
+      // Estendi a destra di 2 settimane (shift negativo → contenuto si sposta a sinistra)
+      _extendingRange = true;
+      _calStart       = addDays(_calStart, CAL_SHIFT_DAYS);
+      _scrollShift    = -(CAL_SHIFT_DAYS * COL_W_MOB);
       await refreshWeek();
+      _extendingRange = false;
     }
-  }, 300);
+  }, 150);  // debounce breve: reagisce velocemente senza spammare
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────
