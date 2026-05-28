@@ -1,8 +1,9 @@
-const express = require('express');
-const bcrypt  = require('bcryptjs');
-const jwt     = require('jsonwebtoken');
+const express  = require('express');
+const bcrypt   = require('bcryptjs');
+const jwt      = require('jsonwebtoken');
 const supabase = require('../services/supabase');
 const { requireAuth } = require('../middleware/auth');
+const { notificaCambioCredenziali } = require('../services/email');
 
 const router = express.Router();
 
@@ -95,6 +96,57 @@ router.post('/crea-utente', requireAuth, async (req, res) => {
   }
 
   res.status(201).json(data);
+});
+
+// ─── PUT /api/auth/credenziali — cambia username e/o password ───────────
+router.put('/credenziali', requireAuth, async (req, res) => {
+  const { password_attuale, nuovo_username, nuova_password } = req.body;
+
+  if (!password_attuale) {
+    return res.status(400).json({ error: 'La password attuale è obbligatoria' });
+  }
+  if (!nuovo_username && !nuova_password) {
+    return res.status(400).json({ error: 'Inserisci almeno il nuovo username o la nuova password' });
+  }
+
+  // Carica utente corrente
+  const { data: utente, error } = await supabase
+    .from('utenti')
+    .select('*')
+    .eq('id', req.user.id)
+    .single();
+
+  if (error || !utente) return res.status(404).json({ error: 'Utente non trovato' });
+
+  // Verifica password attuale
+  const ok = await bcrypt.compare(password_attuale, utente.password_hash);
+  if (!ok) return res.status(401).json({ error: 'Password attuale non corretta' });
+
+  // Costruisce aggiornamenti
+  const updates = {};
+  if (nuovo_username) updates.username = nuovo_username.toLowerCase().trim();
+  if (nuova_password) updates.password_hash = await bcrypt.hash(nuova_password, 12);
+
+  const { error: updErr } = await supabase
+    .from('utenti')
+    .update(updates)
+    .eq('id', req.user.id);
+
+  if (updErr) {
+    if (updErr.code === '23505') return res.status(409).json({ error: 'Username già in uso' });
+    return res.status(500).json({ error: updErr.message });
+  }
+
+  // Email di sicurezza
+  const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || null;
+  notificaCambioCredenziali({
+    utente:         utente.username,
+    cambiaUsername: nuovo_username || null,
+    cambiaPassword: !!nuova_password,
+    ip,
+  }).catch(() => {});
+
+  res.json({ ok: true, messaggio: 'Credenziali aggiornate. Effettua di nuovo il login.' });
 });
 
 module.exports = router;

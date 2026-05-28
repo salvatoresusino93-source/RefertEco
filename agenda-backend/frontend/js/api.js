@@ -53,6 +53,9 @@ const api = {
   // Blocchi agenda (festività, impegni, manuali)
   blocchi: (from, to) => api._req('GET', `/blocchi?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
 
+  // Credenziali
+  cambiaCredenziali: (data) => api._req('PUT', '/auth/credenziali', data),
+
   // Indisponibilità (fasce orarie: mattina/pomeriggio/giornata)
   indisponibilita:        (from, to) => api._req('GET',    `/indisponibilita?from=${from}&to=${to}`),
   creaIndisponibilita:    (data)     => api._req('POST',   '/indisponibilita', data),

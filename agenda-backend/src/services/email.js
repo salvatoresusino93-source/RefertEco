@@ -229,4 +229,54 @@ async function notificaPrenotazioneOnline(appuntamento, tokenJwt) {
   }
 }
 
-module.exports = { notificaNuovoAppuntamento, notificaAppuntamentoAnnullato, notificaPrenotazioneOnline };
+// ─── Notifica cambio credenziali ──────────────────────────────────────────
+async function notificaCambioCredenziali({ utente, cambiaUsername, cambiaPassword, ip }) {
+  const resend = getResend();
+  if (!resend) return;
+
+  const ora  = new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome', dateStyle: 'full', timeStyle: 'short' });
+  const cosa = [
+    cambiaUsername && `Username → <strong>${cambiaUsername}</strong>`,
+    cambiaPassword && `Password modificata`,
+  ].filter(Boolean).join('<br>');
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;background:#f9f9f9;border-radius:10px;overflow:hidden;">
+      <div style="background:#dc2626;padding:20px 24px;">
+        <h2 style="color:#fff;margin:0;font-size:18px;">🔐 Credenziali modificate</h2>
+      </div>
+      <div style="padding:20px 24px;background:#fff;">
+        <p style="margin:0 0 16px;color:#374151;">Le credenziali di accesso all'Agenda Studio sono state modificate.</p>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+          <tr><td style="padding:6px 0;color:#6b7280;width:140px;">Utente</td>
+              <td style="padding:6px 0;font-weight:700;">${utente}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;">Modifiche</td>
+              <td style="padding:6px 0;">${cosa}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;">Data e ora</td>
+              <td style="padding:6px 0;">${ora}</td></tr>
+          ${ip ? `<tr><td style="padding:6px 0;color:#6b7280;">IP</td>
+              <td style="padding:6px 0;font-family:monospace;">${ip}</td></tr>` : ''}
+        </table>
+        <p style="margin:20px 0 0;font-size:13px;color:#ef4444;">
+          Se non sei stato tu a fare questa modifica, accedi immediatamente e cambia la password.
+        </p>
+      </div>
+      <div style="padding:12px 24px;background:#fef2f2;font-size:11px;color:#888;text-align:center;">
+        Agenda Studio — avviso di sicurezza
+      </div>
+    </div>
+  `;
+
+  try {
+    await resend.emails.send({
+      from:    'Agenda Studio <onboarding@resend.dev>',
+      to:      MEDICO_EMAIL,
+      subject: `🔐 Credenziali modificate — utente: ${utente}`,
+      html,
+    });
+  } catch (e) {
+    console.error('[email] Errore notifica cambio credenziali:', e.message);
+  }
+}
+
+module.exports = { notificaNuovoAppuntamento, notificaAppuntamentoAnnullato, notificaPrenotazioneOnline, notificaCambioCredenziali };

@@ -745,6 +745,18 @@ function menuBlocco() {
   openModalBlocco(toDateStr(new Date()));
 }
 
+function menuCredenziali() {
+  chiudiMenu();
+  $('cred-pass-attuale').value  = '';
+  $('cred-nuovo-username').value = '';
+  $('cred-nuova-pass').value    = '';
+  $('cred-conferma-pass').value = '';
+  $('cred-err').classList.add('hidden');
+  $('cred-overlay').onclick = e => { if (e.target === e.currentTarget) chiudiCredenziali(); };
+  $('cred-overlay').classList.remove('hidden');
+  setTimeout(() => $('cred-pass-attuale').focus(), 80);
+}
+
 function menuArchivio() {
   chiudiMenu();
   apriArchivio();
@@ -966,6 +978,48 @@ function checkPreparazione() {
 
   const richiede = PREP_KEYWORDS.some(k => nome.includes(k));
   reminder.classList.toggle('hidden', !richiede);
+}
+
+// ─── Cambio credenziali ───────────────────────────────────────────────────
+
+function chiudiCredenziali() {
+  $('cred-overlay').classList.add('hidden');
+}
+
+async function salvaCredenziali() {
+  const passAttuale    = $('cred-pass-attuale').value;
+  const nuovoUsername  = $('cred-nuovo-username').value.trim();
+  const nuovaPass      = $('cred-nuova-pass').value;
+  const confermaPass   = $('cred-conferma-pass').value;
+  const errEl          = $('cred-err');
+
+  errEl.classList.add('hidden');
+
+  if (!passAttuale) { errEl.textContent = 'Inserisci la password attuale'; errEl.classList.remove('hidden'); return; }
+  if (!nuovoUsername && !nuovaPass) { errEl.textContent = 'Inserisci almeno un nuovo username o una nuova password'; errEl.classList.remove('hidden'); return; }
+  if (nuovaPass && nuovaPass !== confermaPass) { errEl.textContent = 'Le due password non coincidono'; errEl.classList.remove('hidden'); return; }
+  if (nuovaPass && nuovaPass.length < 6) { errEl.textContent = 'La nuova password deve essere di almeno 6 caratteri'; errEl.classList.remove('hidden'); return; }
+
+  const btn = $('btn-salva-cred');
+  btn.textContent = 'Salvataggio…'; btn.disabled = true;
+  try {
+    await api.cambiaCredenziali({
+      password_attuale: passAttuale,
+      nuovo_username:   nuovoUsername || undefined,
+      nuova_password:   nuovaPass     || undefined,
+    });
+    chiudiCredenziali();
+    alert('✅ Credenziali aggiornate. Effettua di nuovo il login.');
+    // Forza logout
+    api.setToken(null);
+    _user = null;
+    showLogin();
+  } catch(ex) {
+    errEl.textContent = ex.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.textContent = '💾 Salva'; btn.disabled = false;
+  }
 }
 
 // ─── Blocco fascia oraria ─────────────────────────────────────────────────
