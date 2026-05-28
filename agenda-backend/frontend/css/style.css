@@ -116,12 +116,16 @@ button { font-family:inherit; }
 .app-main { flex:1; overflow:auto; }
 
 /* ─── CALENDAR ────────────────────────────────────────────────────────── */
-.cal-wrap { min-width:680px; }
+.cal-wrap { min-width:0; }   /* larghezza impostata via JS */
 
-.cal-header { display:grid; grid-template-columns:52px repeat(7,1fr);
+.cal-header { display:grid; /* grid-template-columns impostato via JS */
   background:var(--surface); border-bottom:2px solid var(--border);
   position:sticky; top:0; z-index:5; }
-.cal-th-time { /* empty corner */ }
+/* Angolo ore sticky a sinistra su desktop e mobile */
+.cal-th-time {
+  position:-webkit-sticky; position:sticky;
+  left:0; z-index:7; background:var(--surface);
+}
 .cal-th-day  { padding:8px 4px; text-align:center; border-left:1px solid var(--border); }
 .cal-th-dayname { display:block; font-size:10px; font-weight:700;
   text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
@@ -130,9 +134,13 @@ button { font-family:inherit; }
   margin-top:2px; }
 .cal-th-day.today .cal-th-daynum { background:var(--pri); color:#fff; }
 
-.cal-body { display:grid; grid-template-columns:52px repeat(7,1fr); }
+.cal-body { display:grid; /* grid-template-columns impostato via JS */ }
 
-.cal-time-col { position:relative; }
+/* Colonna ore sticky a sinistra su desktop e mobile */
+.cal-time-col {
+  position:-webkit-sticky; position:sticky;
+  left:0; z-index:3; background:var(--surface);
+}
 .cal-lbl { position:absolute; right:6px; font-size:10px; color:var(--muted);
   transform:translateY(-7px); white-space:nowrap; }
 

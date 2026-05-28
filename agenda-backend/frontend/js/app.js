@@ -24,11 +24,16 @@ const BLOCCO_TIPI = {
   giornata:   { label: 'Giornata bloccata',   startH: 8,  endH: 20 },
 };
 
-// ── Calendario continuo (mobile) ─────────────────────────────────────────
-const CAL_WEEKS_MOB   = 5;   // settimane renderizzate (2 prima + corrente + 2 dopo)
-const CAL_SHIFT_DAYS  = 14;  // giorni di shift al re-center (2 settimane)
-const COL_W_MOB       = 68;  // larghezza colonna giorno mobile (px)
-const TIME_W_MOB      = 44;  // larghezza colonna ore mobile (px)
+// ── Calendario continuo (mobile + desktop) ───────────────────────────────
+const CAL_WEEKS_MOB   = 5;    // settimane renderizzate (2 prima + corrente + 2 dopo)
+const CAL_SHIFT_DAYS  = 14;   // giorni di shift al re-center (2 settimane)
+const COL_W_MOB       = 68;   // larghezza colonna giorno mobile (px)
+const TIME_W_MOB      = 44;   // larghezza colonna ore mobile (px)
+const COL_W_DESK      = 148;  // larghezza colonna giorno desktop (px) — ~7 colonne visibili
+const TIME_W_DESK     = 52;   // larghezza colonna ore desktop (px)
+// Larghezza corrente (usata dal listener scroll)
+function getColW()  { return isMobile() ? COL_W_MOB  : COL_W_DESK;  }
+function getTimeW() { return isMobile() ? TIME_W_MOB : TIME_W_DESK; }
 // Nomi giorni indicizzati per d.getDay() (0=Dom…6=Sab)
 const GIORNI_IT = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
 
@@ -125,7 +130,7 @@ async function onLoginOk(user) {
   bindEvents();
   initSwipe();
   initScrollListener();
-  window.addEventListener('resize', () => { renderCalendar(); renderPeriod(); });
+  window.addEventListener('resize', () => { _firstRender = true; renderCalendar(); renderPeriod(); });
 }
 
 // ─── Socket.io ────────────────────────────────────────────────────────────
@@ -143,18 +148,11 @@ function initSocket() {
 
 // ─── Calendar load & render ───────────────────────────────────────────────
 async function refreshWeek() {
-  const mobile = isMobile();
-  let fromDate, toDate;
-  if (mobile) {
-    if (!_calStart) _calStart = addDays(getMon(_viewStart), -7);
-    fromDate = _calStart;
-    toDate   = addDays(_calStart, CAL_WEEKS_MOB * 7);
-  } else {
-    fromDate = _viewStart;
-    toDate   = addDays(_viewStart, 7);
-  }
-  const from = toISO(fromDate);
-  const to   = toISO(toDate);
+  if (!_calStart) _calStart = addDays(getMon(_viewStart), -CAL_SHIFT_DAYS);
+  const fromDate = _calStart;
+  const toDate   = addDays(_calStart, CAL_WEEKS_MOB * 7);
+  const from     = toISO(fromDate);
+  const to       = toISO(toDate);
   try { _appointments    = await api.appuntamenti(from, to); }   catch { _appointments = []; }
   try { _blocchi         = await api.blocchi(from, to); }         catch { _blocchi = []; }
   try { _indisponibilita = await api.indisponibilita(
@@ -172,18 +170,15 @@ function renderPeriod() {
 }
 
 function renderCalendar() {
-  const mobile    = isMobile();
-  const numDays   = mobile ? CAL_WEEKS_MOB * 7 : 7;
-  const timeW     = mobile ? TIME_W_MOB : 52;
-  const colW      = mobile ? COL_W_MOB  : null;   // null = 1fr su desktop
-  const startDate = mobile ? (_calStart || _viewStart) : _viewStart;
-  const gridCols  = mobile
-    ? `${timeW}px repeat(${numDays},${colW}px)`
-    : `${timeW}px repeat(7,1fr)`;
+  const numDays   = CAL_WEEKS_MOB * 7;
+  const colW      = getColW();
+  const timeW     = getTimeW();
+  const startDate = _calStart || _viewStart;
+  const gridCols  = `${timeW}px repeat(${numDays},${colW}px)`;
 
   // Salva scroll corrente prima di ricostruire il DOM
   const mainEl      = document.querySelector('.app-main');
-  const savedScroll = (mobile && mainEl) ? mainEl.scrollLeft : 0;
+  const savedScroll = mainEl ? mainEl.scrollLeft : 0;
 
   const totalMin = (CAL_END - CAL_START) * 60;
   const totalPx  = totalMin * PX_PER_MIN;
@@ -288,28 +283,22 @@ function renderCalendar() {
     days += `<div class="cal-day${todayCls}${festivoCls}" style="height:${totalPx}px">${lines}${slots}${bloccoOverlay}${fasceBlocchi}${appHtml}</div>`;
   }
 
-  // ── Applica larghezza al wrapper (mobile: pixel fissi; desktop: auto)
+  // ── Applica larghezza al wrapper (colonne pixel fissi, scrollabile)
   const calWrap = $('cal-wrap');
-  if (mobile) {
-    calWrap.style.width    = `${timeW + numDays * colW}px`;
-    calWrap.style.minWidth = '0';
-  } else {
-    calWrap.style.width    = '';
-    calWrap.style.minWidth = '';
-  }
+  calWrap.style.width    = `${timeW + numDays * colW}px`;
+  calWrap.style.minWidth = '0';
 
   calWrap.innerHTML = `${hdr}<div class="cal-body" style="grid-template-columns:${gridCols}">${timeLbls}${days}</div>`;
 
-  // ── Gestione scroll mobile
-  if (mobile && mainEl) {
+  // ── Gestione scroll (uguale su mobile e desktop)
+  if (mainEl) {
     if (_scrollShift !== null) {
-      // Edge re-center: applica lo shift al scroll ATTUALE (non a quello al trigger,
-      // perché l'utente ha continuato a scorrere durante il fetch asincrono)
+      // Edge re-center: shift applicato allo scroll ATTUALE (l'utente ha continuato a scorrere durante il fetch)
       mainEl.scrollLeft = Math.max(0, savedScroll + _scrollShift);
       _scrollShift  = null;
       _firstRender  = false;
     } else if (!_firstRender) {
-      // Re-render normale (es. nuovo appuntamento via socket): mantieni posizione
+      // Re-render normale: mantieni posizione corrente
       mainEl.scrollLeft = savedScroll;
     } else {
       // Primo render: posiziona sulla settimana corrente (_viewStart)
@@ -322,12 +311,8 @@ function renderCalendar() {
 
 // ─── Navigazione settimana (mobile: frecce, desktop: frecce + swipe) ─────
 function navMobileWeek(n) {
-  if (isMobile()) {
-    const el = document.querySelector('.app-main');
-    if (el) { el.scrollBy({ left: n * 7 * COL_W_MOB, behavior: 'smooth' }); return; }
-  }
-  _viewStart = addDays(_viewStart, n * 7);
-  refreshWeek();
+  const el = document.querySelector('.app-main');
+  if (el) el.scrollBy({ left: n * 7 * getColW(), behavior: 'smooth' });
 }
 
 function goToToday() {
@@ -342,8 +327,9 @@ function goToToday() {
 function initSwipe() {
   document.addEventListener('keydown', e => {
     if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
-    if (e.key === 'ArrowRight') { e.preventDefault(); _viewStart = addDays(_viewStart,  7); refreshWeek(); }
-    if (e.key === 'ArrowLeft')  { e.preventDefault(); _viewStart = addDays(_viewStart, -7); refreshWeek(); }
+    const el = document.querySelector('.app-main');
+    if (e.key === 'ArrowRight') { e.preventDefault(); if(el) el.scrollBy({left: 7*getColW(), behavior:'smooth'}); }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); if(el) el.scrollBy({left:-7*getColW(), behavior:'smooth'}); }
   });
 }
 
@@ -355,46 +341,45 @@ function initScrollListener() {
 }
 
 function onCalMainScroll() {
-  if (!isMobile() || !_calStart) return;
+  if (!_calStart) return;
   const el = document.querySelector('.app-main');
   if (!el) return;
 
   // Aggiorna etichetta periodo in tempo reale
-  const dayIdx = Math.max(0, Math.floor(el.scrollLeft / COL_W_MOB));
+  const colW   = getColW();
+  const dayIdx = Math.max(0, Math.floor(el.scrollLeft / colW));
   const visMon = getMon(addDays(_calStart, dayIdx));
   if (toDateStr(visMon) !== toDateStr(_viewStart)) {
     _viewStart = visMon;
     renderPeriod();
   }
 
-  // Prefetch anticipato: trigger a 1 settimana dal bordo (non aspetta di arrivare al bordo!)
-  // L'utente ha ancora ~1-2s di contenuto davanti; il fetch dura ~300ms → zero attesa.
+  // Prefetch anticipato: trigger a 1 settimana dal bordo
   if (_extendingRange) return;
 
   clearTimeout(_scrollDebounce);
   _scrollDebounce = setTimeout(async () => {
-    if (!isMobile() || !_calStart || _extendingRange) return;
+    if (!_calStart || _extendingRange) return;
     const el2 = document.querySelector('.app-main');
     if (!el2) return;
+    const cw        = getColW();
     const maxScroll = el2.scrollWidth - el2.clientWidth;
-    const triggerPx = 7 * COL_W_MOB;   // 1 settimana dal bordo = trigger anticipato
+    const triggerPx = 7 * cw;   // 1 settimana dal bordo
 
     if (el2.scrollLeft < triggerPx) {
-      // Estendi a sinistra di 2 settimane (shift positivo → contenuto si sposta a destra)
       _extendingRange = true;
       _calStart       = addDays(_calStart, -CAL_SHIFT_DAYS);
-      _scrollShift    = CAL_SHIFT_DAYS * COL_W_MOB;
+      _scrollShift    = CAL_SHIFT_DAYS * cw;
       await refreshWeek();
       _extendingRange = false;
     } else if (el2.scrollLeft > maxScroll - triggerPx) {
-      // Estendi a destra di 2 settimane (shift negativo → contenuto si sposta a sinistra)
       _extendingRange = true;
       _calStart       = addDays(_calStart, CAL_SHIFT_DAYS);
-      _scrollShift    = -(CAL_SHIFT_DAYS * COL_W_MOB);
+      _scrollShift    = -(CAL_SHIFT_DAYS * cw);
       await refreshWeek();
       _extendingRange = false;
     }
-  }, 150);  // debounce breve: reagisce velocemente senza spammare
+  }, 150);
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────
@@ -417,14 +402,8 @@ async function refreshSidebar() {
 
 // ─── Nav events ───────────────────────────────────────────────────────────
 function bindEvents() {
-  $('btn-prev').onclick  = () => {
-    if (isMobile()) { const el=document.querySelector('.app-main'); if(el){ el.scrollBy({left:-7*COL_W_MOB,behavior:'smooth'}); return; } }
-    _viewStart = addDays(_viewStart,-7); refreshWeek();
-  };
-  $('btn-next').onclick  = () => {
-    if (isMobile()) { const el=document.querySelector('.app-main'); if(el){ el.scrollBy({left: 7*COL_W_MOB,behavior:'smooth'}); return; } }
-    _viewStart = addDays(_viewStart, 7); refreshWeek();
-  };
+  $('btn-prev').onclick  = () => { const el=document.querySelector('.app-main'); if(el) el.scrollBy({left:-7*getColW(),behavior:'smooth'}); };
+  $('btn-next').onclick  = () => { const el=document.querySelector('.app-main'); if(el) el.scrollBy({left: 7*getColW(),behavior:'smooth'}); };
   $('btn-oggi').onclick  = () => goToToday();
   $('btn-nuovo').onclick = () => openModal();
   $('btn-stampa').onclick = stampaDiario;
