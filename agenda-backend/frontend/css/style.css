@@ -408,10 +408,8 @@ button { font-family:inherit; }
   .mobile-bottom-bar { display:flex !important; }
 
   /* Header semplificato */
-  .hdr-nav    { display:none; }
   .hdr-period { display:none; }
   #btn-stampa { display:none; }
-  #btn-menu   { display:none; }   /* nascosto su mobile: usa bottom bar */
   .app-title  { font-size:15px; }
   .user-badge { display:none; }
 
