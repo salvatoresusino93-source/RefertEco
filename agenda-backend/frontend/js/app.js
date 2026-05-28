@@ -174,12 +174,15 @@ function renderCalendar() {
   for (let i=0; i<7; i++) {
     const d       = addDays(_viewStart, i);
     const dateStr = toDateStr(d);
-    const bloccoGiorno = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
-    const cls = (isToday(d) ? ' today' : '') + (bloccoGiorno ? ' festivo' : '');
+    const bloccoGiorno  = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
+    const isDomenica    = d.getDay() === 0;
+    const isChiuso      = bloccoGiorno || isDomenica;
+    const motivoChiuso  = isDomenica ? 'Domenica — giorno di chiusura' : (bloccoGiorno?.motivo || '');
+    const cls = (isToday(d) ? ' today' : '') + (isChiuso ? ' festivo' : '');
     hdr += `<div class="cal-th-day${cls}">
       <span class="cal-th-dayname">${GIORNI[i]}</span>
       <span class="cal-th-daynum">${d.getDate()}</span>
-      ${bloccoGiorno ? `<span class="cal-th-festivo" title="${esc(bloccoGiorno.motivo)}">🔴</span>` : ''}
+      ${isChiuso ? `<span class="cal-th-festivo" title="${esc(motivoChiuso)}">🔴</span>` : ''}
     </div>`;
   }
   hdr += `</div>`;
@@ -191,9 +194,12 @@ function renderCalendar() {
     const dateStr = toDateStr(d);
     const todayCls = isToday(d) ? ' today' : '';
 
-    // Blocco tutto il giorno per questa data?
-    const bloccoGiorno = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
-    const festivoCls   = bloccoGiorno ? ' festivo' : '';
+    // Blocco tutto il giorno: festività oppure domenica
+    const bloccoGiorno  = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
+    const isDomenica    = d.getDay() === 0;
+    const isChiuso      = bloccoGiorno || isDomenica;
+    const motivoChiuso  = isDomenica ? 'Domenica — giorno di chiusura' : (bloccoGiorno?.motivo || '');
+    const festivoCls    = isChiuso ? ' festivo' : '';
 
     // Hour lines
     let lines = '';
@@ -201,25 +207,25 @@ function renderCalendar() {
       lines += `<div class="cal-hline${m%60===0?' major':''}" style="top:${m*PX_PER_MIN}px"></div>`;
     }
 
-    // Click slots (bloccati se giorno festivo)
+    // Click slots (bloccati se giorno chiuso)
     let slots = '';
     for (let m=0; m<totalMin; m+=SLOT_MIN) {
       const absMin = CAL_START*60 + m;
       const hh = String(Math.floor(absMin/60)).padStart(2,'0');
       const mm = String(absMin%60).padStart(2,'0');
-      if (bloccoGiorno) {
+      if (isChiuso) {
         slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
-          onclick="onSlotBlockedClick('${esc(bloccoGiorno.motivo)}')"></div>`;
+          onclick="onSlotBlockedClick('${esc(motivoChiuso)}')"></div>`;
       } else {
         slots += `<div class="cal-slot" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
           onclick="onSlotClick('${dateStr}','${hh}:${mm}')"></div>`;
       }
     }
 
-    // Overlay blocco giorno intero
-    const bloccoOverlay = bloccoGiorno
-      ? `<div class="cal-blocco-overlay" title="${esc(bloccoGiorno.motivo)}">
-           <span class="cal-blocco-label">${esc(bloccoGiorno.motivo)}</span>
+    // Overlay blocco giorno intero (festività o domenica)
+    const bloccoOverlay = isChiuso
+      ? `<div class="cal-blocco-overlay" title="${esc(motivoChiuso)}">
+           <span class="cal-blocco-label">${esc(motivoChiuso)}</span>
          </div>`
       : '';
 
