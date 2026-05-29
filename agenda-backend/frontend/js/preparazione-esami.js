@@ -51,8 +51,7 @@
       '<div class="prep-icon">⚠️</div>' +
       '<div class="prep-text">' +
       '<strong>Preparazione per l\'esame:</strong><br>' +
-      'Venire a <strong>DIGIUNO</strong> e con <strong>VESCICA PIENA</strong> ' +
-      '(non urinare nelle 2–3 ore prima).' +
+      'Venire a <strong>DIGIUNO</strong> (almeno 6 ore) e con <strong>VESCICA PIENA</strong>.' +
       '</div></div>'
     );
   }

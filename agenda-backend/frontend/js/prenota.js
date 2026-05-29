@@ -111,12 +111,33 @@ async function goStep1() {
 async function selectEsame(id, nome) {
   ST.esameId   = id;
   ST.esameName = nome;
-  // Reset date/slot
   ST.giorni    = [];
   ST.dataScelta = null;
   ST.dataLabel  = null;
   ST.slotScelta = null;
-  await goStep2();
+  renderEsameSceltoStep1();
+}
+
+function renderEsameSceltoStep1() {
+  ST.step = 1;
+  updateDots(1);
+  main().innerHTML = `<div class="pr-card">
+    <div class="pr-card-title">Esame selezionato</div>
+    <div class="pr-card-body">
+      <div class="esame-item selected" style="cursor:default">
+        <div class="esame-icon">🩺</div>
+        <div>
+          <div class="esame-nome">${esc(ST.esameName)}</div>
+          <div class="esame-durata">⏱ 30 minuti</div>
+        </div>
+      </div>
+      ${prepBlock()}
+      <div class="pr-btn-row" style="margin-top:16px">
+        <button class="pr-btn-ghost" onclick="goStep1()">← Cambia esame</button>
+        <button class="pr-btn-pri" onclick="goStep2()">Scegli data →</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 // ─── STEP 2 — Selezione data ──────────────────────────────────────────────
@@ -486,5 +507,9 @@ function findEsameFromQuery() {
 document.addEventListener('DOMContentLoaded', async () => {
   await goStep1();
   const match = findEsameFromQuery();
-  if (match) await selectEsame(match.id, match.nome);
+  if (match) {
+    ST.esameId = match.id;
+    ST.esameName = match.nome;
+    renderEsameSceltoStep1();
+  }
 });

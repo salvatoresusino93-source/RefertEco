@@ -15,6 +15,7 @@ UPDATE tipi_prestazione SET attivo = true WHERE nome IN (
   'Ecografia addome superiore',
   'Ecografia addome inferiore',
   'Ecografia apparato urinario',
+  'Ecografia renale',
   'Ecografia vescico-prostatica',
   'Ecografia prostatica transrettale',
   'Ecografia scrotale e testicolare',
@@ -30,6 +31,8 @@ UPDATE tipi_prestazione SET attivo = true WHERE nome IN (
   'Ecografia caviglia e piede',
   'Ecografia parti molli',
   'Ecocolordoppler TSA (tronchi sovra-aortici)',
+  'Ecocolordoppler aorta addominale',
+  'Ecocolordoppler arterie renali',
   'Ecocolordoppler arti inferiori',
   'Ecocolordoppler arti superiori',
   'Ecografia linfonodi'
@@ -41,6 +44,7 @@ UPDATE tipi_prestazione SET attivo = false WHERE nome NOT IN (
   'Ecografia addome superiore',
   'Ecografia addome inferiore',
   'Ecografia apparato urinario',
+  'Ecografia renale',
   'Ecografia vescico-prostatica',
   'Ecografia prostatica transrettale',
   'Ecografia scrotale e testicolare',
@@ -56,6 +60,8 @@ UPDATE tipi_prestazione SET attivo = false WHERE nome NOT IN (
   'Ecografia caviglia e piede',
   'Ecografia parti molli',
   'Ecocolordoppler TSA (tronchi sovra-aortici)',
+  'Ecocolordoppler aorta addominale',
+  'Ecocolordoppler arterie renali',
   'Ecocolordoppler arti inferiori',
   'Ecocolordoppler arti superiori',
   'Ecografia linfonodi'
