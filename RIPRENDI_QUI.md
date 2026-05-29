@@ -4,7 +4,7 @@
 > Contiene tutto il contesto, le decisioni prese, i bug già risolti, e i prossimi passi.
 > Aggiornalo alla fine di ogni sessione importante.
 
-Ultimo aggiornamento: **2026-05-29** (sessione DICOM, import automatico, MicroDicom)
+Ultimo aggiornamento: **2026-05-29** (sito vetrina, prenotazione online, esami e preparazione)
 
 ---
 
@@ -414,8 +414,38 @@ Claude leggerà CLAUDE.md (in questa cartella Google Drive) → poi RIPRENDI_QUI
 
 ---
 
-## 12. CONTATTI E LINK UTILI
-- **GitHub**: https://github.com/salvatoresusino93-source/RefertEco
+## 12. SITO VETRINA studio-susino-web (2026-05-29)
+
+Progetto separato ma collegato all’Agenda.
+
+| | |
+|--|--|
+| GitHub | https://github.com/salvatoresusino93-source/studio-susino-web |
+| Locale Mac | `~/Projects/studio-susino-web` |
+| Google Drive | `Il mio Drive/studio-susino-web` |
+| Live | https://salvatoresusino93-source.github.io/studio-susino-web/ |
+| Dominio futuro | studiosusino.it (DNS Aruba da attivare) |
+
+**Prenotazione online:** https://referteco-production.up.railway.app/prenota
+
+### Modifiche recenti sessione
+- **25 esami** prenotabili (sync `scripts/sync_tipi.js`): ripristinati **Ecografia renale**, **Doppler aorta addominale**, **Doppler arterie renali**, **Anca neonatale**
+- Slot fissi **30 min** (`agenda-backend/src/routes/public.js` → `SLOT_MINUTI = 30`)
+- **Preparazione** digiuno + vescica piena: solo in `/prenota` (`preparazione-esami.js`), non sul sito vetrina
+- Sito: no martedì/venerdì, no fasce 9–13 / 15–19 — solo «su appuntamento»
+- Prenota: esami raggruppati per categoria; banner preparazione dopo scelta esame
+
+### Supabase — se mancano esami in prenota
+```bash
+cd agenda-backend && NODE_PATH=./node_modules node ../scripts/sync_tipi.js
+```
+Oppure SQL in `supabase/slot_30_minuti.sql`, `fix_duplicati_esami.sql`.
+
+---
+
+## 13. CONTATTI E LINK UTILI
+- **GitHub RefertEco**: https://github.com/salvatoresusino93-source/RefertEco
+- **GitHub sito**: https://github.com/salvatoresusino93-source/studio-susino-web
 - **Agenda produzione**: https://referteco-production.up.railway.app/
 - **Railway dashboard**: https://railway.app/
 - **Supabase**: https://app.supabase.com/
