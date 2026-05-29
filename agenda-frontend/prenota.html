@@ -190,6 +190,16 @@
     }
     .pr-link{color:#2563eb;text-decoration:underline}
 
+    /* Preparazione esame addominale */
+    .pr-prep-reminder{
+      display:flex;align-items:flex-start;gap:10px;
+      background:#fffbeb;border:1px solid #f59e0b;border-left:4px solid #f59e0b;
+      border-radius:12px;padding:12px 14px;margin-bottom:14px;
+    }
+    .pr-prep-reminder .prep-icon{font-size:20px;line-height:1.2;flex-shrink:0}
+    .pr-prep-reminder .prep-text{font-size:13px;color:#78350f;line-height:1.5}
+    .pr-prep-reminder .prep-text strong{color:#92400e}
+
     /* ── Mobile tweaks ───────────────────────────────────────────────── */
     @media(max-width:400px){
       .ora-grid{grid-template-columns:repeat(3,1fr)}
@@ -223,6 +233,7 @@
 
 </div>
 
-<script src="/js/prenota.js?v=20260527b"></script>
+<script src="/js/preparazione-esami.js?v=20260529a"></script>
+<script src="/js/prenota.js?v=20260529a"></script>
 </body>
 </html>

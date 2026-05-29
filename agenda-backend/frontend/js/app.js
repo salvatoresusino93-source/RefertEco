@@ -1053,36 +1053,18 @@ function nuovoAppDaPaziente() {
 }
 
 // ─── Reminder preparazione ────────────────────────────────────────────────
-// Parole chiave che richiedono digiuno + vescica piena
-const PREP_KEYWORDS = [
-  'addome', 'addominale',
-  'epatica', 'epato', 'fegato',
-  'colecisti', 'colecistopatia', 'biliare',
-  'pancreas', 'pancreatica', 'pancreatico',
-  'splenica', 'milza',
-  'renale', 'rene', 'reni',
-  'urinario', 'urinaria', 'urinari',
-  'vescic',                     // vescica, vescico-prostatico…
-  'surrenal',                   // surrene, surrenalico…
-  'aorta',
-  'portale', 'portali',
-  'mesenter',                   // vasi mesenterici
-  'anse intestinali',
-  'retroperiton',
-  'ceus',
-];
-
 function checkPreparazione() {
   const selEl = $('app-tipo');
   const selId  = selEl.value;
   const reminder = $('prep-reminder');
   if (!selId) { reminder.classList.add('hidden'); return; }
 
-  // Ottieni il nome dell'esame dall'option selezionata o da _prestazioni
   const prest = _prestazioni.find(x => String(x.id) === String(selId));
-  const nome  = (prest ? prest.nome : selEl.options[selEl.selectedIndex]?.text || '').toLowerCase();
+  const nome  = (prest ? prest.nome : selEl.options[selEl.selectedIndex]?.text || '');
 
-  const richiede = PREP_KEYWORDS.some(k => nome.includes(k));
+  const richiede = window.PREPARAZIONE_ESAMI
+    ? PREPARAZIONE_ESAMI.richiedePreparazione(nome)
+    : false;
   reminder.classList.toggle('hidden', !richiede);
 }
 

@@ -28,6 +28,12 @@ const main    = () => document.getElementById('pr-main');
 const dots    = n  => document.getElementById(`dot-${n}`);
 const esc     = s  => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
+function prepBlock() {
+  if (!ST.esameName || !window.PREPARAZIONE_ESAMI) return '';
+  if (!PREPARAZIONE_ESAMI.richiedePreparazione(ST.esameName)) return '';
+  return PREPARAZIONE_ESAMI.htmlReminder('pr-prep-reminder');
+}
+
 // ─── Step indicator ───────────────────────────────────────────────────────
 function updateDots(currentStep) {
   for (let i = 1; i <= 4; i++) {
@@ -121,6 +127,7 @@ async function goStep2() {
     <div class="pr-card">
       <div class="pr-card-title">Scegli la data <span>· ${esc(ST.esameName)}</span></div>
       <div class="pr-card-body">
+        ${prepBlock()}
         <div id="date-wrap"><div class="pr-loader"><div class="pr-spinner"></div><br>Controllo disponibilità…</div></div>
       </div>
     </div>`;
@@ -188,6 +195,7 @@ function goStep2b() {
     <div class="pr-card">
       <div class="pr-card-title">Scegli l'orario <span>· ${esc(ST.dataLabel)}</span></div>
       <div class="pr-card-body">
+        ${prepBlock()}
         ${mattinaI.length > 0 ? `
           <div class="ora-section">
             <div class="ora-section-lbl">🌅 Mattina</div>
@@ -228,6 +236,7 @@ function goStep3() {
     <div class="pr-card">
       <div class="pr-card-title">I tuoi dati</div>
       <div class="pr-card-body">
+        ${prepBlock()}
         <div class="field-row">
           <div class="field">
             <label>Cognome *</label>
@@ -343,6 +352,7 @@ function goStep4() {
     <div class="pr-card">
       <div class="pr-card-title">Riepilogo prenotazione</div>
       <div class="pr-card-body">
+        ${prepBlock()}
         <div class="recap">
           <div class="recap-row">
             <div class="recap-icon">🩺</div>
