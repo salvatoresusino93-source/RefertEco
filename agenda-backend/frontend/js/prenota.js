@@ -34,6 +34,16 @@ function prepBlock() {
   return PREPARAZIONE_ESAMI.htmlReminder('pr-prep-reminder');
 }
 
+function dedupeEsami(list) {
+  const seen = new Set();
+  return (list || []).filter(function (e) {
+    const key = String(e.nome || '').toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // ─── Step indicator ───────────────────────────────────────────────────────
 function updateDots(currentStep) {
   for (let i = 1; i <= 4; i++) {
@@ -68,7 +78,7 @@ async function goStep1() {
     try {
       const r = await fetch('/api/public/esami');
       if (!r.ok) throw new Error('Errore server');
-      ST.esami = await r.json();
+      ST.esami = dedupeEsami(await r.json());
     } catch (e) {
       document.getElementById('esami-wrap').innerHTML =
         `<div class="pr-error">Impossibile caricare gli esami. Ricarica la pagina.</div>`;
@@ -82,35 +92,48 @@ async function goStep1() {
     return;
   }
 
-  const ICONS = { default:'🩺', ecografia:'🔵', tiroide:'🦋', addome:'🫀', cardiaca:'❤️', rene:'💧', mammella:'🩻' };
+  document.getElementById('esami-wrap').innerHTML = renderEsamiGrid();
+}
+
+function renderEsamiGrid() {
   function getIcon(nome) {
     const n = nome.toLowerCase();
     if (n.includes('tiro')) return '🦋';
-    if (n.includes('cuore') || n.includes('cardiaca')) return '❤️';
-    if (n.includes('mammella') || n.includes('seno')) return '🩻';
-    if (n.includes('rene') || n.includes('renale')) return '💧';
-    if (n.includes('feto') || n.includes('ostet')) return '👶';
+    if (n.includes('doppler')) return '🩸';
+    if (n.includes('rene') || n.includes('renale') || n.includes('urinario') || n.includes('vescic')) return '💧';
+    if (n.includes('neonata')) return '👶';
+    if (n.includes('addome')) return '🫀';
     return '🔵';
   }
 
-  document.getElementById('esami-wrap').innerHTML = `
-    <div class="esame-grid">
-      ${ST.esami.map(e => `
-        <div class="esame-item${e.id===ST.esameId?' selected':''}" onclick="selectEsame('${e.id}','${esc(e.nome)}')">
-          <div class="esame-icon">${getIcon(e.nome)}</div>
-          <div>
-            <div class="esame-nome">${esc(e.nome)}</div>
-            <div class="esame-durata">⏱ ${e.durata_minuti} minuti</div>
-          </div>
-          <div class="esame-arrow">›</div>
-        </div>
-      `).join('')}
+  function renderItem(e) {
+    return `<div class="esame-item${e.id === ST.esameId ? ' selected' : ''}" onclick="selectEsame('${e.id}')">
+      <div class="esame-icon">${getIcon(e.nome)}</div>
+      <div>
+        <div class="esame-nome">${esc(e.nome)}</div>
+        <div class="esame-durata">⏱ ${e.durata_minuti} minuti</div>
+      </div>
+      <div class="esame-arrow">›</div>
     </div>`;
+  }
+
+  if (!window.ESAMI_CATEGORIE) {
+    return `<div class="esame-grid">${ST.esami.map(renderItem).join('')}</div>`;
+  }
+
+  return ESAMI_CATEGORIE.raggruppa(ST.esami).map(function (g) {
+    return `<div class="esame-section">
+      <div class="esame-section-title">${esc(g.cat)}</div>
+      <div class="esame-grid">${g.items.map(renderItem).join('')}</div>
+    </div>`;
+  }).join('');
 }
 
-async function selectEsame(id, nome) {
+async function selectEsame(id) {
+  const esame = ST.esami.find(function (e) { return e.id === id; });
+  if (!esame) return;
   ST.esameId   = id;
-  ST.esameName = nome;
+  ST.esameName = esame.nome;
   ST.giorni    = [];
   ST.dataScelta = null;
   ST.dataLabel  = null;

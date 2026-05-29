@@ -49,6 +49,16 @@ function esamePrenotabile(nome) {
   return true;
 }
 
+function dedupeEsamiPerNome(rows) {
+  const seen = new Set();
+  return (rows || []).filter((row) => {
+    const key = String(row.nome || '').toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // ─── GET /api/public/esami ────────────────────────────────────────────────
 router.get('/esami', async (req, res) => {
   const { data, error } = await supabase
@@ -57,7 +67,8 @@ router.get('/esami', async (req, res) => {
     .eq('attivo', true)
     .order('nome');
   if (error) return res.status(500).json({ error: 'Errore caricamento esami' });
-  res.json((data || []).filter(row => esamePrenotabile(row.nome)).map(row => ({
+  const rows = dedupeEsamiPerNome((data || []).filter(row => esamePrenotabile(row.nome)));
+  res.json(rows.map(row => ({
     ...row,
     durata_minuti: SLOT_MINUTI,
   })));
