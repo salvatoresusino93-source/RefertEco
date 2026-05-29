@@ -1225,6 +1225,15 @@ function setPrintPerPage(n) {
   document.querySelectorAll('.pp-btn').forEach(b => b.classList.toggle('active', +b.dataset.n === n));
 }
 
+// Verifica se un dataset DICOM è una cine/video (multiframe): NumberOfFrames > 1
+// Le cine vanno escluse dalla stampa (altrimenti stamperebbe centinaia di fotogrammi)
+function _isDicomCine(ds) {
+  try {
+    const nf = parseInt(ds.intString('x00280008') || ds.string('x00280008') || '1', 10);
+    return nf > 1;
+  } catch { return false; }
+}
+
 // Estrae info paziente/esame da un dataset DICOM per l'intestazione di stampa
 function _dicomPatientInfo(ds) {
   const rawName = (ds.string('x00100010') || '').trim();
@@ -1282,7 +1291,8 @@ async function stampaImmagini() {
   if (_viewerFiles.length === 0) { toast('Nessuna immagine da stampare', 'err'); return; }
   toast('Preparazione stampa…', 'ok');
   let _dicomInfo = null; // estratto dal primo DICOM trovato
-  const srcList = await Promise.all(_viewerFiles.map(async f => {
+  let _cineEscluse = 0;  // conteggio video saltati
+  const srcRaw = await Promise.all(_viewerFiles.map(async f => {
     if (/\.dcm$/i.test(f.filename) && _tempRefertoId) {
       try {
         const url = '/immagini/' + _tempRefertoId + '/' + encodeURIComponent(f.filename);
@@ -1290,6 +1300,7 @@ async function stampaImmagini() {
         const buf = await resp.arrayBuffer();
         const ds = dicomParser.parseDicom(new Uint8Array(buf));
         if (!_dicomInfo) _dicomInfo = _dicomPatientInfo(ds);
+        if (_isDicomCine(ds)) { _cineEscluse++; return null; } // video: escluso dalla stampa
         return await dicomDsToDataUrl(ds, buf, 'png') || f.displayUrl;
       } catch { return f.displayUrl; }
     }
@@ -1297,6 +1308,9 @@ async function stampaImmagini() {
       return '/immagini/' + _tempRefertoId + '/' + encodeURIComponent(f.filename);
     return f.displayUrl;
   }));
+  const srcList = srcRaw.filter(Boolean);
+  if (_cineEscluse > 0) toast(`${_cineEscluse} video esclusi dalla stampa`, 'ok');
+  if (srcList.length === 0) { toast('Nessuna immagine da stampare (solo video)', 'err'); return; }
 
   // Costruisci intestazione da DICOM; fallback ai campi del form se DICOM non ha dati
   let headerText = '';
@@ -1333,13 +1347,26 @@ async function stampaImmaginiArchivio(refertoId) {
   const imgFiles = await apiGet('/api/referti/' + refertoId + '/immagini');
   if (!imgFiles || imgFiles.length === 0) { toast('Nessuna immagine da stampare', 'err'); return; }
   const srcList = [];
+  let _cineEscluse = 0;
   for (const f of imgFiles) {
     const url = '/immagini/' + refertoId + '/' + encodeURIComponent(f);
     const isDcm = /\.dcm$/i.test(f);
-    const dataUrl = isDcm ? await dicomToDataUrl(url, 'png') : await imgToDataUrl(url);
-    if (dataUrl) srcList.push(dataUrl);
+    if (isDcm) {
+      // Parsa il DICOM per escludere le cine/video (multiframe)
+      try {
+        const buf = await (await fetch(url)).arrayBuffer();
+        const ds  = dicomParser.parseDicom(new Uint8Array(buf));
+        if (_isDicomCine(ds)) { _cineEscluse++; continue; } // video: escluso dalla stampa
+        const dataUrl = await dicomDsToDataUrl(ds, buf, 'png');
+        if (dataUrl) srcList.push(dataUrl);
+      } catch {}
+    } else {
+      const dataUrl = await imgToDataUrl(url);
+      if (dataUrl) srcList.push(dataUrl);
+    }
   }
-  if (srcList.length === 0) { toast('Nessuna immagine da stampare', 'err'); return; }
+  if (_cineEscluse > 0) toast(`${_cineEscluse} video esclusi dalla stampa`, 'ok');
+  if (srcList.length === 0) { toast('Nessuna immagine da stampare (solo video)', 'err'); return; }
   const headerText = r ? `${esc(r.cognome)} ${esc(r.nome)} — ${esc(r.tipo)} — ${fmt(r.data)}` : '';
   _stampaImmaginiComune(srcList, _printPerPage, headerText);
 }
@@ -2211,8 +2238,19 @@ async function esportaPDF(id, conImmagini = true) {
     for (const f of imgFiles) {
       const url = '/immagini/' + id + '/' + encodeURIComponent(f);
       const isDcm = /\.dcm$/i.test(f);
-      const dataUrl = isDcm ? await dicomToDataUrl(url) : await imgToDataUrl(url);
-      if (dataUrl) imgDataUrls.push(dataUrl);
+      if (isDcm) {
+        // Parsa il DICOM per escludere le cine/video (multiframe) dal PDF
+        try {
+          const buf = await (await fetch(url)).arrayBuffer();
+          const ds  = dicomParser.parseDicom(new Uint8Array(buf));
+          if (_isDicomCine(ds)) continue; // video: escluso dal PDF
+          const dataUrl = await dicomDsToDataUrl(ds, buf);
+          if (dataUrl) imgDataUrls.push(dataUrl);
+        } catch {}
+      } else {
+        const dataUrl = await imgToDataUrl(url);
+        if (dataUrl) imgDataUrls.push(dataUrl);
+      }
     }
     const pdfPP = _printPerPage;
     for (let p = 0; p * pdfPP < imgDataUrls.length; p++) {
@@ -2967,12 +3005,13 @@ setInterval(loadPazientiAttesa, 10000);
 // ══════════════════════════════════════════════════════════════
 let _accessionAttivo = null;
 let _watchOrthancTimer = null;
-let _orthancStudiVisti = new Set();
+let _orthancIstanzeViste = new Set(); // istanze già importate (per real-time)
 
 function _avviaWatchOrthanc(accession) {
   if (_watchOrthancTimer) clearInterval(_watchOrthancTimer);
+  _orthancIstanzeViste = new Set();
   if (!accession) return;
-  console.log('[OrthancWatch] Avvio sorveglianza per accession', accession);
+  console.log('[OrthancWatch] Avvio sorveglianza real-time per accession', accession);
   _watchOrthancTimer = setInterval(() => _controllaOrthanc(accession), 5000);
 }
 
@@ -2981,16 +3020,32 @@ async function _controllaOrthanc(accession) {
     clearInterval(_watchOrthancTimer); return;
   }
   try {
-    // Cerca su Orthanc studi con questo AccessionNumber
-    const r = await fetch('/api/orthanc/cerca-accession?n=' + encodeURIComponent(accession));
+    // Chiede al server le istanze NON ancora viste (esclude video, esclude già importate)
+    const giàViste = [..._orthancIstanzeViste].join(',');
+    const r = await fetch('/api/orthanc/istanze-nuove?accession=' + encodeURIComponent(accession) + '&viste=' + encodeURIComponent(giàViste));
     if (!r.ok) return;
-    const studi = await r.json();
-    for (const studyId of (studi || [])) {
-      if (_orthancStudiVisti.has(studyId)) continue;
-      _orthancStudiVisti.add(studyId);
-      // Importa automaticamente lo studio nel referto corrente
-      await _importaStudioOrthanc(studyId);
-      toast('📸 Immagini dall\'ecografo importate automaticamente', 'ok');
+    const nuove = await r.json();
+    if (!nuove || !nuove.length) return;
+
+    let importate = 0;
+    for (const inst of nuove) {
+      if (_accessionAttivo !== accession) break; // paziente cambiato mentre importavo
+      _orthancIstanzeViste.add(inst.id);
+      try {
+        const res = await fetch('/api/orthanc/importa-istanza/' + inst.id, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refertoId: _tempRefertoId || (_tempRefertoId = Date.now().toString()) }),
+        });
+        const data = await res.json();
+        if (data.ok) importate++;
+      } catch (e) {
+        console.error('[OrthancWatch] Errore importa istanza', inst.id, e);
+      }
+    }
+    if (importate > 0) {
+      await ricaricaViewer([]);
+      toast('📸 ' + importate + (importate === 1 ? ' immagine importata' : ' immagini importate') + ' dall\'ecografo', 'ok');
     }
   } catch (e) {
     console.error('[OrthancWatch]', e);
@@ -3096,7 +3151,7 @@ async function importaDaOrthanc(studyId) {
   }
 
   document.getElementById('orthanc-overlay').classList.remove('open');
-  await ricaricaViewer(res.files);
+  await ricaricaViewer([]);
   toast(`Importate ${res.importati} immagini da Orthanc`, 'ok');
 }
 

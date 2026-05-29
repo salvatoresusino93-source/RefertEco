@@ -51,7 +51,12 @@ app.get('/api/referti/:id/immagini', (req, res) => {
         return ia !== ib ? ia - ib : a.localeCompare(b, undefined, { numeric: true });
       });
     } else {
-      files.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      // Ordine cronologico: per data di modifica del file (= ordine di acquisizione)
+      files.sort((a, b) => {
+        const ma = fs.statSync(path.join(dir, a)).mtime;
+        const mb = fs.statSync(path.join(dir, b)).mtime;
+        return ma - mb;
+      });
     }
     res.setHeader('X-Custom-Order', hasCustomOrder ? 'true' : 'false');
     return res.json(files);
@@ -447,11 +452,16 @@ app.get('/api/orthanc/studi', async (req, res) => {
         const rawDate = (st.StudyDate || '').replace(/\D/g, '');
         const studyDate = rawDate.length === 8
           ? rawDate.slice(6) + '/' + rawDate.slice(4, 6) + '/' + rawDate.slice(0, 4) : '';
+        let nInstances = 0;
+        try {
+          const stat = await (await orthancFetch('/studies/' + id + '/statistics')).json();
+          nInstances = parseInt(stat.CountInstances || 0, 10);
+        } catch {}
         return {
           id, patientName, patientId: pt.PatientID || '', birthDate, studyDate,
           description: st.StudyDescription || st.RequestedProcedureDescription || '',
           modality: st.ModalitiesInStudy || '',
-          nInstances: (s.Instances || []).length,
+          nInstances,
           stabile: s.IsStable,
         };
       } catch { return null; }
@@ -467,8 +477,18 @@ app.post('/api/orthanc/importa/:studyId', async (req, res) => {
   if (!refertoId) return res.status(400).json({ error: 'refertoId mancante' });
   try {
     const study = await (await orthancFetch('/studies/' + req.params.studyId)).json();
-    const instanceIds = study.Instances || [];
-    if (instanceIds.length === 0) return res.json({ importati: 0, files: [], paziente: {} });
+    // Orthanc a livello Study espone "Series", non "Instances": le istanze vanno
+    // prese da /studies/{id}/instances (altrimenti l'import scaricherebbe 0 immagini)
+    const instArr = await (await orthancFetch('/studies/' + req.params.studyId + '/instances')).json();
+    // Importa SOLO le immagini fisse: salta i video/cine (NumberOfFrames > 1).
+    // I video restano su Orthanc e si consultano con MicroDicom.
+    let videoSaltati = 0;
+    const instanceIds = (instArr || []).filter(inst => {
+      const nf = parseInt((inst.MainDicomTags && inst.MainDicomTags.NumberOfFrames) || '1', 10);
+      if (nf > 1) { videoSaltati++; return false; }
+      return true;
+    }).map(x => x.ID);
+    if (instanceIds.length === 0) return res.json({ importati: 0, files: [], paziente: {}, videoSaltati });
 
     const dir = getImgDir(refertoId);
     fs.mkdirSync(dir, { recursive: true });
@@ -493,6 +513,7 @@ app.post('/api/orthanc/importa/:studyId', async (req, res) => {
     res.json({
       importati: saved.length,
       files: saved,
+      videoSaltati,
       paziente: {
         cognome: rawName[0] || '',
         nome: rawName[1] || '',
@@ -506,6 +527,58 @@ app.post('/api/orthanc/importa/:studyId', async (req, res) => {
   } catch (e) {
     console.error('[orthanc importa]', e);
     res.status(500).json({ error: 'Errore importazione: ' + e.message });
+  }
+});
+
+// Importa le istanze di un accession number NON ancora viste — per real-time
+// GET /api/orthanc/istanze-nuove?accession=XXX&viste=id1,id2,...
+// Restituisce [{id, nFrames}] — solo le nuove (non video), da importare singolarmente
+app.get('/api/orthanc/istanze-nuove', async (req, res) => {
+  const { accession, viste } = req.query;
+  if (!accession) return res.json([]);
+  const giàViste = new Set((viste || '').split(',').filter(Boolean));
+  try {
+    // Cerca lo studio per accession number
+    const found = await (await orthancFetch('/tools/find', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ Level: 'Study', Query: { AccessionNumber: accession } }),
+    })).json();
+    if (!found || !found.length) return res.json([]);
+    const studyId = found[0];
+
+    // Lista istanze dello studio
+    const instArr = await (await orthancFetch('/studies/' + studyId + '/instances')).json();
+    const nuove = (instArr || [])
+      .filter(inst => {
+        if (giàViste.has(inst.ID)) return false;
+        const nf = parseInt((inst.MainDicomTags && inst.MainDicomTags.NumberOfFrames) || '1', 10);
+        return nf <= 1; // salta video/cine
+      })
+      .map(inst => ({ id: inst.ID }));
+    res.json(nuove);
+  } catch (e) {
+    res.json([]);
+  }
+});
+
+// Scarica una singola istanza DICOM da Orthanc nel referto
+// POST /api/orthanc/importa-istanza/:instanceId  { refertoId }
+app.post('/api/orthanc/importa-istanza/:instanceId', async (req, res) => {
+  const { refertoId } = req.body;
+  if (!refertoId) return res.status(400).json({ error: 'refertoId mancante' });
+  try {
+    const r = await orthancFetch('/instances/' + req.params.instanceId + '/file');
+    if (!r.ok) return res.status(404).json({ error: 'Istanza non trovata in Orthanc' });
+    const dir = getImgDir(refertoId);
+    fs.mkdirSync(dir, { recursive: true });
+    // Numero progressivo basato sui file già presenti
+    const existing = fs.readdirSync(dir).filter(f => f.endsWith('.dcm')).length;
+    const fname = 'orthanc_' + String(existing + 1).padStart(4, '0') + '.dcm';
+    fs.writeFileSync(path.join(dir, fname), Buffer.from(await r.arrayBuffer()));
+    res.json({ ok: true, file: fname });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -593,7 +666,7 @@ app.post('/api/worklist/crea', async (req, res) => {
   }
 });
 
-// Cerca studi Orthanc per AccessionNumber
+// Cerca studi Orthanc per AccessionNumber — restituisce [{id, stabile, nImmagini}]
 app.get('/api/orthanc/cerca-accession', async (req, res) => {
   const n = req.query.n;
   if (!n) return res.status(400).json({ error: 'Manca parametro n (accession number)' });
@@ -607,8 +680,21 @@ app.get('/api/orthanc/cerca-accession', async (req, res) => {
       }),
     });
     if (!r.ok) return res.json([]);
-    const ids = await r.json();
-    res.json(ids || []);
+    const ids = await r.json() || [];
+    // Per ogni studio aggiunge info stabilità (IsStable = Orthanc ha ricevuto tutto)
+    const studi = await Promise.all(ids.map(async id => {
+      try {
+        const s = await (await orthancFetch('/studies/' + id)).json();
+        // Conteggio istanze da /statistics (a livello Study non c'è "Instances")
+        let nImmagini = 0;
+        try {
+          const st = await (await orthancFetch('/studies/' + id + '/statistics')).json();
+          nImmagini = parseInt(st.CountInstances || 0, 10);
+        } catch {}
+        return { id, stabile: s.IsStable === true, nImmagini };
+      } catch { return { id, stabile: false, nImmagini: 0 }; }
+    }));
+    res.json(studi);
   } catch (e) {
     res.json([]);
   }
