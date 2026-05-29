@@ -39,6 +39,13 @@ function capitalizeWords(s) {
   return s.trim().toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
 }
 
+function esamePrenotabile(nome) {
+  const n = String(nome || '').toLowerCase();
+  if (/mammell|mammaria|\bseno\b/.test(n)) return false;
+  if (/ginecolog|ostetric|transvagin|pelvic|pelvi femm|gestaz|fetale|nucale|ecocardio fet/.test(n)) return false;
+  return true;
+}
+
 // ─── GET /api/public/esami ────────────────────────────────────────────────
 router.get('/esami', async (req, res) => {
   const { data, error } = await supabase
@@ -47,7 +54,7 @@ router.get('/esami', async (req, res) => {
     .eq('attivo', true)
     .order('nome');
   if (error) return res.status(500).json({ error: 'Errore caricamento esami' });
-  res.json(data);
+  res.json((data || []).filter(row => esamePrenotabile(row.nome)));
 });
 
 // ─── GET /api/public/disponibilita?tipo_id=UUID ───────────────────────────
