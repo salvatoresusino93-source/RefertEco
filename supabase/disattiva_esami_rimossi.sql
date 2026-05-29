@@ -24,6 +24,7 @@ UPDATE tipi_prestazione SET attivo = true WHERE nome IN (
   'Ecografia spalla',
   'Ecografia ginocchio',
   'Ecografia anca',
+  'Ecografia anca neonatale',
   'Ecografia gomito',
   'Ecografia polso e mano',
   'Ecografia caviglia e piede',
@@ -49,6 +50,7 @@ UPDATE tipi_prestazione SET attivo = false WHERE nome NOT IN (
   'Ecografia spalla',
   'Ecografia ginocchio',
   'Ecografia anca',
+  'Ecografia anca neonatale',
   'Ecografia gomito',
   'Ecografia polso e mano',
   'Ecografia caviglia e piede',
@@ -61,7 +63,7 @@ UPDATE tipi_prestazione SET attivo = false WHERE nome NOT IN (
 
 -- Inserisci eventuali voci nuove accorpate
 INSERT INTO tipi_prestazione (nome, durata_minuti, codice_dicom, attivo) VALUES
-  ('Ecografia scrotale e testicolare', 20, 'US_SCROTO', true),
+  ('Ecografia scrotale e testicolare', 30, 'US_SCROTO', true),
   ('Ecocolordoppler arti inferiori', 30, 'DOPPLER_AAII', true),
   ('Ecocolordoppler arti superiori', 30, 'DOPPLER_AASS', true)
 ON CONFLICT (nome) DO UPDATE SET attivo = true, durata_minuti = EXCLUDED.durata_minuti;

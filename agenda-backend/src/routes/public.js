@@ -8,6 +8,9 @@ const { notificaPrenotazioneOnline } = require('../services/email');
 
 const router = express.Router();
 
+// Griglia agenda unificata: tutti gli slot da 30 minuti
+const SLOT_MINUTI = 30;
+
 // ─── Helper: offset Roma in ms rispetto a UTC ────────────────────────────
 // Positive = Roma è avanti di UTC (es. +7200000 per CEST +02:00)
 function getRomeOffsetMs(dateStr) {
@@ -54,7 +57,10 @@ router.get('/esami', async (req, res) => {
     .eq('attivo', true)
     .order('nome');
   if (error) return res.status(500).json({ error: 'Errore caricamento esami' });
-  res.json((data || []).filter(row => esamePrenotabile(row.nome)));
+  res.json((data || []).filter(row => esamePrenotabile(row.nome)).map(row => ({
+    ...row,
+    durata_minuti: SLOT_MINUTI,
+  })));
 });
 
 // ─── GET /api/public/disponibilita?tipo_id=UUID ───────────────────────────
@@ -72,7 +78,7 @@ router.get('/disponibilita', async (req, res) => {
 
   if (!tipo) return res.status(404).json({ error: 'Esame non trovato' });
 
-  const durata = tipo.durata_minuti || 30;
+  const durata = SLOT_MINUTI;
 
   const adesso = new Date();
   const domani = new Date(adesso);
@@ -172,7 +178,7 @@ router.post('/prenota', async (req, res) => {
 
   if (!tipo) return res.status(404).json({ error: 'Tipo esame non trovato' });
 
-  const durata       = tipo.durata_minuti || 30;
+  const durata       = SLOT_MINUTI;
   const data_ora_fine = new Date(new Date(data_ora_inizio).getTime() + durata * 60000).toISOString();
 
   // Controllo slot ancora disponibile
