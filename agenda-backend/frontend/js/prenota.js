@@ -462,6 +462,19 @@ function goSuccess(telefono) {
 }
 
 // ─── AVVIO ────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  goStep1();
+function findEsameFromQuery() {
+  const q = new URLSearchParams(window.location.search).get('esame');
+  if (!q || !ST.esami.length) return null;
+  const normalized = q.trim().toLowerCase();
+  return (
+    ST.esami.find((e) => e.nome.toLowerCase() === normalized) ||
+    ST.esami.find((e) => e.nome.toLowerCase().includes(normalized)) ||
+    ST.esami.find((e) => normalized.includes(e.nome.toLowerCase()))
+  );
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await goStep1();
+  const match = findEsameFromQuery();
+  if (match) await selectEsame(match.id, match.nome);
 });
