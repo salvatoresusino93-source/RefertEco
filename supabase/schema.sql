@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS appuntamenti (
   data_ora_inizio     TIMESTAMPTZ NOT NULL,
   data_ora_fine       TIMESTAMPTZ NOT NULL,
   stato               TEXT NOT NULL DEFAULT 'prenotato'
-                      CHECK (stato IN ('prenotato','arrivato','in_corso','refertato','annullato')),
+                      CHECK (stato IN ('in_attesa','prenotato','arrivato','in_corso','refertato','annullato')),
   note_segreteria     TEXT,
   note_medico         TEXT,
   accession_number    TEXT UNIQUE,

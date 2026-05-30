@@ -511,6 +511,9 @@ function goSuccess(telefono) {
         <p style="margin-top:16px;font-size:13px;color:#94a3b8">
           In caso di problemi o per informazioni,<br>contatta lo studio telefonicamente.
         </p>
+        <a href="https://studiosusino.it/" class="pr-btn-pri" style="margin-top:24px;text-decoration:none">
+          Torna al sito
+        </a>
       </div>
     </div>`;
 }

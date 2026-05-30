@@ -22,9 +22,18 @@
 
     /* ── Header ─────────────────────────────────────────────────────── */
     .pr-header{
+      position:relative;
       background:linear-gradient(135deg,#1e40af 0%,#2563eb 100%);
       color:#fff;padding:24px 20px 20px;text-align:center;
     }
+    .pr-header-back{
+      position:absolute;left:14px;top:14px;
+      display:inline-flex;align-items:center;gap:5px;
+      color:#fff;text-decoration:none;font-size:13px;font-weight:600;
+      background:rgba(255,255,255,.15);padding:7px 12px;border-radius:20px;
+      transition:background .15s;
+    }
+    .pr-header-back:hover{background:rgba(255,255,255,.28)}
     .pr-header-logo{font-size:40px;margin-bottom:8px;line-height:1}
     .pr-header h1{font-size:20px;font-weight:700;margin-bottom:4px}
     .pr-header p{font-size:13px;opacity:.85}
@@ -218,6 +227,7 @@
 
   <!-- Header -->
   <header class="pr-header">
+    <a class="pr-header-back" href="https://studiosusino.it/">← Torna al sito</a>
     <div class="pr-header-logo">🏥</div>
     <h1>Prenota un esame</h1>
     <p>Studio Medico Ecografico</p>
@@ -241,6 +251,6 @@
 
 <script src="/js/esami-categorie.js?v=20260530"></script>
 <script src="/js/preparazione-esami.js?v=20260530"></script>
-<script src="/js/prenota.js?v=20260530"></script>
+<script src="/js/prenota.js?v=20260530b"></script>
 </body>
 </html>
