@@ -5,6 +5,7 @@ const express  = require('express');
 const jwt      = require('jsonwebtoken');
 const supabase = require('../services/supabase');
 const { inviaSmsConferma } = require('../services/sms');
+const { creaEvento } = require('../services/googleCalendar');
 const { getIO } = require('../socket');
 
 const router = express.Router();
@@ -111,6 +112,11 @@ router.get('/conferma/:token', async (req, res) => {
 
   // SMS di conferma al paziente
   inviaSmsConferma(app).catch(e => console.error('[SMS] Conferma prenotazione online:', e.message));
+
+  // Google Calendar — crea evento (come per le prenotazioni dall'agenda).
+  // Le prenotazioni dal sito arrivano in_attesa: l'evento su Google va scritto
+  // SOLO ora che il medico ha confermato (stato → prenotato).
+  creaEvento(app).catch(e => console.error('[GCal] Crea evento (conferma online):', e.message));
 
   const paz  = app.pazienti;
   const nome = paz ? `${paz.cognome} ${paz.nome}` : '—';
