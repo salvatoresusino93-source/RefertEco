@@ -5,6 +5,7 @@ const express  = require('express');
 const jwt      = require('jsonwebtoken');
 const supabase = require('../services/supabase');
 const { notificaPrenotazioneOnline } = require('../services/email');
+const { leggiEventiPersonali } = require('../services/googleCalendar');
 
 const router = express.Router();
 
@@ -40,6 +41,43 @@ function makeRomeDateTime(dateStr, totalMinutes) {
 function capitalizeWords(s) {
   if (!s) return s;
   return s.trim().toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+}
+
+// ─── Impegni personali da Google Calendar → intervalli occupati ───────────
+// Lettura in tempo reale: se il medico è impegnato nel suo calendario,
+// quegli orari NON sono prenotabili. In caso di errore restituisce []
+// (la disponibilità resta comunque coperta dai blocchi importati alle 06:00).
+async function intervalliGoogleCalendar(daISO, aISO) {
+  let eventi;
+  try {
+    eventi = await leggiEventiPersonali(daISO, aISO);
+  } catch (e) {
+    console.error('[Disponibilità] Lettura Google Calendar fallita:', e.message);
+    return [];
+  }
+
+  const intervalli = [];
+  for (const ev of eventi || []) {
+    // Eventi marcati "Disponibile" (transparent) non bloccano l'agenda
+    if (ev.transparency === 'transparent') continue;
+    // Eventi annullati/rifiutati
+    if (ev.status === 'cancelled') continue;
+
+    if (ev.start?.dateTime && ev.end?.dateTime) {
+      // Evento con orario
+      intervalli.push({
+        data_ora_inizio: ev.start.dateTime,
+        data_ora_fine:   ev.end.dateTime,
+      });
+    } else if (ev.start?.date && ev.end?.date) {
+      // Evento "tutto il giorno": end.date è esclusivo in Google
+      intervalli.push({
+        data_ora_inizio: makeRomeDateTime(ev.start.date, 0).toISOString(),
+        data_ora_fine:   makeRomeDateTime(ev.end.date,   0).toISOString(),
+      });
+    }
+  }
+  return intervalli;
 }
 
 function esamePrenotabile(nome) {
@@ -115,7 +153,10 @@ router.get('/disponibilita', async (req, res) => {
     .lt('data_ora_inizio', fine45.toISOString())
     .gt('data_ora_fine',  domani.toISOString());
 
-  const occupied = [...(appuntamenti || []), ...(blocchi || [])];
+  // Impegni personali letti in tempo reale dal Google Calendar del medico
+  const impegniGoogle = await intervalliGoogleCalendar(domani.toISOString(), fine45.toISOString());
+
+  const occupied = [...(appuntamenti || []), ...(blocchi || []), ...impegniGoogle];
 
   const FASCE = [
     { start:  9 * 60, end: 13 * 60 },
@@ -212,6 +253,16 @@ router.post('/prenota', async (req, res) => {
 
   if (blocchi && blocchi.length > 0) {
     return res.status(409).json({ error: 'Slot non disponibile (giorno festivo o chiusura).' });
+  }
+
+  // Controllo impegni personali dal Google Calendar (tempo reale)
+  const impegniGoogle = await intervalliGoogleCalendar(data_ora_inizio, data_ora_fine);
+  const sovrappostoGoogle = impegniGoogle.some(o =>
+    new Date(o.data_ora_inizio).getTime() < new Date(data_ora_fine).getTime() &&
+    new Date(o.data_ora_fine).getTime()   > new Date(data_ora_inizio).getTime()
+  );
+  if (sovrappostoGoogle) {
+    return res.status(409).json({ error: 'Slot non più disponibile. Scegli un altro orario.' });
   }
 
   // Trova o crea paziente

@@ -125,11 +125,11 @@ async function sincronizzaBlocchiGoogleCalendar() {
     return;
   }
 
-  // Importa i prossimi 30 giorni
+  // Importa i prossimi 46 giorni (copre l'orizzonte di prenotazione online: 45 gg)
   const da = new Date();
   da.setHours(0, 0, 0, 0);
   const a = new Date(da);
-  a.setDate(a.getDate() + 30);
+  a.setDate(a.getDate() + 46);
 
   let eventi;
   try {
