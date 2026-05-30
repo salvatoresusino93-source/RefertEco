@@ -6,6 +6,7 @@ const jwt      = require('jsonwebtoken');
 const supabase = require('../services/supabase');
 const { notificaPrenotazioneOnline } = require('../services/email');
 const { leggiEventiPersonali } = require('../services/googleCalendar');
+const { leggiImpegniIcal, icalConfigurato } = require('../services/icalCalendar');
 
 const router = express.Router();
 
@@ -48,6 +49,12 @@ function capitalizeWords(s) {
 // quegli orari NON sono prenotabili. In caso di errore restituisce []
 // (la disponibilità resta comunque coperta dai blocchi importati alle 06:00).
 async function intervalliGoogleCalendar(daISO, aISO) {
+  // Via semplice: link iCal segreto (sola lettura). Se configurato ha priorità.
+  if (icalConfigurato()) {
+    return leggiImpegniIcal(daISO, aISO);
+  }
+
+  // Via service account: lettura tramite API Google Calendar.
   let eventi;
   try {
     eventi = await leggiEventiPersonali(daISO, aISO);
