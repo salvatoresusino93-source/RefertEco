@@ -155,7 +155,7 @@ router.get('/esami', async (req, res) => {
 });
 
 // ─── GET /api/public/disponibilita?tipo_id=UUID ───────────────────────────
-// Restituisce gli slot liberi per i prossimi 45 giorni (solo martedì e venerdì)
+// Restituisce gli slot liberi per i prossimi 45 giorni (lunedì–venerdì)
 router.get('/disponibilita', async (req, res) => {
   const { tipo_id } = req.query;
   if (!tipo_id) return res.status(400).json({ error: 'tipo_id obbligatorio' });
@@ -207,10 +207,10 @@ router.get('/disponibilita', async (req, res) => {
   const occupied = [...(appuntamenti || []), ...(blocchi || []), ...impegniGoogle, ...indisponibilita];
 
   const FASCE = [
-    { start:  9 * 60, end: 13 * 60 },
-    { start: 15 * 60, end: 19 * 60 },
+    { start:  9 * 60,      end: 12 * 60 + 30 }, // 09:00–12:30
+    { start: 15 * 60,      end: 19 * 60 },       // 15:00–19:00
   ];
-  const GIORNI_APERTI = new Set([2, 5]); // Martedì = 2, Venerdì = 5
+  const GIORNI_APERTI = new Set([1, 2, 3, 4, 5]); // Lunedì–Venerdì
 
   const giorni = [];
 

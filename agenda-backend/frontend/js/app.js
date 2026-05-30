@@ -191,7 +191,7 @@ function renderCalendar() {
     const dateStr    = toDateStr(d);
     const bloccoGiorno = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
     const isDomenica   = d.getDay() === 0;
-    const isEcografia  = d.getDay() === 2 || d.getDay() === 5;
+    const isEcografia  = d.getDay() >= 1 && d.getDay() <= 5;
     const isChiuso     = bloccoGiorno || isDomenica;
     const motivoCh     = isDomenica ? 'Domenica — giorno di chiusura' : (bloccoGiorno?.motivo || '');
     const giorno       = GIORNI_IT[d.getDay()];
@@ -223,7 +223,7 @@ function renderCalendar() {
     const todayCls   = isToday(d) ? ' today' : '';
     const bloccoGiorno = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
     const isDomenica   = d.getDay() === 0;
-    const isEcografia  = d.getDay() === 2 || d.getDay() === 5;
+    const isEcografia  = d.getDay() >= 1 && d.getDay() <= 5;
     const isChiuso     = bloccoGiorno || isDomenica;
     const motivoCh     = isDomenica ? 'Domenica — giorno di chiusura' : (bloccoGiorno?.motivo || '');
     const festivoCls   = isChiuso ? ' festivo' : (isEcografia ? ' ecografia' : '');

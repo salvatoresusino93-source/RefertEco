@@ -15,13 +15,13 @@
 const supabase = require('./supabase');
 const { leggiEventiPersonali } = require('./googleCalendar');
 
-// ─── Orari base (martedì=2, venerdì=5) ───────────────────────────────────
+// ─── Orari base (lunedì–venerdì) ─────────────────────────────────────────
 // Slot in minuti dal mezzanotte
 const SLOT_BASE = [
-  { start:  9 * 60, end: 13 * 60 },   // 09:00–13:00
-  { start: 15 * 60, end: 19 * 60 },   // 15:00–19:00
+  { start:  9 * 60,      end: 12 * 60 + 30 }, // 09:00–12:30
+  { start: 15 * 60,      end: 19 * 60 },       // 15:00–19:00
 ];
-const GIORNI_APERTI = new Set([2, 5]); // 0=dom 1=lun 2=mar 3=mer 4=gio 5=ven 6=sab
+const GIORNI_APERTI = new Set([1, 2, 3, 4, 5]); // 0=dom 1=lun 2=mar 3=mer 4=gio 5=ven 6=sab
 
 // ─── Genera URL autorizzazione OAuth2 ────────────────────────────────────
 function generaAuthUrl() {
