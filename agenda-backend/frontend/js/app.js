@@ -202,7 +202,6 @@ function renderCalendar() {
       <span class="cal-th-dayname">${giorno}</span>
       <span class="cal-th-daynum">${d.getDate()}</span>
       ${isChiuso ? `<span class="cal-th-festivo" title="${esc(motivoCh)}">🔴</span>` : ''}
-      ${isEcografia && !isChiuso ? `<span class="cal-th-ecografia" title="Giorno ecografia">🩺</span>` : ''}
     </div>`;
   }
   hdr += `</div>`;
