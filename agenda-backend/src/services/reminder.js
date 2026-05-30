@@ -190,15 +190,19 @@ function avviaReminder() {
     popolaFestivita(anno + 1).catch(e => console.error('[Festività]', e.message));
   }, { timezone: 'Europe/Rome' });
 
-  // Ogni mattina alle 06:00 → importa impegni personali da Google Calendar come blocchi
-  cron.schedule('0 6 * * *', sincronizzaBlocchiGoogleCalendar, { timezone: 'Europe/Rome' });
+  // NB: la sincronizzazione degli impegni personali NON viene più importata
+  // come blocchi nell'agenda (mostrerebbe i tuoi impegni privati, coi titoli,
+  // dentro l'agenda delle ecografie). Gli impegni personali bloccano gli slot
+  // della prenotazione online tramite lettura in tempo reale (vedi routes/public.js),
+  // restando invisibili nell'agenda.
+  // cron.schedule('0 6 * * *', sincronizzaBlocchiGoogleCalendar, { timezone: 'Europe/Rome' });
 
   // Ogni domenica alle 20:00 → aggiorna orari Google Business Profile per i prossimi 30 giorni
   cron.schedule('0 20 * * 0', () => {
     aggiornaOreSettimana().catch(e => console.error('[GBP] Errore cron domenicale:', e.message));
   }, { timezone: 'Europe/Rome' });
 
-  console.log('[SMS Reminder] Cron job attivi — 19:00 SMS + 1h prima + sync GCal 06:00 + GBP domenica 20:00 (Europe/Rome)');
+  console.log('[SMS Reminder] Cron job attivi — 19:00 SMS + 1h prima + GBP domenica 20:00 (Europe/Rome)');
 
   // All'avvio: popola festività anno corrente e prossimo se non già presenti
   const annoOra = new Date().getFullYear();

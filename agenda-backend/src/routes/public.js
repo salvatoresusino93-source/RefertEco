@@ -5,7 +5,7 @@ const express  = require('express');
 const jwt      = require('jsonwebtoken');
 const supabase = require('../services/supabase');
 const { notificaPrenotazioneOnline } = require('../services/email');
-const { leggiEventiPersonali } = require('../services/googleCalendar');
+const { leggiEventiPersonali, getCreds } = require('../services/googleCalendar');
 const { leggiImpegniIcal, icalConfigurato } = require('../services/icalCalendar');
 
 const router = express.Router();
@@ -49,42 +49,46 @@ function capitalizeWords(s) {
 // quegli orari NON sono prenotabili. In caso di errore restituisce []
 // (la disponibilità resta comunque coperta dai blocchi importati alle 06:00).
 async function intervalliGoogleCalendar(daISO, aISO) {
-  // Via semplice: link iCal segreto (sola lettura). Se configurato ha priorità.
+  // Via service account (consigliata): legge SOLO gli impegni personali del
+  // medico ed esclude automaticamente le ecografie che l'agenda stessa ha
+  // scritto nel calendario (riconosciute da extendedProperties.agendaStudioId).
+  if (getCreds()) {
+    try {
+      const eventi = await leggiEventiPersonali(daISO, aISO);
+      const intervalli = [];
+      for (const ev of eventi || []) {
+        // Eventi marcati "Disponibile" (transparent) o annullati non bloccano
+        if (ev.transparency === 'transparent') continue;
+        if (ev.status === 'cancelled') continue;
+
+        if (ev.start?.dateTime && ev.end?.dateTime) {
+          intervalli.push({
+            data_ora_inizio: ev.start.dateTime,
+            data_ora_fine:   ev.end.dateTime,
+          });
+        } else if (ev.start?.date && ev.end?.date) {
+          // Evento "tutto il giorno": end.date è esclusivo in Google
+          intervalli.push({
+            data_ora_inizio: makeRomeDateTime(ev.start.date, 0).toISOString(),
+            data_ora_fine:   makeRomeDateTime(ev.end.date,   0).toISOString(),
+          });
+        }
+      }
+      return intervalli;
+    } catch (e) {
+      console.error('[Disponibilità] Lettura Google Calendar (service account) fallita:', e.message);
+      return [];
+    }
+  }
+
+  // Fallback: link iCal segreto (sola lettura), usato solo se il service
+  // account non è configurato. NB: l'iCal non distingue le ecografie scritte
+  // dall'agenda dagli impegni personali, ma blocca comunque correttamente.
   if (icalConfigurato()) {
     return leggiImpegniIcal(daISO, aISO);
   }
 
-  // Via service account: lettura tramite API Google Calendar.
-  let eventi;
-  try {
-    eventi = await leggiEventiPersonali(daISO, aISO);
-  } catch (e) {
-    console.error('[Disponibilità] Lettura Google Calendar fallita:', e.message);
-    return [];
-  }
-
-  const intervalli = [];
-  for (const ev of eventi || []) {
-    // Eventi marcati "Disponibile" (transparent) non bloccano l'agenda
-    if (ev.transparency === 'transparent') continue;
-    // Eventi annullati/rifiutati
-    if (ev.status === 'cancelled') continue;
-
-    if (ev.start?.dateTime && ev.end?.dateTime) {
-      // Evento con orario
-      intervalli.push({
-        data_ora_inizio: ev.start.dateTime,
-        data_ora_fine:   ev.end.dateTime,
-      });
-    } else if (ev.start?.date && ev.end?.date) {
-      // Evento "tutto il giorno": end.date è esclusivo in Google
-      intervalli.push({
-        data_ora_inizio: makeRomeDateTime(ev.start.date, 0).toISOString(),
-        data_ora_fine:   makeRomeDateTime(ev.end.date,   0).toISOString(),
-      });
-    }
-  }
-  return intervalli;
+  return [];
 }
 
 function esamePrenotabile(nome) {
