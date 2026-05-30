@@ -96,14 +96,9 @@ async function goStep1() {
 }
 
 function renderEsamiGrid() {
-  function getIcon(nome) {
-    const n = nome.toLowerCase();
-    if (n.includes('tiro')) return '🦋';
-    if (n.includes('doppler')) return '🩸';
-    if (n.includes('rene') || n.includes('renale') || n.includes('urinario') || n.includes('vescic')) return '💧';
-    if (n.includes('neonata')) return '👶';
-    if (n.includes('addome')) return '🫀';
-    return '🔵';
+  function getIcon() {
+    // Icona unica e uniforme: linea "battito" (ecografia/diagnostica)
+    return '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h4l2.5-6 4 13 3-8 1.5 3H22"/></svg>';
   }
 
   function renderItem(e) {
@@ -148,7 +143,7 @@ function renderEsameSceltoStep1() {
     <div class="pr-card-title">Esame selezionato</div>
     <div class="pr-card-body">
       <div class="esame-item selected" style="cursor:default">
-        <div class="esame-icon">🩺</div>
+        <div class="esame-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h4l2.5-6 4 13 3-8 1.5 3H22"/></svg></div>
         <div>
           <div class="esame-nome">${esc(ST.esameName)}</div>
           <div class="esame-durata">⏱ 30 minuti</div>

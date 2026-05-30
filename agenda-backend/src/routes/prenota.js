@@ -28,7 +28,7 @@ function htmlPage(title, icon, body, color) {
     h1{font-size:22px;color:${color};margin-bottom:14px;font-weight:700}
     p{color:#475569;font-size:15px;line-height:1.7}
     strong{color:#1e293b}
-    .btn{display:inline-block;margin-top:24px;padding:11px 24px;background:#2563eb;
+    .btn{display:inline-block;margin-top:24px;padding:11px 24px;background:#586570;
          color:#fff;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600}
   </style>
 </head>

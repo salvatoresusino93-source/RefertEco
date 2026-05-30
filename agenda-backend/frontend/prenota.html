@@ -3,16 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Prenota un esame — Studio Medico</title>
+  <title>Prenota un esame — Studio Ecografico Dr. Salvatore Susino</title>
   <meta name="description" content="Prenota il tuo esame ecografico online">
-  <meta name="theme-color" content="#2563eb">
+  <meta name="theme-color" content="#586570">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     /* ── Reset & Base ─────────────────────────────────────────────────── */
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html{height:100%}
     body{
-      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-      font-size:15px;color:#1e293b;background:#f0f4f8;min-height:100%;
+      font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      font-size:15px;color:#1e293b;background:#fafafa;min-height:100%;
     }
     button,input,select,textarea{font-family:inherit;font-size:inherit}
     .hidden{display:none!important}
@@ -23,7 +26,7 @@
     /* ── Header ─────────────────────────────────────────────────────── */
     .pr-header{
       position:relative;
-      background:linear-gradient(135deg,#1e40af 0%,#2563eb 100%);
+      background:linear-gradient(135deg,#465058 0%,#586570 100%);
       color:#fff;padding:24px 20px 20px;text-align:center;
     }
     .pr-header-back{
@@ -34,7 +37,13 @@
       transition:background .15s;
     }
     .pr-header-back:hover{background:rgba(255,255,255,.28)}
-    .pr-header-logo{font-size:40px;margin-bottom:8px;line-height:1}
+    .pr-header-logo{
+      width:60px;height:60px;margin:0 auto 10px;
+      background:#fff;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 2px 10px rgba(0,0,0,.15);
+    }
+    .pr-header-logo img{height:38px;width:auto;display:block}
     .pr-header h1{font-size:20px;font-weight:700;margin-bottom:4px}
     .pr-header p{font-size:13px;opacity:.85}
 
@@ -52,9 +61,9 @@
       transition:all .2s;
     }
     .pr-step small{font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
-    .pr-step.done span{background:#dbeafe;border-color:#3b82f6;color:#2563eb}
-    .pr-step.active span{background:#2563eb;border-color:#2563eb;color:#fff}
-    .pr-step.active small{color:#2563eb}
+    .pr-step.done span{background:#eef0f2;border-color:#586570;color:#586570}
+    .pr-step.active span{background:#586570;border-color:#586570;color:#fff}
+    .pr-step.active small{color:#586570}
     .pr-step-line{flex:1;height:2px;background:#e2e8f0;max-width:36px;margin:0 4px;margin-bottom:14px}
 
     /* ── Card ────────────────────────────────────────────────────────── */
@@ -66,7 +75,7 @@
       padding:18px 20px 14px;border-bottom:1px solid #f1f5f9;
       font-size:16px;font-weight:700;color:#1e293b;
     }
-    .pr-card-title span{color:#2563eb}
+    .pr-card-title span{color:#586570}
     .pr-card-body{padding:16px 20px}
 
     /* ── Esame card ─────────────────────────────────────────────────── */
@@ -82,9 +91,9 @@
       border:2px solid #e2e8f0;border-radius:12px;cursor:pointer;
       background:#fafafa;transition:all .15s;
     }
-    .esame-item:hover{border-color:#93c5fd;background:#eff6ff}
-    .esame-item.selected{border-color:#2563eb;background:#eff6ff}
-    .esame-icon{font-size:28px;flex-shrink:0}
+    .esame-item:hover{border-color:#b8c0c7;background:#eef0f2}
+    .esame-item.selected{border-color:#586570;background:#eef0f2}
+    .esame-icon{flex-shrink:0;color:#586570;display:flex;align-items:center;justify-content:center;width:30px}
     .esame-nome{font-weight:600;font-size:15px;color:#1e293b;margin-bottom:2px}
     .esame-durata{font-size:12px;color:#64748b}
     .esame-arrow{margin-left:auto;color:#94a3b8;font-size:18px}
@@ -96,8 +105,8 @@
       padding:12px 16px;border:2px solid #e2e8f0;border-radius:10px;
       cursor:pointer;background:#fafafa;transition:all .15s;
     }
-    .date-item:hover{border-color:#93c5fd;background:#eff6ff}
-    .date-item.selected{border-color:#2563eb;background:#eff6ff}
+    .date-item:hover{border-color:#b8c0c7;background:#eef0f2}
+    .date-item.selected{border-color:#586570;background:#eef0f2}
     .date-item-txt{font-weight:600;font-size:14px;text-transform:capitalize}
     .date-item-cnt{font-size:12px;color:#64748b;background:#f1f5f9;padding:3px 8px;border-radius:20px}
 
@@ -111,8 +120,8 @@
       background:#fafafa;cursor:pointer;font-size:14px;font-weight:600;
       color:#334155;transition:all .15s;text-align:center;
     }
-    .ora-btn:hover{border-color:#93c5fd;background:#eff6ff}
-    .ora-btn.selected{border-color:#2563eb;background:#2563eb;color:#fff}
+    .ora-btn:hover{border-color:#b8c0c7;background:#eef0f2}
+    .ora-btn.selected{border-color:#586570;background:#586570;color:#fff}
 
     /* ── Form campi ─────────────────────────────────────────────────── */
     .field{display:flex;flex-direction:column;gap:5px;flex:1}
@@ -126,7 +135,7 @@
       width:100%;transition:border-color .15s;
     }
     .field input:focus,.field select:focus,.field textarea:focus{
-      outline:none;border-color:#2563eb;background:#fff;box-shadow:0 0 0 3px rgba(37,99,235,.1);
+      outline:none;border-color:#586570;background:#fff;box-shadow:0 0 0 3px rgba(88,101,112,.15);
     }
     .field-row{display:flex;gap:12px;margin-bottom:12px}
     .field-full{margin-bottom:12px}
@@ -150,16 +159,16 @@
     .pr-success-icon{font-size:72px;margin-bottom:20px;line-height:1}
     .pr-success h2{font-size:22px;font-weight:700;color:#1e293b;margin-bottom:12px}
     .pr-success p{color:#475569;font-size:15px;line-height:1.6;margin-bottom:8px}
-    .pr-success .tel{font-weight:700;color:#2563eb}
+    .pr-success .tel{font-weight:700;color:#586570}
 
     /* ── Buttons ─────────────────────────────────────────────────────── */
     .pr-btn-pri{
-      display:block;width:100%;padding:14px;background:#2563eb;color:#fff;
+      display:block;width:100%;padding:14px;background:#586570;color:#fff;
       border:none;border-radius:10px;font-size:15px;font-weight:700;
       cursor:pointer;transition:background .15s;
     }
-    .pr-btn-pri:hover{background:#1d4ed8}
-    .pr-btn-pri:disabled{background:#93c5fd;cursor:not-allowed}
+    .pr-btn-pri:hover{background:#465058}
+    .pr-btn-pri:disabled{background:#b8c0c7;cursor:not-allowed}
     .pr-btn-ghost{
       display:block;width:100%;padding:12px;background:none;color:#64748b;
       border:1px solid #e2e8f0;border-radius:10px;font-size:14px;
@@ -174,7 +183,7 @@
     .pr-loader{text-align:center;padding:32px;color:#64748b;font-size:14px}
     .pr-spinner{
       display:inline-block;width:32px;height:32px;
-      border:3px solid #e2e8f0;border-top-color:#2563eb;
+      border:3px solid #e2e8f0;border-top-color:#586570;
       border-radius:50%;animation:spin .7s linear infinite;
       margin-bottom:10px;
     }
@@ -192,7 +201,7 @@
 
     /* ── Privacy checkbox ────────────────────────────────────────────── */
     .privacy-wrap{
-      background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;
+      background:#f4f6f7;border:1px solid #d6dbdf;border-radius:8px;
       padding:12px 14px;margin-bottom:14px;
     }
     .privacy-label{
@@ -201,9 +210,9 @@
     }
     .privacy-label input[type=checkbox]{
       margin-top:2px;width:18px;height:18px;flex-shrink:0;
-      accent-color:#2563eb;cursor:pointer;
+      accent-color:#586570;cursor:pointer;
     }
-    .pr-link{color:#2563eb;text-decoration:underline}
+    .pr-link{color:#586570;text-decoration:underline}
 
     /* Preparazione esame addominale */
     .pr-prep-reminder{
@@ -228,9 +237,11 @@
   <!-- Header -->
   <header class="pr-header">
     <a class="pr-header-back" href="https://studiosusino.it/">← Torna al sito</a>
-    <div class="pr-header-logo">🏥</div>
+    <div class="pr-header-logo">
+      <img src="/images/logo-mark.png" srcset="/images/logo-mark.png 1x, /images/logo-mark@2x.png 2x" alt="Studio Ecografico Dr. Salvatore Susino">
+    </div>
     <h1>Prenota un esame</h1>
-    <p>Studio Medico Ecografico</p>
+    <p>Studio Ecografico Dr. Salvatore Susino</p>
   </header>
 
   <!-- Step indicator -->
@@ -251,6 +262,6 @@
 
 <script src="/js/esami-categorie.js?v=20260530"></script>
 <script src="/js/preparazione-esami.js?v=20260530"></script>
-<script src="/js/prenota.js?v=20260530b"></script>
+<script src="/js/prenota.js?v=20260530c"></script>
 </body>
 </html>
