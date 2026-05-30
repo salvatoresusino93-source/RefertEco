@@ -415,6 +415,23 @@ button { font-family:inherit; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 90%; padding: 0 4px; }
 
+/* Impegno personale da Google Calendar — blocco grosso "non prenotabile" */
+.cal-blocco-gcal {
+  z-index: 3;
+  background: repeating-linear-gradient(-45deg,
+    rgba(120,53,15,.16), rgba(120,53,15,.16) 10px,
+    rgba(120,53,15,.07) 10px, rgba(120,53,15,.07) 20px);
+  border-left: 4px solid rgba(180,83,9,.85);
+  border-top: 1px solid rgba(180,83,9,.45);
+}
+.cal-blocco-gcal:hover {
+  background: repeating-linear-gradient(-45deg,
+    rgba(120,53,15,.26), rgba(120,53,15,.26) 10px,
+    rgba(120,53,15,.13) 10px, rgba(120,53,15,.13) 20px);
+}
+.cal-blocco-gcal .cal-blocco-label  { color: rgba(124,45,18,.95); }
+.cal-blocco-gcal .cal-blocco-motivo { color: rgba(124,45,18,.7); }
+
 /* Tipo selector nel modal blocco */
 .blocco-tipo-btns { display: flex; gap: 8px; }
 .blocco-tipo-btn {

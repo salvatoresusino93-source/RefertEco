@@ -281,7 +281,26 @@ function renderCalendar() {
       </div>`;
     }
 
-    days += `<div class="cal-day${todayCls}${festivoCls}" style="height:${totalPx}px">${lines}${slots}${bloccoOverlay}${fasceBlocchi}${appHtml}</div>`;
+    // ── Impegni personali da Google Calendar (blocchi a orario, non rimovibili)
+    // Mostra un blocco grosso "Non prenotabile" sullo slot occupato, senza
+    // svelare i dettagli privati dell'impegno (etichetta generica).
+    let impegniGcal = '';
+    for (const b of _blocchi.filter(x => !x.tutto_il_giorno && x.tipo === 'google_calendar' && x.data_ora_inizio.startsWith(dateStr))) {
+      const startM = minFromMidnight(b.data_ora_inizio);
+      const endM   = minFromMidnight(b.data_ora_fine);
+      const top    = (startM - CAL_START*60) * PX_PER_MIN;
+      const height = Math.max((endM - startM) * PX_PER_MIN, 30);
+      if (top < 0 || top >= totalPx) continue;
+      const oraTxt = `${fmtTime(b.data_ora_inizio)}–${fmtTime(b.data_ora_fine)}`;
+      impegniGcal += `<div class="cal-blocco cal-blocco-gcal" style="top:${top}px;height:${height}px"
+        onclick="onImpegnoClick(event)" title="Impegno personale ${oraTxt} — slot non prenotabile">
+        <span class="cal-blocco-icon">🚫</span>
+        <span class="cal-blocco-label">Non prenotabile</span>
+        ${height>=44?`<span class="cal-blocco-motivo">Impegno personale</span>`:''}
+      </div>`;
+    }
+
+    days += `<div class="cal-day${todayCls}${festivoCls}" style="height:${totalPx}px">${lines}${slots}${bloccoOverlay}${fasceBlocchi}${impegniGcal}${appHtml}</div>`;
   }
 
   // ── Applica larghezza al wrapper (colonne pixel fissi, scrollabile)
@@ -782,6 +801,10 @@ function onSlotClick(date, time) {
 }
 function onSlotBlockedClick(motivo) {
   alert(`⛔ Giorno non disponibile: ${motivo}\n\nIl centro è chiuso in questa data.`);
+}
+function onImpegnoClick(e) {
+  if (e) e.stopPropagation();
+  alert('🚫 Slot non prenotabile\n\nQui hai un impegno personale segnato sul tuo Google Calendar.\nLo slot è bloccato per le prenotazioni online.\n\nPer liberarlo, rimuovi o sposta l\'impegno dal Google Calendar.');
 }
 function onAppClick(id, e) { if(e) e.stopPropagation(); openModal({ id }); }
 
