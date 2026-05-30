@@ -140,7 +140,7 @@ async function sincronizzaBlocchiGoogleCalendar() {
   }
 
   if (!eventi.length) {
-    console.log('[GCal Sync] Nessun impegno personale nei prossimi 30 giorni.');
+    console.log('[GCal Sync] Nessun impegno personale nei prossimi 46 giorni.');
     return;
   }
 
@@ -159,10 +159,12 @@ async function sincronizzaBlocchiGoogleCalendar() {
     const inizio = ev.start?.dateTime || (ev.start?.date + 'T00:00:00.000Z');
     const fine   = ev.end?.dateTime   || (ev.end?.date   + 'T23:59:59.000Z');
 
+    // Etichetta generica: nell'agenda si vede che lo slot è occupato/non
+    // prenotabile, ma NON i dettagli privati dell'impegno (titolo nascosto).
     const { error } = await supabase.from('blocchi_agenda').insert({
       data_ora_inizio: inizio,
       data_ora_fine:   fine,
-      motivo:          ev.summary || 'Impegno personale',
+      motivo:          'Impegno personale',
       tipo:            'google_calendar',
       tutto_il_giorno: tuttoIlGiorno,
     });
@@ -190,19 +192,20 @@ function avviaReminder() {
     popolaFestivita(anno + 1).catch(e => console.error('[Festività]', e.message));
   }, { timezone: 'Europe/Rome' });
 
-  // NB: la sincronizzazione degli impegni personali NON viene più importata
-  // come blocchi nell'agenda (mostrerebbe i tuoi impegni privati, coi titoli,
-  // dentro l'agenda delle ecografie). Gli impegni personali bloccano gli slot
-  // della prenotazione online tramite lettura in tempo reale (vedi routes/public.js),
-  // restando invisibili nell'agenda.
-  // cron.schedule('0 6 * * *', sincronizzaBlocchiGoogleCalendar, { timezone: 'Europe/Rome' });
+  // Ogni 30 minuti → importa gli impegni personali da Google Calendar come
+  // blocchi nell'agenda (etichetta generica, senza dettagli privati). Così
+  // nell'agenda lo slot risulta "non prenotabile". Gli impegni bloccano anche
+  // la prenotazione online in tempo reale (vedi routes/public.js).
+  cron.schedule('*/30 * * * *', sincronizzaBlocchiGoogleCalendar, { timezone: 'Europe/Rome' });
+  // All'avvio: importa subito una prima volta
+  sincronizzaBlocchiGoogleCalendar().catch(e => console.error('[GCal Sync avvio]', e.message));
 
   // Ogni domenica alle 20:00 → aggiorna orari Google Business Profile per i prossimi 30 giorni
   cron.schedule('0 20 * * 0', () => {
     aggiornaOreSettimana().catch(e => console.error('[GBP] Errore cron domenicale:', e.message));
   }, { timezone: 'Europe/Rome' });
 
-  console.log('[SMS Reminder] Cron job attivi — 19:00 SMS + 1h prima + GBP domenica 20:00 (Europe/Rome)');
+  console.log('[SMS Reminder] Cron job attivi — 19:00 SMS + 1h prima + sync GCal ogni 30min + GBP domenica 20:00 (Europe/Rome)');
 
   // All'avvio: popola festività anno corrente e prossimo se non già presenti
   const annoOra = new Date().getFullYear();
