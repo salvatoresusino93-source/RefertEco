@@ -91,6 +91,37 @@ async function intervalliGoogleCalendar(daISO, aISO) {
   return [];
 }
 
+// ─── Blocchi di fascia oraria (tabella indisponibilita) come intervalli ────
+// Le fasce sono in ora locale Italia: mattina 08-14, pomeriggio 14-20,
+// giornata 08-20. Servono a impedire le prenotazioni online quando il medico
+// blocca una fascia dall'agenda (es. quando in ambulatorio c'è la collega).
+const FASCE_INDISP = {
+  mattina:    { startH: 8,  endH: 14 },
+  pomeriggio: { startH: 14, endH: 20 },
+  giornata:   { startH: 8,  endH: 20 },
+};
+
+async function intervalliIndisponibilita(fromDateStr, toDateStr) {
+  const { data, error } = await supabase
+    .from('indisponibilita')
+    .select('data, tipo')
+    .gte('data', fromDateStr)
+    .lte('data', toDateStr);
+
+  if (error || !data) return [];
+
+  const intervalli = [];
+  for (const b of data) {
+    const f = FASCE_INDISP[b.tipo];
+    if (!f) continue;
+    intervalli.push({
+      data_ora_inizio: makeRomeDateTime(b.data, f.startH * 60).toISOString(),
+      data_ora_fine:   makeRomeDateTime(b.data, f.endH   * 60).toISOString(),
+    });
+  }
+  return intervalli;
+}
+
 function esamePrenotabile(nome) {
   const n = String(nome || '').toLowerCase();
   if (/mammell|mammaria|\bseno\b/.test(n)) return false;
@@ -167,7 +198,13 @@ router.get('/disponibilita', async (req, res) => {
   // Impegni personali letti in tempo reale dal Google Calendar del medico
   const impegniGoogle = await intervalliGoogleCalendar(domani.toISOString(), fine45.toISOString());
 
-  const occupied = [...(appuntamenti || []), ...(blocchi || []), ...impegniGoogle];
+  // Blocchi di fascia oraria messi dall'agenda (mattina/pomeriggio/giornata)
+  const indisponibilita = await intervalliIndisponibilita(
+    domani.toISOString().slice(0, 10),
+    fine45.toISOString().slice(0, 10)
+  );
+
+  const occupied = [...(appuntamenti || []), ...(blocchi || []), ...impegniGoogle, ...indisponibilita];
 
   const FASCE = [
     { start:  9 * 60, end: 13 * 60 },
@@ -274,6 +311,17 @@ router.post('/prenota', async (req, res) => {
   );
   if (sovrappostoGoogle) {
     return res.status(409).json({ error: 'Slot non più disponibile. Scegli un altro orario.' });
+  }
+
+  // Controllo blocchi di fascia oraria messi dall'agenda (mattina/pomeriggio/giornata)
+  const indispDay = data_ora_inizio.slice(0, 10);
+  const indisponibilita = await intervalliIndisponibilita(indispDay, indispDay);
+  const sovrappostoIndisp = indisponibilita.some(o =>
+    new Date(o.data_ora_inizio).getTime() < new Date(data_ora_fine).getTime() &&
+    new Date(o.data_ora_fine).getTime()   > new Date(data_ora_inizio).getTime()
+  );
+  if (sovrappostoIndisp) {
+    return res.status(409).json({ error: 'Slot non disponibile (fascia oraria bloccata).' });
   }
 
   // Trova o crea paziente
