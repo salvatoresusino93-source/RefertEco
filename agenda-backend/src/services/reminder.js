@@ -152,15 +152,9 @@ async function sincronizzaBlocchiGoogleCalendar() {
     .gte('data_ora_inizio', da.toISOString())
     .lte('data_ora_inizio', a.toISOString());
 
-  let inseriti = 0;
-  for (const ev of eventi) {
-    // Evento tutto il giorno
-    const tuttoIlGiorno = !!(ev.start?.date && !ev.start?.dateTime);
-    const inizio = ev.start?.dateTime || (ev.start?.date + 'T00:00:00.000Z');
-    const fine   = ev.end?.dateTime   || (ev.end?.date   + 'T23:59:59.000Z');
-
-    // Etichetta generica: nell'agenda si vede che lo slot è occupato/non
-    // prenotabile, ma NON i dettagli privati dell'impegno (titolo nascosto).
+  // Etichetta generica: nell'agenda si vede che lo slot è occupato/non
+  // prenotabile, ma NON i dettagli privati dell'impegno (titolo nascosto).
+  const inserisciBlocco = async (inizio, fine, tuttoIlGiorno) => {
     const { error } = await supabase.from('blocchi_agenda').insert({
       data_ora_inizio: inizio,
       data_ora_fine:   fine,
@@ -168,8 +162,40 @@ async function sincronizzaBlocchiGoogleCalendar() {
       tipo:            'google_calendar',
       tutto_il_giorno: tuttoIlGiorno,
     });
+    return !error;
+  };
 
-    if (!error) inseriti++;
+  let inseriti = 0;
+  for (const ev of eventi) {
+    const tuttoIlGiorno = !!(ev.start?.date && !ev.start?.dateTime);
+
+    if (tuttoIlGiorno) {
+      // Evento "tutto il giorno": end.date è ESCLUSIVO in Google. Se copre più
+      // giorni va spezzato in un blocco per ciascun giorno, altrimenti l'agenda
+      // mostrerebbe chiuso solo il primo giorno (il blocco-giornata si disegna
+      // sul giorno in cui il blocco inizia).
+      const startStr = ev.start.date;
+      let endStr = ev.end?.date;
+      if (!endStr) {
+        const t = new Date(startStr + 'T00:00:00.000Z');
+        t.setUTCDate(t.getUTCDate() + 1);
+        endStr = t.toISOString().slice(0, 10);
+      }
+      const cursore = new Date(startStr + 'T00:00:00.000Z');
+      const fineEsclusiva = new Date(endStr + 'T00:00:00.000Z');
+      while (cursore < fineEsclusiva) {
+        const dayStr = cursore.toISOString().slice(0, 10);
+        if (await inserisciBlocco(dayStr + 'T00:00:00.000Z', dayStr + 'T23:59:59.000Z', true)) {
+          inseriti++;
+        }
+        cursore.setUTCDate(cursore.getUTCDate() + 1);
+      }
+    } else {
+      // Evento a orario: un solo blocco
+      if (await inserisciBlocco(ev.start.dateTime, ev.end.dateTime, false)) {
+        inseriti++;
+      }
+    }
   }
 
   console.log(`[GCal Sync] Importati ${inseriti} impegni da Google Calendar`);
