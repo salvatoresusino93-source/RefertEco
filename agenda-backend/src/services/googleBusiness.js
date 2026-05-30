@@ -23,6 +23,10 @@ const SLOT_BASE = [
 ];
 const GIORNI_APERTI = new Set([1, 2, 3, 4, 5]); // 0=dom 1=lun 2=mar 3=mer 4=gio 5=ven 6=sab
 
+// Memorizza l'ultimo payload inviato a Google: se ricalcolando esce identico
+// evitiamo di riscrivere su Google (la funzione gira ogni 30 min).
+let _ultimoPayloadGBP = null;
+
 // ─── Genera URL autorizzazione OAuth2 ────────────────────────────────────
 function generaAuthUrl() {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
@@ -222,7 +226,7 @@ async function aggiornaOreSettimana() {
     g.setHours(0, 0, 0, 0);
 
     const dow = g.getDay();
-    if (!GIORNI_APERTI.has(dow)) continue; // solo martedì e venerdì
+    if (!GIORNI_APERTI.has(dow)) continue; // solo giorni feriali (lun–ven)
 
     const dateKey = { year: g.getFullYear(), month: g.getMonth() + 1, day: g.getDate() };
     const gFine   = new Date(g); gFine.setHours(23, 59, 59, 999);
@@ -296,6 +300,13 @@ async function aggiornaOreSettimana() {
 
   console.log(`[GBP] Periodi speciali calcolati: ${specialHourPeriods.length}`);
 
+  // ── Salta la scrittura se nulla è cambiato dall'ultima volta ───────────
+  const payloadStr = JSON.stringify(specialHourPeriods);
+  if (payloadStr === _ultimoPayloadGBP) {
+    console.log('[GBP] Nessuna variazione rispetto all\'ultimo aggiornamento — skip scrittura.');
+    return { ok: true, periodi: specialHourPeriods.length, invariato: true };
+  }
+
   // ── Aggiorna Google Business Profile ──────────────────────────────────
   try {
     const token        = await refreshAccessToken();
@@ -315,6 +326,7 @@ async function aggiornaOreSettimana() {
       throw new Error(`GBP PATCH error: ${JSON.stringify(err)}`);
     }
 
+    _ultimoPayloadGBP = payloadStr;
     console.log(`[GBP] ✓ specialHours aggiornati — ${specialHourPeriods.length} periodi`);
     return { ok: true, periodi: specialHourPeriods.length };
   } catch (e) {

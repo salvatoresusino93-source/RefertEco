@@ -200,12 +200,17 @@ function avviaReminder() {
   // All'avvio: importa subito una prima volta
   sincronizzaBlocchiGoogleCalendar().catch(e => console.error('[GCal Sync avvio]', e.message));
 
-  // Ogni domenica alle 20:00 → aggiorna orari Google Business Profile per i prossimi 30 giorni
-  cron.schedule('0 20 * * 0', () => {
-    aggiornaOreSettimana().catch(e => console.error('[GBP] Errore cron domenicale:', e.message));
+  // Ogni 30 minuti → aggiorna gli orari pubblici di Google Business Profile per
+  // i prossimi 30 giorni in base agli impegni del medico (Google Calendar) e
+  // alle festività. Così gli orari su Google riflettono SEMPRE la reale
+  // disponibilità. La funzione salta la scrittura se nulla è cambiato.
+  cron.schedule('*/30 * * * *', () => {
+    aggiornaOreSettimana().catch(e => console.error('[GBP] Errore aggiornamento orari:', e.message));
   }, { timezone: 'Europe/Rome' });
+  // All'avvio: allinea subito gli orari
+  aggiornaOreSettimana().catch(e => console.error('[GBP avvio]', e.message));
 
-  console.log('[SMS Reminder] Cron job attivi — 19:00 SMS + 1h prima + sync GCal ogni 30min + GBP domenica 20:00 (Europe/Rome)');
+  console.log('[SMS Reminder] Cron job attivi — 19:00 SMS + 1h prima + sync GCal ogni 30min + GBP ogni 30min (Europe/Rome)');
 
   // All'avvio: popola festività anno corrente e prossimo se non già presenti
   const annoOra = new Date().getFullYear();
