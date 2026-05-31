@@ -37,7 +37,6 @@ const TIPI = [
   { nome: 'Ecografia apparato urinario',                       durata_minuti: 30, codice_dicom: 'US_APP_URINARIO' },
   { nome: 'Ecografia renale',                                  durata_minuti: 30, codice_dicom: 'US_RENE' },
   { nome: 'Ecografia vescico-prostatica',                      durata_minuti: 30, codice_dicom: 'US_VES_PROS' },
-  { nome: 'Ecografia prostatica transrettale',                 durata_minuti: 30, codice_dicom: 'US_PROS_TR' },
   { nome: 'Ecografia scrotale e testicolare',                  durata_minuti: 30, codice_dicom: 'US_SCROTO' },
   { nome: 'Ecografia tiroide',                                 durata_minuti: 30, codice_dicom: 'US_TIROIDE' },
   { nome: 'Ecografia del collo',                               durata_minuti: 30, codice_dicom: 'US_COLLO' },

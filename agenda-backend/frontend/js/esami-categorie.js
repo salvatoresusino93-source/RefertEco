@@ -16,7 +16,6 @@
     'Ecografia apparato urinario': 'Apparato urinario e urologia',
     'Ecografia renale': 'Apparato urinario e urologia',
     'Ecografia vescico-prostatica': 'Apparato urinario e urologia',
-    'Ecografia prostatica transrettale': 'Apparato urinario e urologia',
     'Ecografia scrotale e testicolare': 'Apparato urinario e urologia',
     'Ecografia tiroide': 'Tiroide e collo',
     'Ecografia del collo': 'Tiroide e collo',
