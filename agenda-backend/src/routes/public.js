@@ -272,7 +272,7 @@ router.post('/prenota', async (req, res) => {
   const {
     tipo_id, data_ora_inizio,
     cognome, nome, data_nascita, sesso,
-    telefono, email, codice_fiscale, note,
+    telefono, email, codice_fiscale, cap, comune, note,
     paga_online
   } = req.body;
 
@@ -382,6 +382,8 @@ router.post('/prenota', async (req, res) => {
         codice_fiscale: cfPulito,
         telefono:       telPulito,
         email:          emailPulita,
+        cap:            cap?.trim() || null,
+        comune:         comune?.trim() || null,
       })
       .select('id')
       .single();
@@ -390,11 +392,14 @@ router.post('/prenota', async (req, res) => {
     pazienteId = newPaz.id;
   } else {
     // Paziente esistente: completa l'email se mancante
-    await supabase
-      .from('pazienti')
-      .update({ email: emailPulita })
-      .eq('id', pazienteId)
-      .is('email', null);
+    // Aggiorna email, CAP e comune se mancanti
+    const aggiornamenti = {};
+    if (emailPulita) aggiornamenti.email  = emailPulita;
+    if (cap?.trim()) aggiornamenti.cap    = cap.trim();
+    if (comune?.trim()) aggiornamenti.comune = comune.trim();
+    if (Object.keys(aggiornamenti).length) {
+      await supabase.from('pazienti').update(aggiornamenti).eq('id', pazienteId);
+    }
   }
 
   // Crea appuntamento in_attesa

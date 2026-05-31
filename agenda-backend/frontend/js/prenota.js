@@ -23,6 +23,8 @@ const ST = {
     telefono:       '',
     email:          '',
     codice_fiscale: '',
+    cap:            '',
+    comune:         '',
     note:           '',
   }
 };
@@ -369,6 +371,18 @@ function goStep3() {
               autocomplete="off" style="text-transform:uppercase" required>
           </div>
         </div>
+        <div class="field-row">
+          <div class="field">
+            <label>CAP *</label>
+            <input type="text" id="f-cap" value="${esc(f.cap)}" placeholder="97016"
+              maxlength="5" pattern="[0-9]{5}" autocomplete="postal-code" required>
+          </div>
+          <div class="field">
+            <label>Comune *</label>
+            <input type="text" id="f-comune" value="${esc(f.comune)}" placeholder="Pozzallo"
+              autocomplete="address-level2" required>
+          </div>
+        </div>
         <div class="field-full">
           <div class="field">
             <label>Note aggiuntive (opzionale)</label>
@@ -412,7 +426,9 @@ function avanzaStep4() {
   const telefono      = prefisso + telNudo;
   const email         = document.getElementById('f-email').value.trim();
   const codice_fiscale = document.getElementById('f-cf').value.trim().toUpperCase();
-  const note          = document.getElementById('f-note').value.trim();
+  const cap            = document.getElementById('f-cap').value.trim();
+  const comune         = document.getElementById('f-comune').value.trim();
+  const note           = document.getElementById('f-note').value.trim();
   const errEl         = document.getElementById('form-err');
 
   errEl.classList.add('hidden');
@@ -430,12 +446,18 @@ function avanzaStep4() {
     showFormErr(errEl, 'Inserisci un codice fiscale valido (16 caratteri).');
     return;
   }
+  if (!cap || !/^[0-9]{5}$/.test(cap)) {
+    showFormErr(errEl, 'Inserisci un CAP valido (5 cifre).'); return;
+  }
+  if (!comune) {
+    showFormErr(errEl, 'Inserisci il comune di residenza.'); return;
+  }
   if (!ST.privacyAccettata) {
     showFormErr(errEl, 'Devi accettare l\'informativa sulla privacy per procedere.');
     return;
   }
 
-  Object.assign(ST.form, { cognome, nome, data_nascita, sesso, telefono, email, codice_fiscale, note });
+  Object.assign(ST.form, { cognome, nome, data_nascita, sesso, telefono, email, codice_fiscale, cap, comune, note });
   goStep4();
 }
 
@@ -497,6 +519,11 @@ function goStep4() {
             <div class="recap-icon">🪪</div>
             <div><div class="recap-lbl">Codice Fiscale</div><div class="recap-val">${esc(f.codice_fiscale)}</div></div>
           </div>` : ''}
+          ${f.cap || f.comune ? `
+          <div class="recap-row">
+            <div class="recap-icon">📍</div>
+            <div><div class="recap-lbl">Residenza</div><div class="recap-val">${esc(f.comune)} (${esc(f.cap)})</div></div>
+          </div>` : ''}
           ${f.note ? `
           <div class="recap-row">
             <div class="recap-icon">📝</div>
@@ -557,6 +584,8 @@ async function inviaPrenota() {
     telefono:        f.telefono,
     email:           f.email,
     codice_fiscale:  f.codice_fiscale || null,
+    cap:             f.cap || null,
+    comune:          f.comune || null,
     note:            f.note || null,
     paga_online:     !!(ST.config.pagamenti_attivi && ST.pagaOnline),
   };
