@@ -599,7 +599,7 @@ async function emettiFattura(appId) {
     const res = await fetch('/api/fatture/crea', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json',
-                 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                 'Authorization': `Bearer ${localStorage.getItem('agenda_token')}` },
       body:    JSON.stringify({ appuntamento_id: appId }),
     });
     const data = await res.json();
