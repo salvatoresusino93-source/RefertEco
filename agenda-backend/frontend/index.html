@@ -51,6 +51,7 @@
           <button class="menu-item" onclick="menuStampa()">🖨&nbsp; Stampa giornata</button>
           <button class="menu-item" onclick="menuBlocco()">🔒&nbsp; Blocca fascia oraria</button>
           <button class="menu-item" onclick="menuCredenziali()">🔐&nbsp; Cambia credenziali</button>
+          <button class="menu-item" onclick="menuSistemaTS()">📋&nbsp; Sistema TS / 730</button>
           <div class="menu-divider"></div>
           <button class="menu-item menu-item--danger" onclick="menuLogout()">🚪&nbsp; Esci</button>
         </div>
@@ -248,6 +249,12 @@
       <div class="field" id="field-stato">
         <label>Stato appuntamento</label>
         <div class="stato-btns" id="stato-btns"></div>
+      </div>
+
+      <!-- Fattura elettronica (solo in modifica, appuntamento confermato) -->
+      <div class="field hidden" id="field-fattura">
+        <label>Fattura elettronica</label>
+        <div id="fattura-info"></div>
       </div>
 
     </div>
@@ -462,6 +469,73 @@
       <div class="modal-ftr-r">
         <button class="btn-ghost" onclick="chiudiBlocco()">Annulla</button>
         <button class="btn-danger" id="btn-salva-blocco" onclick="salvaBlocco()">🔒 Blocca</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SISTEMA TS / 730 ════════════════════════════ -->
+<div id="ts-overlay" class="modal-overlay hidden">
+  <div class="modal" style="max-width:900px;width:95vw">
+    <div class="modal-hdr">
+      <h2>📋 Sistema TS / 730 — Spese sanitarie</h2>
+      <button class="btn-icon modal-close" onclick="chiudiSistemaTS()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Filtri -->
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+        <div class="field" style="flex:0 0 auto">
+          <label>Anno</label>
+          <select id="ts-anno" onchange="caricaTS()">
+            <option value="2026">2026</option>
+            <option value="2025">2025</option>
+            <option value="2024">2024</option>
+          </select>
+        </div>
+        <div class="field" style="flex:0 0 auto">
+          <label>Stato invio</label>
+          <select id="ts-filtro-stato" onchange="caricaTS()">
+            <option value="">Tutti</option>
+            <option value="no">Da inviare</option>
+            <option value="si">Già inviati</option>
+          </select>
+        </div>
+        <div style="flex:1"></div>
+        <div style="font-size:13px;color:var(--muted)" id="ts-contatore">—</div>
+      </div>
+
+      <!-- Tabella prestazioni -->
+      <div style="overflow-x:auto;max-height:55vh;overflow-y:auto">
+        <table class="ts-table" id="ts-table">
+          <thead>
+            <tr>
+              <th style="width:32px"><input type="checkbox" id="ts-check-all" onchange="tsToggleAll(this.checked)" title="Seleziona tutti"></th>
+              <th>Data</th>
+              <th>Paziente</th>
+              <th>CF Paziente</th>
+              <th>Prestazione</th>
+              <th>Importo €</th>
+              <th>Pagamento</th>
+              <th>Stato TS</th>
+            </tr>
+          </thead>
+          <tbody id="ts-tbody">
+            <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">Caricamento…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+    <div class="modal-ftr">
+      <div style="font-size:12px;color:var(--muted)">
+        Seleziona le prestazioni da inviare al Sistema Tessera Sanitaria (MEF)
+      </div>
+      <div class="modal-ftr-r">
+        <button class="btn-ghost" onclick="chiudiSistemaTS()">Chiudi</button>
+        <button class="btn-pri" id="btn-invia-ts" onclick="inviaSistemaTS()">
+          📤 Invia selezionati al Sistema TS
+        </button>
       </div>
     </div>
   </div>

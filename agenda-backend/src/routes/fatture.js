@@ -6,17 +6,18 @@ const express   = require('express');
 const router    = express.Router();
 const supabase  = require('../services/supabase');
 const { arubaFE } = require('../services/arubaFE');
+const auth      = require('../middleware/auth');
 
 // ─── GET /api/fatture/test-connessione ───────────────────────────────────────
 // Testa che le credenziali Aruba funzionino (senza inviare nulla).
-router.get('/test-connessione', async (req, res) => {
+router.get('/test-connessione', auth, async (req, res) => {
   const risultato = await arubaFE.testConnessione();
   res.json(risultato);
 });
 
 // ─── GET /api/fatture/prossimo-numero ────────────────────────────────────────
 // Ritorna il prossimo numero progressivo fattura per l'anno corrente.
-router.get('/prossimo-numero', async (req, res) => {
+router.get('/prossimo-numero', auth, async (req, res) => {
   try {
     const anno = new Date().getFullYear();
     const { data, error } = await supabase
@@ -38,7 +39,7 @@ router.get('/prossimo-numero', async (req, res) => {
 // ─── POST /api/fatture/crea ───────────────────────────────────────────────────
 // Crea e invia una fattura per un appuntamento.
 // Body: { appuntamento_id }
-router.post('/crea', async (req, res) => {
+router.post('/crea', auth, async (req, res) => {
   try {
     const { appuntamento_id } = req.body;
     if (!appuntamento_id) return res.status(400).json({ error: 'appuntamento_id mancante' });
@@ -125,7 +126,7 @@ router.post('/crea', async (req, res) => {
 
 // ─── GET /api/fatture ────────────────────────────────────────────────────────
 // Lista fatture emesse (con filtro anno opzionale).
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
   try {
     const anno = req.query.anno || new Date().getFullYear();
     const { data, error } = await supabase

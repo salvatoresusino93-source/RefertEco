@@ -544,7 +544,69 @@ async function loadAppInModal(id) {
     $('app-invia-sms').checked = a.invia_sms_promemoria !== false; // default true
     $('field-stato').style.display = '';
     renderStatoBtns(a.stato);
+    renderFatturaBox(a);
   } catch { alert('Errore nel caricamento'); closeModal(); }
+}
+
+// ─── Fattura elettronica ──────────────────────────────────────────────────
+function renderFatturaBox(a) {
+  const box    = $('field-fattura');
+  const info   = $('fattura-info');
+  const statiConFattura = ['prenotato','arrivato','refertato'];
+
+  if (!statiConFattura.includes(a.stato)) {
+    box.classList.add('hidden'); return;
+  }
+  box.classList.remove('hidden');
+
+  if (a.numero_fattura) {
+    // Fattura già emessa
+    info.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;
+                  background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;
+                  font-size:13px;color:#166534;">
+        ✅ <strong>Fattura ${a.numero_fattura}</strong> — già inviata al SDI
+      </div>`;
+  } else {
+    // Fattura da emettere
+    const importo = ((a.importo_pagato_cent || 8000) / 100).toFixed(2);
+    info.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <button onclick="emettiFattura(${a.id})" id="btn-emetti-fattura"
+          style="background:#0ea5e9;color:#fff;border:none;border-radius:6px;
+                 padding:7px 14px;cursor:pointer;font-size:13px;font-weight:600;">
+          🧾 Emetti fattura (€ ${importo})
+        </button>
+        <span style="font-size:12px;color:#6b7280;">Verrà inviata al SDI tramite Aruba</span>
+      </div>`;
+  }
+}
+
+async function emettiFattura(appId) {
+  const btn = $('btn-emetti-fattura');
+  btn.textContent = '⏳ Invio in corso…';
+  btn.disabled    = true;
+  try {
+    const res = await fetch('/api/fatture/crea', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json',
+                 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      body:    JSON.stringify({ appuntamento_id: appId }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Errore sconosciuto');
+
+    $('fattura-info').innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;
+                  background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;
+                  font-size:13px;color:#166534;">
+        ✅ <strong>Fattura ${data.numeroFattura}</strong> — inviata al SDI con successo
+      </div>`;
+  } catch (e) {
+    btn.textContent = '🧾 Emetti fattura';
+    btn.disabled    = false;
+    alert('Errore emissione fattura: ' + e.message);
+  }
 }
 
 function renderStatoBtns(attuale) {
@@ -884,6 +946,124 @@ function menuCredenziali() {
 function menuArchivio() {
   chiudiMenu();
   apriArchivio();
+}
+
+// ─── Sistema TS / 730 ─────────────────────────────────────────────────────
+let _tsRighe = []; // cache righe caricate
+
+function menuSistemaTS() {
+  chiudiMenu();
+  // Preseleziona anno corrente
+  const anno = new Date().getFullYear();
+  const sel = $('ts-anno');
+  // Popola anni disponibili (anno corrente + 3 precedenti)
+  sel.innerHTML = '';
+  for (let a = anno; a >= anno - 3; a--) {
+    const opt = document.createElement('option');
+    opt.value = a; opt.textContent = a;
+    sel.appendChild(opt);
+  }
+  $('ts-overlay').classList.remove('hidden');
+  caricaTS();
+}
+
+function chiudiSistemaTS() {
+  $('ts-overlay').classList.add('hidden');
+}
+
+async function caricaTS() {
+  const anno   = $('ts-anno').value;
+  const filtro = $('ts-filtro-stato').value;
+  $('ts-tbody').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">Caricamento…</td></tr>';
+
+  try {
+    const da  = `${anno}-01-01T00:00:00.000Z`;
+    const a   = `${anno}-12-31T23:59:59.999Z`;
+    const res = await api.req('GET', `/api/sistema-ts/prestazioni?da=${da}&a=${a}`);
+    let righe = res || [];
+
+    // Filtra per stato se richiesto
+    if (filtro === 'si') righe = righe.filter(r => r.ts_inviato);
+    if (filtro === 'no') righe = righe.filter(r => !r.ts_inviato);
+
+    _tsRighe = righe;
+    renderTS(righe);
+  } catch(e) {
+    $('ts-tbody').innerHTML = `<tr><td colspan="8" style="text-align:center;color:#dc2626;padding:24px">Errore: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+function renderTS(righe) {
+  $('ts-contatore').textContent = `${righe.length} prestazioni`;
+  if (!righe.length) {
+    $('ts-tbody').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">Nessuna prestazione trovata</td></tr>';
+    return;
+  }
+
+  $('ts-tbody').innerHTML = righe.map((r, i) => {
+    const paz    = r.pazienti ? `${r.pazienti.cognome} ${r.pazienti.nome}` : '—';
+    const cf     = r.pazienti?.codice_fiscale || '—';
+    const esame  = r.tipi_prestazione?.nome || '—';
+    const data   = fmtData(r.data_ora_inizio);
+    const imp    = r.importo_ts_cent != null ? r.importo_ts_cent : (r.importo_pagato_cent != null ? r.importo_pagato_cent : 8000);
+    const impEur = (imp / 100).toFixed(2);
+    const pag    = r.pagamento_stato === 'pagato' ? 'Tracciato' : 'Contanti';
+    const inviato = r.ts_inviato;
+    const badge  = inviato
+      ? '<span class="ts-badge-inviato">✅ Inviato</span>'
+      : '<span class="ts-badge-attesa">⬜ Da inviare</span>';
+    const checked = (!inviato) ? 'checked' : '';
+    const disabled = inviato ? 'disabled' : '';
+    return `<tr class="${inviato ? 'ts-inviata' : ''}" data-id="${r.id}">
+      <td><input type="checkbox" class="ts-check" data-idx="${i}" ${checked} ${disabled}></td>
+      <td>${data}</td>
+      <td>${esc(paz)}</td>
+      <td style="font-family:monospace;font-size:12px">${esc(cf)}</td>
+      <td>${esc(esame)}</td>
+      <td><input type="number" class="ts-importo-input" value="${impEur}" min="0" step="0.01"
+          data-idx="${i}" ${disabled} onchange="tsAggiornaCifra(${i}, this.value)"> €</td>
+      <td>${pag}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+}
+
+function tsToggleAll(checked) {
+  document.querySelectorAll('.ts-check:not(:disabled)').forEach(cb => cb.checked = checked);
+}
+
+function tsAggiornaCifra(idx, val) {
+  const cent = Math.round(parseFloat(val) * 100);
+  if (!isNaN(cent) && cent >= 0) _tsRighe[idx]._importoOverride = cent;
+}
+
+async function inviaSistemaTS() {
+  const checks = [...document.querySelectorAll('.ts-check:not(:disabled):checked')];
+  if (!checks.length) { alert('Nessuna prestazione selezionata.'); return; }
+
+  const selezionate = checks.map(cb => {
+    const idx = parseInt(cb.dataset.idx);
+    const r   = _tsRighe[idx];
+    const imp = r._importoOverride != null
+      ? r._importoOverride
+      : (r.importo_ts_cent != null ? r.importo_ts_cent : (r.importo_pagato_cent != null ? r.importo_pagato_cent : 8000));
+    return { id: r.id, importo_ts_cent: imp };
+  });
+
+  const btn = $('btn-invia-ts');
+  btn.disabled = true;
+  btn.textContent = '⏳ Invio in corso…';
+
+  try {
+    const res = await api.req('POST', '/api/sistema-ts/invia', { prestazioni: selezionate });
+    alert(`✅ Invio completato!\n\nInviate: ${res.inviate}\nErrori: ${res.errori}${res.errori > 0 ? '\n\nControllare i log per dettagli.' : ''}`);
+    caricaTS();
+  } catch(e) {
+    alert(`❌ Errore invio: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📤 Invia selezionati al Sistema TS';
+  }
 }
 
 // ─── Archivio Pazienti ─────────────────────────────────────────────────────
