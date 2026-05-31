@@ -429,7 +429,7 @@ Progetto separato ma collegato all’Agenda.
 **Prenotazione online:** https://referteco-production.up.railway.app/prenota
 
 ### Modifiche recenti sessione
-- **25 esami** prenotabili (sync `scripts/sync_tipi.js`): ripristinati **Ecografia renale**, **Doppler aorta addominale**, **Doppler arterie renali**, **Anca neonatale**
+- **24 esami** prenotabili (sync `scripts/sync_tipi.js`): ripristinati **Ecografia renale**, **Doppler aorta addominale**, **Doppler arterie renali**, **Anca neonatale** — esclusa **Ecografia prostatica transrettale**
 - Slot fissi **30 min** (`agenda-backend/src/routes/public.js` → `SLOT_MINUTI = 30`)
 - **Preparazione** digiuno + vescica piena: solo in `/prenota` (`preparazione-esami.js`), non sul sito vetrina
 - Sito: no martedì/venerdì, no fasce 9–13 / 15–19 — solo «su appuntamento»
