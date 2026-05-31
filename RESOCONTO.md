@@ -130,3 +130,47 @@ Stato:
   `GOOGLE_OAUTH_REFRESH_TOKEN` (Google Business — presente), `GBP_LOCATION_NAME`
   (da impostare dopo l'approvazione quota).
 - Log Railway: `railway logs` dalla cartella `~/Desktop/RefertEco/agenda-backend`.
+
+---
+
+## 9. SEO DEL SITO (aggiornato 31 maggio 2026)
+- ✅ **SEO tecnica di base** già presente: robots.txt, sitemap.xml, JSON-LD MedicalBusiness sulla home.
+- ✅ **Open Graph + Twitter Card** aggiunti a tutte le pagine (anteprime corrette su WhatsApp/Facebook).
+- ✅ **Home JSON-LD arricchito**: coordinate geo (36.7299582, 14.8483942), orari Lun–Ven 09:00–12:30 / 15:00–19:00, hasMap, sameAs (profilo Google).
+- ✅ **Sitemap** con date `lastmod`.
+- ✅ **Google Search Console**: sitemap inviata e letta (Success, 7+ pagine). Home **indicizzata** ("URL is on Google", HTTPS ok).
+- ✅ **5 pagine-esame dedicate** (SEO locale, esami più richiesti):
+  - ecografia-tiroide.html, ecografia-addome.html, ecocolordoppler-carotidi.html,
+    ecocolordoppler-arti-inferiori.html, ecografia-muscolo-scheletrica.html
+  - Ognuna: contenuto + FAQ + dati strutturati (BreadcrumbList + MedicalTest + FAQPage),
+    link interni, CTA, voce in sitemap, e link da ecografie.html ("Approfondimenti").
+  - ✅ **Illustrazione anatomica** nell'hero (in alto a destra), immagini OpenStax CC BY 3.0
+    (file images/esame-*.jpg) con credito. Esclusi gli esami non offerti/non prenotabili
+    online (seno, ginecologiche, ostetriche).
+- Da fare (medico): in Search Console "Controllo URL" → "Richiedi indicizzazione" una volta per
+  ognuna delle 5 pagine (FATTO dal medico). Non ripetere: una volta basta.
+- Prossimi passi SEO possibili: altre pagine-esame solo se diventano richieste; mantenere
+  NAP coerente (nome/indirizzo/telefono) ovunque; recensioni Google.
+
+## 10. FACEBOOK / SOCIAL (impostato 31 maggio 2026)
+- Scelta: **niente SMS/WhatsApp invasivi**; presenza social leggera e automatizzata.
+- ✅ **Routine mensile automatica** (cloud, gira l'1 di ogni mese ~09:00): genera 8 post
+  educativi stile "una domanda che mi fanno spesso" (prima persona), conformi alla
+  pubblicità sanitaria, e li salva su Google Drive. Gestione:
+  https://claude.ai/code/routines/trig_013M8DHP7EU1bZFt3nh2ShEM
+- ✅ Su Drive: documenti "Facebook — Post pronti Studio Ecografico Susino" (blocco iniziale +
+  stile Domande) pronti da programmare in Meta Business Suite.
+- Pubblicazione scelta: **programmazione nativa** in Meta Business Suite (no API). Il medico
+  copia/incolla e programma; collega Instagram per pubblicare su entrambi.
+- Da fare (medico): rinominare la pagina Facebook da "Centro Ecografico" a "Studio Ecografico
+  Dr. Salvatore Susino"; aggiungere ogni tanto qualche FOTO VERA dello studio.
+
+## 11. ALTRE COSE FATTE/IN CORSO (31 maggio 2026)
+- ✅ **HTTPS** del sito attivato (Let's Encrypt + Enforce HTTPS + redirect http→https).
+- ✅ **Pulsante recensioni** Google nella pagina Contatti (g.page/r/CQUbXzXQvvzqEBM/review).
+- ✅ **Link prenotazione su Google**: "Appuntamenti: referteco-production.up.railway.app".
+- ⏳ **MioDottore**: booking disattivato lato MioDottore, ma su Google residua il loro modulo
+  "Prenota" (cache Google; va richiesta rimozione del fornitore terzo all'assistenza Google).
+- ⏳ **Quota Google Business API**: in attesa di approvazione (vedi sezione 7-A).
+- ℹ️ **CUP Solidale**: portale privato a pagamento per il medico (come MioDottore); il
+  concorrente locale è il Centro Moncada. Per ora si resta sul canale diretto.
