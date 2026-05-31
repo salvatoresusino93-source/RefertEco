@@ -23,6 +23,8 @@ const ST = {
     telefono:       '',
     email:          '',
     codice_fiscale: '',
+    indirizzo:      '',
+    civico:         '',
     cap:            '',
     comune:         '',
     note:           '',
@@ -373,7 +375,19 @@ function goStep3() {
         </div>
         <div class="field-row">
           <div class="field">
-            <label>CAP residenza *</label>
+            <label>Via / Indirizzo *</label>
+            <input type="text" id="f-indirizzo" value="${esc(f.indirizzo)}" placeholder="Via Roma"
+              autocomplete="street-address" required>
+          </div>
+          <div class="field" style="max-width:90px">
+            <label>N° civico *</label>
+            <input type="text" id="f-civico" value="${esc(f.civico)}" placeholder="10"
+              autocomplete="address-line2" required>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field" style="max-width:100px">
+            <label>CAP *</label>
             <input type="text" id="f-cap" value="${esc(f.cap)}" placeholder="97016"
               maxlength="5" pattern="[0-9]{5}" autocomplete="postal-code" required>
           </div>
@@ -426,6 +440,8 @@ function avanzaStep4() {
   const telefono      = prefisso + telNudo;
   const email         = document.getElementById('f-email').value.trim();
   const codice_fiscale = document.getElementById('f-cf').value.trim().toUpperCase();
+  const indirizzo      = document.getElementById('f-indirizzo').value.trim();
+  const civico         = document.getElementById('f-civico').value.trim();
   const cap            = document.getElementById('f-cap').value.trim();
   const comune         = document.getElementById('f-comune').value.trim();
   const note           = document.getElementById('f-note').value.trim();
@@ -446,6 +462,8 @@ function avanzaStep4() {
     showFormErr(errEl, 'Inserisci un codice fiscale valido (16 caratteri).');
     return;
   }
+  if (!indirizzo) { showFormErr(errEl, 'Inserisci via e indirizzo.'); return; }
+  if (!civico)    { showFormErr(errEl, 'Inserisci il numero civico.'); return; }
   if (!cap || !/^[0-9]{5}$/.test(cap)) {
     showFormErr(errEl, 'Inserisci un CAP valido (5 cifre).'); return;
   }
@@ -457,7 +475,7 @@ function avanzaStep4() {
     return;
   }
 
-  Object.assign(ST.form, { cognome, nome, data_nascita, sesso, telefono, email, codice_fiscale, cap, comune, note });
+  Object.assign(ST.form, { cognome, nome, data_nascita, sesso, telefono, email, codice_fiscale, indirizzo, civico, cap, comune, note });
   goStep4();
 }
 
@@ -519,10 +537,10 @@ function goStep4() {
             <div class="recap-icon">🪪</div>
             <div><div class="recap-lbl">Codice Fiscale</div><div class="recap-val">${esc(f.codice_fiscale)}</div></div>
           </div>` : ''}
-          ${f.cap || f.comune ? `
+          ${f.indirizzo ? `
           <div class="recap-row">
             <div class="recap-icon">📍</div>
-            <div><div class="recap-lbl">Residenza</div><div class="recap-val">${esc(f.comune)} (${esc(f.cap)})</div></div>
+            <div><div class="recap-lbl">Residenza</div><div class="recap-val">${esc(f.indirizzo)} ${esc(f.civico)}, ${esc(f.cap)} ${esc(f.comune)}</div></div>
           </div>` : ''}
           ${f.note ? `
           <div class="recap-row">
@@ -584,6 +602,8 @@ async function inviaPrenota() {
     telefono:        f.telefono,
     email:           f.email,
     codice_fiscale:  f.codice_fiscale || null,
+    indirizzo:       f.indirizzo || null,
+    civico:          f.civico || null,
     cap:             f.cap || null,
     comune:          f.comune || null,
     note:            f.note || null,

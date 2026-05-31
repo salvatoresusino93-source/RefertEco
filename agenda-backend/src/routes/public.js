@@ -272,7 +272,7 @@ router.post('/prenota', async (req, res) => {
   const {
     tipo_id, data_ora_inizio,
     cognome, nome, data_nascita, sesso,
-    telefono, email, codice_fiscale, cap, comune, note,
+    telefono, email, codice_fiscale, indirizzo, civico, cap, comune, note,
     paga_online
   } = req.body;
 
@@ -382,8 +382,10 @@ router.post('/prenota', async (req, res) => {
         codice_fiscale: cfPulito,
         telefono:       telPulito,
         email:          emailPulita,
-        cap:            cap?.trim() || null,
-        comune:         comune?.trim() || null,
+        indirizzo:      indirizzo?.trim() || null,
+        civico:         civico?.trim()    || null,
+        cap:            cap?.trim()       || null,
+        comune:         comune?.trim()    || null,
       })
       .select('id')
       .single();
@@ -394,9 +396,11 @@ router.post('/prenota', async (req, res) => {
     // Paziente esistente: completa l'email se mancante
     // Aggiorna email, CAP e comune se mancanti
     const aggiornamenti = {};
-    if (emailPulita) aggiornamenti.email  = emailPulita;
-    if (cap?.trim()) aggiornamenti.cap    = cap.trim();
-    if (comune?.trim()) aggiornamenti.comune = comune.trim();
+    if (emailPulita)      aggiornamenti.email     = emailPulita;
+    if (indirizzo?.trim()) aggiornamenti.indirizzo = indirizzo.trim();
+    if (civico?.trim())    aggiornamenti.civico    = civico.trim();
+    if (cap?.trim())       aggiornamenti.cap       = cap.trim();
+    if (comune?.trim())    aggiornamenti.comune    = comune.trim();
     if (Object.keys(aggiornamenti).length) {
       await supabase.from('pazienti').update(aggiornamenti).eq('id', pazienteId);
     }

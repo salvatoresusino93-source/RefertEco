@@ -78,9 +78,13 @@ router.post('/crea', requireAuth, async (req, res) => {
       numProgressivo,
       dataFattura,
       nomePaziente,
-      cfPaziente:           paziente.codice_fiscale,
+      cfPaziente:             paziente.codice_fiscale,
       importoEuro,
       descrizionePrestazione: descrizione,
+      indirizzoPaziente:      paziente.indirizzo || null,
+      civicoPaziente:         paziente.civico    || null,
+      capPaziente:            paziente.cap       || null,
+      comunePaziente:         paziente.comune    || null,
     });
 
     // 4. Salva in DB tabella fatture

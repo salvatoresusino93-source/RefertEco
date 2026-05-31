@@ -532,3 +532,21 @@ button { font-family:inherit; }
   .modal-overlay[data-vv] .modal      { max-height:98% !important; }
   .modal-overlay[data-vv] .modal-body { max-height:calc(100% - 140px) !important; }
 }
+
+/* ─── SISTEMA TS / 730 ───────────────────────────────────────────────── */
+.ts-table { width:100%; border-collapse:collapse; font-size:13px; }
+.ts-table th {
+  background:var(--surface2,#f8f9fa); padding:8px 10px; text-align:left;
+  font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase;
+  letter-spacing:.04em; border-bottom:2px solid var(--border); position:sticky; top:0;
+}
+.ts-table td { padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.ts-table tr:hover td { background:var(--accent-soft,#f0f4ff); }
+.ts-table tr.ts-inviata td { opacity:.6; }
+.ts-importo-input {
+  width:80px; border:1px solid var(--border); border-radius:6px;
+  padding:4px 6px; font-size:13px; text-align:right;
+}
+.ts-badge-inviato { background:#dcfce7; color:#166534; border-radius:20px; padding:2px 8px; font-size:11px; font-weight:600; }
+.ts-badge-errore  { background:#fee2e2; color:#991b1b; border-radius:20px; padding:2px 8px; font-size:11px; font-weight:600; }
+.ts-badge-attesa  { background:#f1f5f9; color:#64748b; border-radius:20px; padding:2px 8px; font-size:11px; font-weight:600; }

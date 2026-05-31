@@ -100,7 +100,7 @@ async function getToken() {
 // ─── 2. Costruzione XML FatturaPA ─────────────────────────────────────────────
 // Fattura B2C semplificata per prestazioni mediche esenti IVA (natura N2.2).
 // numProgressivo: numero progressivo fattura (da tenere in DB o passare dall'esterno).
-function buildFatturaXML({ numProgressivo, dataFattura, nomePaziente, cfPaziente, importoEuro, descrizionePrestazione }) {
+function buildFatturaXML({ numProgressivo, dataFattura, nomePaziente, cfPaziente, importoEuro, descrizionePrestazione, indirizzoPaziente, civicoPaziente, capPaziente, comunePaziente }) {
   const anno = new Date(dataFattura).getFullYear();
   // Numero documento: es. "1/2026" — Aruba usa questo come numero fattura
   const numDocumento = `${numProgressivo}/${anno}`;
@@ -158,9 +158,10 @@ function buildFatturaXML({ numProgressivo, dataFattura, nomePaziente, cfPaziente
         </Anagrafica>
       </DatiAnagrafici>
       <Sede>
-        <Indirizzo>Via</Indirizzo>
-        <CAP>00000</CAP>
-        <Comune>-</Comune>
+        <Indirizzo>${indirizzoPaziente || 'Via'}</Indirizzo>
+        ${civicoPaziente ? `<NumeroCivico>${civicoPaziente}</NumeroCivico>` : ''}
+        <CAP>${capPaziente || '00000'}</CAP>
+        <Comune>${comunePaziente || '-'}</Comune>
         <Nazione>${NAZIONE}</Nazione>
       </Sede>
     </CessionarioCommittente>
