@@ -338,9 +338,9 @@ function goStep3() {
         </div>
         <div class="field-full">
           <div class="field">
-            <label>Codice Fiscale (opzionale)</label>
+            <label>Codice Fiscale *</label>
             <input type="text" id="f-cf" value="${esc(f.codice_fiscale)}" placeholder="RSSMRA80A01H501Z"
-              autocomplete="off" style="text-transform:uppercase">
+              autocomplete="off" style="text-transform:uppercase" required>
           </div>
         </div>
         <div class="field-full">
@@ -395,6 +395,11 @@ function avanzaStep4() {
   if (!email)            { showFormErr(errEl, 'Inserisci l\'indirizzo email.'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     showFormErr(errEl, 'Inserisci un indirizzo email valido.');
+    return;
+  }
+  if (!codice_fiscale)   { showFormErr(errEl, 'Inserisci il codice fiscale.'); return; }
+  if (!/^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$/.test(codice_fiscale)) {
+    showFormErr(errEl, 'Inserisci un codice fiscale valido (16 caratteri).');
     return;
   }
   if (!ST.privacyAccettata) {

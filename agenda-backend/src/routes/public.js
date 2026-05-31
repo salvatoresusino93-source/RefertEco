@@ -276,7 +276,7 @@ router.post('/prenota', async (req, res) => {
     paga_online
   } = req.body;
 
-  if (!tipo_id || !data_ora_inizio || !cognome?.trim() || !nome?.trim() || !data_nascita || !telefono?.trim() || !email?.trim()) {
+  if (!tipo_id || !data_ora_inizio || !cognome?.trim() || !nome?.trim() || !data_nascita || !telefono?.trim() || !email?.trim() || !codice_fiscale?.trim()) {
     return res.status(400).json({ error: 'Dati obbligatori mancanti' });
   }
 
@@ -284,6 +284,11 @@ router.post('/prenota', async (req, res) => {
   const emailPulita = email.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailPulita)) {
     return res.status(400).json({ error: 'Indirizzo email non valido' });
+  }
+
+  // Codice fiscale obbligatorio per la prenotazione online (16 caratteri)
+  if (!/^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$/.test(codice_fiscale.trim().toUpperCase())) {
+    return res.status(400).json({ error: 'Codice fiscale non valido' });
   }
 
   // Verifica esame
