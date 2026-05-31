@@ -23,6 +23,7 @@ const publicRoutes            = require('./routes/public');
 const prenotaRoutes           = require('./routes/prenota');
 const indisponibilitaRoutes   = require('./routes/indisponibilita');
 const fattureRoutes           = require('./routes/fatture');
+const sistemaTSRoutes         = require('./routes/sistemaTS');
 
 const app    = express();
 const server = http.createServer(app);
@@ -145,6 +146,7 @@ app.use('/api/public',            publicRoutes);         // no auth — prenotaz
 app.use('/api/prenota',           prenotaRoutes);        // no auth — conferma/rifiuto via email
 app.use('/api/indisponibilita',   indisponibilitaRoutes);
 app.use('/api/fatture',           fattureRoutes);
+app.use('/api/sistema-ts',        sistemaTSRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
