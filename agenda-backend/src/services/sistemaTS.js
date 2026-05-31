@@ -31,6 +31,12 @@ const USERNAME       = process.env.SISTEMA_TS_USERNAME       || '';
 const PASSWORD       = process.env.SISTEMA_TS_PASSWORD       || '';
 const TEST_MODE      = process.env.SISTEMA_TS_TEST === 'true';
 
+// Il CF del "proprietario" dei dati DEVE coincidere con il soggetto autenticato.
+// In test ci si autentica con l'utente di prova del kit MEF (un CF fittizio),
+// quindi il proprietario è l'USERNAME di test. In produzione è il CF reale del
+// medico erogatore.
+const CF_PROPRIETARIO = TEST_MODE ? (USERNAME || CF_EROGATORE) : CF_EROGATORE;
+
 const WS_URL_PROD = 'https://invioss730p.sanita.finanze.it/InvioTelematicoSS730pMtomWeb/InvioTelematicoSS730pMtomPort';
 const WS_URL_TEST = 'https://invioSS730pTest.sanita.finanze.it/InvioTelematicoSS730pMtomWeb/InvioTelematicoSS730pMtomPort';
 const WS_URL      = TEST_MODE ? WS_URL_TEST : WS_URL_PROD;
@@ -57,7 +63,7 @@ function cifraRSA(testo) {
 
 // ─── Costruisce XML delle spese ──────────────────────────────────────────────
 function buildXML(prestazioni) {
-  const cfPropCifrato = cifraRSA(CF_EROGATORE);
+  const cfPropCifrato = cifraRSA(CF_PROPRIETARIO);
 
   const documenti = prestazioni.map(p => {
     const cfCittadinoCifrato = cifraRSA(p.codice_fiscale);
@@ -179,7 +185,7 @@ function buildMTOM(nomeZip, zipBuf, pincodeCifrato) {
       <nomeFileAllegato>${nomeZip}</nomeFileAllegato>
       <pincodeInvianteCifrato>${pincodeCifrato}</pincodeInvianteCifrato>
       <datiProprietario>
-        <cfProprietario>${CF_EROGATORE}</cfProprietario>
+        <cfProprietario>${CF_PROPRIETARIO}</cfProprietario>
       </datiProprietario>
       <opzionale1></opzionale1>
       <opzionale2></opzionale2>
@@ -256,8 +262,8 @@ async function inviaPrestazioni(prestazioni) {
   console.log(`[SistemaTS] Invio ${prestazioni.length} prestazioni (${TEST_MODE ? 'TEST' : 'PRODUZIONE'})`);
 
   const anno    = new Date().getFullYear();
-  const nomeXml = `${CF_EROGATORE}_${anno}.xml`;
-  const nomeZip = `${CF_EROGATORE}_${anno}.zip`;
+  const nomeXml = `${CF_PROPRIETARIO}_${anno}.xml`;
+  const nomeZip = `${CF_PROPRIETARIO}_${anno}.zip`;
 
   const xml     = buildXML(prestazioni);
   const zipBuf  = await creaZip(nomeXml, xml);
