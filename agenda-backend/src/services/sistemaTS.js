@@ -24,6 +24,11 @@ const CF_EROGATORE   = process.env.SISTEMA_TS_CF_EROGATORE  || '';
 const PIVA           = process.env.SISTEMA_TS_PIVA           || '';
 const CODICE_UFFICIO = process.env.SISTEMA_TS_CODICE_UFFICIO || '';
 const PINCODE        = process.env.SISTEMA_TS_PINCODE        || '';
+// Credenziali Sistema TS per l'autenticazione HTTP Basic della chiamata SOAP.
+// Sono distinte dal PINCODE (che serve a cifrare i dati). In ambiente di test
+// MEF si usano le credenziali di prova fornite nel kit.
+const USERNAME       = process.env.SISTEMA_TS_USERNAME       || '';
+const PASSWORD       = process.env.SISTEMA_TS_PASSWORD       || '';
 const TEST_MODE      = process.env.SISTEMA_TS_TEST === 'true';
 
 const WS_URL_PROD = 'https://invioss730p.sanita.finanze.it/InvioTelematicoSS730pMtomWeb/InvioTelematicoSS730pMtomPort';
@@ -38,7 +43,7 @@ function getCert() {
 }
 
 function sistemaTSConfigurato() {
-  return !!(CF_EROGATORE && PIVA && CODICE_UFFICIO && PINCODE);
+  return !!(CF_EROGATORE && PIVA && CODICE_UFFICIO && PINCODE && USERNAME && PASSWORD);
 }
 
 // ─── Cifratura RSA PKCS1 con SanitelCF.cer ──────────────────────────────────
@@ -226,6 +231,8 @@ function inviaAlWebService(body, contentType) {
         'Content-Type':   contentType,
         'Content-Length': bodyBuf.length,
         'SOAPAction':     '""',
+        // Autenticazione HTTP Basic con le credenziali Sistema TS
+        'Authorization':  'Basic ' + Buffer.from(`${USERNAME}:${PASSWORD}`).toString('base64'),
       },
     }, (res) => {
       let data = '';
