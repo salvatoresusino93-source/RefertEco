@@ -188,8 +188,14 @@ Stato:
 ## 13. SISTEMA TS / 730 PRECOMPILATA — ✅ FUNZIONANTE (testato su ambiente MEF)
 ### Cosa fa
 Invia le spese sanitarie dei pazienti al MEF (Sistema Tessera Sanitaria)
-per la dichiarazione precompilata 730. Obbligo per i medici in regime ordinario.
-(Il Dr. Susino è attualmente forfettario → dovrà attivarlo quando passa all'ordinario.)
+per la dichiarazione precompilata 730.
+
+⚠️ OBBLIGO: l'invio al Sistema TS dipende dall'essere un erogatore di prestazioni
+sanitarie iscritto all'albo, NON dal regime fiscale. Quindi anche un medico in
+regime FORFETTARIO è verosimilmente tenuto a trasmettere al TS. (Correzione: in
+una versione precedente era scritto erroneamente che il forfettario non fosse
+obbligato.) DA CONFERMARE col commercialista — è materia di compliance fiscale,
+non una certezza tecnica.
 
 ### Stato: TEST SUPERATO — Esito 000, protocollo assegnato dal MEF
 Il 2026-06-01 l'invio di test ha ricevuto **Esito 000** ("file in attesa di
