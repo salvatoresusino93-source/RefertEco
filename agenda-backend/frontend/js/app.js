@@ -568,9 +568,17 @@ function renderFatturaBox(a) {
                   font-size:13px;color:#166534;">
         ✅ <strong>Fattura ${a.numero_fattura}</strong> — già inviata al SDI
       </div>`;
+  } else if (!a.pazienti?.codice_fiscale) {
+    // CF mancante — non si può fatturare
+    info.innerHTML = `
+      <div style="padding:8px 10px;background:#fef9c3;border:1px solid #fde047;
+                  border-radius:6px;font-size:13px;color:#854d0e;">
+        ⚠️ <strong>Codice fiscale mancante</strong> — aggiungilo nella scheda paziente per emettere la fattura.
+      </div>`;
   } else {
     // Fattura da emettere
     const importo = ((a.importo_pagato_cent || 8000) / 100).toFixed(2);
+    const paziente = `${a.pazienti?.cognome || ''} ${a.pazienti?.nome || ''}`.trim();
     info.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <button onclick="emettiFattura('${a.id}')" id="btn-emetti-fattura"
@@ -578,7 +586,7 @@ function renderFatturaBox(a) {
                  padding:7px 14px;cursor:pointer;font-size:13px;font-weight:600;">
           🧾 Emetti fattura (€ ${importo})
         </button>
-        <span style="font-size:12px;color:#6b7280;">Verrà inviata al SDI tramite Aruba</span>
+        <span style="font-size:12px;color:#6b7280;">${paziente} · CF ${a.pazienti.codice_fiscale}</span>
       </div>`;
   }
 }
