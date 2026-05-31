@@ -575,7 +575,8 @@ function renderFatturaBox(a) {
       ${a.numero_fattura ? `<span style="font-size:12px;color:#16a34a;">✅ ${a.numero_fattura}</span>` : ''}
     </div>
     <small style="color:#6b7280;font-size:11px;margin-top:4px;display:block;">
-      Inserisci il numero della fattura emessa su Aruba (es. 5/2026)
+      Numero della ricevuta/fattura consegnata al paziente (es. 5/2026).
+      È il numero che verrà inviato al Sistema TS.
     </small>`;
 }
 
