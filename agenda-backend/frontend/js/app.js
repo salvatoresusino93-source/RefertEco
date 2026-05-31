@@ -596,14 +596,7 @@ async function emettiFattura(appId) {
   btn.textContent = '⏳ Invio in corso…';
   btn.disabled    = true;
   try {
-    const res = await fetch('/api/fatture/crea', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json',
-                 'Authorization': `Bearer ${localStorage.getItem('agenda_token')}` },
-      body:    JSON.stringify({ appuntamento_id: appId }),
-    });
-    const data = await res.json();
-    if (!res.ok || data.error) throw new Error(data.error || 'Errore sconosciuto');
+    const data = await api._req('POST', '/fatture/crea', { appuntamento_id: appId });
 
     $('fattura-info').innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;
