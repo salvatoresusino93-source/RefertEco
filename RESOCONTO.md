@@ -168,3 +168,87 @@ Stato:
 - ⏳ **Quota Google Business API**: in attesa di approvazione (vedi sezione 7-A).
 - ℹ️ **CUP Solidale**: portale privato a pagamento per il medico (come MioDottore); il
   concorrente locale è il Centro Moncada. Per ora si resta sul canale diretto.
+
+---
+
+## 12. PAGAMENTI ONLINE — STRIPE (completato)
+- ✅ **Stripe LIVE attivo**: carta di credito + Google Pay. Webhook verificato, DB aggiornato.
+- ✅ **Colonne Supabase** aggiunte: `pagamento_stato`, `stripe_session_id`, `stripe_payment_intent`, `importo_pagato_cent`.
+- ✅ **Importo**: 80,00 € (variabile Railway `IMPORTO_PAGAMENTO_CENT=8000`).
+- ✅ **Doppia ricevuta**: il sistema invia email di conferma + Stripe invia ricevuta ufficiale
+  (abilitare in Dashboard Stripe → Impostazioni → Email clienti → Ricevute).
+- ✅ **Prefisso internazionale** nel form prenotazione: bandiera Italia (+39) con selettore
+  paese. CF validato (16 caratteri + regex formato italiano).
+- File coinvolti: `src/services/stripe.js`, `src/app.js` (webhook raw body), `frontend/js/prenota.js`.
+- ⚠️ La variabile `STRIPE_SECRET_KEY` su Railway deve essere `sk_live_...` (non sk_test).
+  Webhook secret = `whsec_AATthV...` (già impostato).
+
+---
+
+## 13. SISTEMA TS / 730 PRECOMPILATA (in sviluppo — NON ancora deployato)
+### Cosa fa
+Invia le spese sanitarie dei pazienti al MEF (Sistema Tessera Sanitaria)
+per la dichiarazione precompilata 730. Obbligo per i medici in regime ordinario.
+(Il Dr. Susino è attualmente forfettario → dovrà attivarlo quando passa all'ordinario.)
+
+### Stato tecnico (tutto risolto)
+- ✅ Kit MEF ufficiale scaricato in `/tmp/kit730/kit730P_ver_20240214/`
+- ✅ **Cifratura corretta**: RSA-1024 con certificato `SanitelCF.cer` (NON AES!)
+  — il file `src/services/sistemaTS.js` attuale usa AES: VA RISCRITTO prima del deploy.
+- ✅ **XML schema**: struttura confermata da `medico.xml` + `radiologo.xml` nel kit.
+- ✅ **Ambiente test MEF**: credenziali in `UtenzeTestMedico.txt` nel kit.
+- ✅ **Credenziali produzione** su Railway: `SISTEMA_TS_CF_EROGATORE`, `SISTEMA_TS_PIVA`,
+  `SISTEMA_TS_CODICE_UFFICIO`, `SISTEMA_TS_PINCODE` (già inserite dal medico).
+- ✅ **UI locale** (NON committata): voce "📋 Sistema TS / 730" nel menu hamburger di
+  RefertEco; archivio prestazioni con spunta per includere/escludere l'invio;
+  campo importo modificabile per prestazione. File modificati localmente (non pushati):
+  `frontend/index.html`, `frontend/css/style.css`, `frontend/js/app.js`.
+
+### Decisioni ancora aperte (da confermare con il commercialista)
+1. **tipoSpesa**: `SR` (specialistica) o `SP` (altro)? — probabilmente SR per ecografie.
+2. **IVA**: `naturaIVA N2` (esente) o `aliquotaIVA 10.00`? — le prestazioni mediche
+   sono esenti IVA: probabilmente N2, ma va confermato.
+
+### Architettura finale prevista
+```
+Paziente paga (Stripe) → RefertEco crea fattura su Aruba FE → numero fattura
+→ Sistema TS usa quel numero come numDocumento
+```
+Il numero di documento da usare nel XML = **numero della fattura elettronica Aruba**
+(non un ID interno). Quindi il Sistema TS dipende dall'integrazione Aruba.
+
+### Cosa fare quando si vuole attivare
+1. Confermare tipoSpesa e IVA con il commercialista.
+2. Riscrivere la cifratura in `sistemaTS.js` con RSA/SanitelCF.cer.
+3. Testare sull'ambiente MEF di test (credenziali in UtenzeTestMedico.txt).
+4. Integrare con Aruba per il numero fattura (vedi sezione 14).
+5. Committare UI e routes del gestionale.
+
+---
+
+## 14. FATTURAZIONE ELETTRONICA ARUBA (da integrare)
+### Perché serve
+Il numero della fattura elettronica emessa su Aruba deve alimentare il Sistema TS
+(campo `numDocumento` nell'XML MEF). Altrimenti il numero documento non è coerente.
+
+### Stato tecnico
+- ✅ **API Aruba FE documentate**: REST, autenticazione OAuth-like (grant_type=password).
+  - Auth: `POST https://auth.fatturazioneelettronica.aruba.it/auth/signin`
+  - Token: dura 30 min, poi refresh.
+  - Demo: `demoauth.fatturazioneelettronica.aruba.it`
+- ⚠️ **Requisito piano**: le API Web Services richiedono piano **Premium** (non base).
+
+### Prossimo passo (bloccato — aspetta il medico)
+1. Verificare se il piano Aruba FE è Premium o base (login su fatturazioneelettronica.aruba.it).
+2. Se Premium: inserire username+password Aruba FE su Railway come
+   `ARUBA_FE_USERNAME` e `ARUBA_FE_PASSWORD` (MAI in chat).
+3. Poi costruire il modulo `src/services/arubaFE.js` che:
+   - Autentica e ottiene access_token
+   - Crea FatturaPA XML (con dati paziente, importo, data)
+   - Invia a SDI tramite Aruba
+   - Ritorna il `numDocumento` → passa a Sistema TS
+
+### Credenziali da inserire su Railway (quando si è pronti)
+- `ARUBA_FE_USERNAME` — username account Aruba FE
+- `ARUBA_FE_PASSWORD` — password account Aruba FE
+- (Mai scriverle in chat o in file di codice)
