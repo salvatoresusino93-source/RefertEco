@@ -22,6 +22,7 @@ const gbpRoutes               = require('./routes/gbp');
 const publicRoutes            = require('./routes/public');
 const prenotaRoutes           = require('./routes/prenota');
 const indisponibilitaRoutes   = require('./routes/indisponibilita');
+const fattureRoutes           = require('./routes/fatture');
 
 const app    = express();
 const server = http.createServer(app);
@@ -143,6 +144,7 @@ app.use('/api/gbp',           gbpRoutes);
 app.use('/api/public',            publicRoutes);         // no auth — prenotazione online
 app.use('/api/prenota',           prenotaRoutes);        // no auth — conferma/rifiuto via email
 app.use('/api/indisponibilita',   indisponibilitaRoutes);
+app.use('/api/fatture',           fattureRoutes);
 
 // ─── Health check ────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
