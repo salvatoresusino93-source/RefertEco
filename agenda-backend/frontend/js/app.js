@@ -975,14 +975,12 @@ async function caricaTS() {
   $('ts-tbody').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">Caricamento…</td></tr>';
 
   try {
-    const da  = `${anno}-01-01T00:00:00.000Z`;
-    const a   = `${anno}-12-31T23:59:59.999Z`;
-    const res = await api.req('GET', `/api/sistema-ts/prestazioni?da=${da}&a=${a}`);
+    const res = await api._req('GET', `/sistema-ts/prestazioni?anno=${anno}`);
     let righe = res || [];
 
     // Filtra per stato se richiesto
-    if (filtro === 'si') righe = righe.filter(r => r.ts_inviato);
-    if (filtro === 'no') righe = righe.filter(r => !r.ts_inviato);
+    if (filtro === 'si') righe = righe.filter(r => r.invia_sistema_ts);
+    if (filtro === 'no') righe = righe.filter(r => !r.invia_sistema_ts);
 
     _tsRighe = righe;
     renderTS(righe);
@@ -1003,10 +1001,10 @@ function renderTS(righe) {
     const cf     = r.pazienti?.codice_fiscale || '—';
     const esame  = r.tipi_prestazione?.nome || '—';
     const data   = fmtData(r.data_ora_inizio);
-    const imp    = r.importo_ts_cent != null ? r.importo_ts_cent : (r.importo_pagato_cent != null ? r.importo_pagato_cent : 8000);
+    const imp    = r.importo_pagato_cent != null ? r.importo_pagato_cent : 8000;
     const impEur = (imp / 100).toFixed(2);
     const pag    = r.pagamento_stato === 'pagato' ? 'Tracciato' : 'Contanti';
-    const inviato = r.ts_inviato;
+    const inviato = r.invia_sistema_ts;
     const badge  = inviato
       ? '<span class="ts-badge-inviato">✅ Inviato</span>'
       : '<span class="ts-badge-attesa">⬜ Da inviare</span>';
@@ -1044,17 +1042,24 @@ async function inviaSistemaTS() {
     const r   = _tsRighe[idx];
     const imp = r._importoOverride != null
       ? r._importoOverride
-      : (r.importo_ts_cent != null ? r.importo_ts_cent : (r.importo_pagato_cent != null ? r.importo_pagato_cent : 8000));
-    return { id: r.id, importo_ts_cent: imp };
+      : (r.importo_pagato_cent != null ? r.importo_pagato_cent : 8000);
+    return { id: r.id, importo_pagato_cent: imp };
   });
+
+  const ids = selezionate.map(s => s.id);
+
+  // Salva importi aggiornati prima dell'invio
+  await Promise.all(selezionate.map(s =>
+    api._req('PATCH', `/sistema-ts/prestazioni/${s.id}`, { importo_pagato_cent: s.importo_pagato_cent }).catch(() => {})
+  ));
 
   const btn = $('btn-invia-ts');
   btn.disabled = true;
   btn.textContent = '⏳ Invio in corso…';
 
   try {
-    const res = await api.req('POST', '/api/sistema-ts/invia', { prestazioni: selezionate });
-    alert(`✅ Invio completato!\n\nInviate: ${res.inviate}\nErrori: ${res.errori}${res.errori > 0 ? '\n\nControllare i log per dettagli.' : ''}`);
+    const res = await api._req('POST', '/sistema-ts/invia', { ids, simulazione: false });
+    alert(`✅ Invio completato!\n\nInviate: ${res.inviate}\nProtocollo: ${res.protocollo || 'N/A'}\nEsito: ${res.descrizione || res.esito}`);
     caricaTS();
   } catch(e) {
     alert(`❌ Errore invio: ${e.message}`);
