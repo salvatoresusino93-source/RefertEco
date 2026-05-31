@@ -573,7 +573,7 @@ function renderFatturaBox(a) {
     const importo = ((a.importo_pagato_cent || 8000) / 100).toFixed(2);
     info.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <button onclick="emettiFattura(${a.id})" id="btn-emetti-fattura"
+        <button onclick="emettiFattura('${a.id}')" id="btn-emetti-fattura"
           style="background:#0ea5e9;color:#fff;border:none;border-radius:6px;
                  padding:7px 14px;cursor:pointer;font-size:13px;font-weight:600;">
           🧾 Emetti fattura (€ ${importo})
