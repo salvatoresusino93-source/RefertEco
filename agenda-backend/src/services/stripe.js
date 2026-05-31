@@ -51,7 +51,7 @@ async function creaCheckoutPagamento(app, importoCent) {
 
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
-    payment_method_types: ['card'],
+    payment_method_types: ['card', 'google_pay'],
     expires_at: Math.floor(Date.now() / 1000) + 30 * 60, // 30 min (minimo Stripe)
     // Email del paziente: pre-compila il campo in Checkout e, soprattutto,
     // imposta `receipt_email` sul PaymentIntent così Stripe invia in automatico
