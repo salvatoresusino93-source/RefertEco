@@ -505,6 +505,7 @@ function openModal(opts={}) {
   $('app-invia-sms').checked = true; // default: invia promemoria
   $('prep-reminder').classList.add('hidden');
   $('field-stato').style.display = 'none';
+  $('field-fattura').classList.add('hidden');
   $('btn-annulla-app').classList.add('hidden');
   $('nuovo-paz-form').classList.add('hidden');
   $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
