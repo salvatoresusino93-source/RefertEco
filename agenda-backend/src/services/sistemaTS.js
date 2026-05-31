@@ -30,18 +30,23 @@ const TEST_USERNAME       = 'A9AZOS61';
 const TEST_PASSWORD       = 'Salve123';
 const TEST_PINCODE        = '5485370458';
 const TEST_CF_PROPRIETARIO = 'PROVAX00X00X000Y';
+const TEST_PIVA           = '98765432104';
+const TEST_CODICE_UFFICIO = '604-120-010011';
 
 // ─── Valori reali (produzione), letti dalle variabili d'ambiente ────────────
 const CF_EROGATORE   = process.env.SISTEMA_TS_CF_EROGATORE  || '';
-const PIVA           = process.env.SISTEMA_TS_PIVA           || '';
-const CODICE_UFFICIO = process.env.SISTEMA_TS_CODICE_UFFICIO || '';
 
 // In test si usano i valori fissi del kit; in produzione le variabili reali.
 const USERNAME        = TEST_MODE ? TEST_USERNAME        : (process.env.SISTEMA_TS_USERNAME || '');
 const PASSWORD        = TEST_MODE ? TEST_PASSWORD        : (process.env.SISTEMA_TS_PASSWORD || '');
 const PINCODE         = TEST_MODE ? TEST_PINCODE         : (process.env.SISTEMA_TS_PINCODE  || '');
+const PIVA            = TEST_MODE ? TEST_PIVA            : (process.env.SISTEMA_TS_PIVA      || '');
+const CODICE_UFFICIO  = TEST_MODE ? TEST_CODICE_UFFICIO  : (process.env.SISTEMA_TS_CODICE_UFFICIO || '');
 // Il CF del "proprietario" dei dati deve coincidere col soggetto autenticato.
 const CF_PROPRIETARIO = TEST_MODE ? TEST_CF_PROPRIETARIO : CF_EROGATORE;
+
+// Il codice ufficio ha formato "regione-asl-ssa" (es. 604-120-010011).
+const [CODICE_REGIONE = '', CODICE_ASL = '', CODICE_SSA = ''] = CODICE_UFFICIO.split('-');
 
 const WS_URL_PROD = 'https://invioss730p.sanita.finanze.it/InvioTelematicoSS730pMtomWeb/InvioTelematicoSS730pMtomPort';
 const WS_URL_TEST = 'https://invioSS730pTest.sanita.finanze.it/InvioTelematicoSS730pMtomWeb/InvioTelematicoSS730pMtomPort';
@@ -55,6 +60,8 @@ function getCert() {
 }
 
 function sistemaTSConfigurato() {
+  // In test i valori sono fissi e sempre presenti.
+  if (TEST_MODE) return true;
   return !!(CF_EROGATORE && PIVA && CODICE_UFFICIO && PINCODE && USERNAME && PASSWORD);
 }
 
@@ -109,6 +116,9 @@ function buildXML(prestazioni) {
 <precompilata xsi:noNamespaceSchemaLocation="730_precompilata.xsd"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <proprietario>
+    <codiceRegione>${CODICE_REGIONE}</codiceRegione>
+    <codiceAsl>${CODICE_ASL}</codiceAsl>
+    <codiceSSA>${CODICE_SSA}</codiceSSA>
     <cfProprietario>${cfPropCifrato}</cfProprietario>
   </proprietario>${documenti}
 </precompilata>`;
@@ -191,6 +201,9 @@ function buildMTOM(nomeZip, zipBuf, pincodeCifrato) {
       <nomeFileAllegato>${nomeZip}</nomeFileAllegato>
       <pincodeInvianteCifrato>${pincodeCifrato}</pincodeInvianteCifrato>
       <datiProprietario>
+        <codiceRegione>${CODICE_REGIONE}</codiceRegione>
+        <codiceAsl>${CODICE_ASL}</codiceAsl>
+        <codiceSSA>${CODICE_SSA}</codiceSSA>
         <cfProprietario>${CF_PROPRIETARIO}</cfProprietario>
       </datiProprietario>
       <opzionale1></opzionale1>
