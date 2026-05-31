@@ -322,7 +322,38 @@ function goStep3() {
         <div class="field-full">
           <div class="field">
             <label>Telefono *</label>
-            <input type="tel" id="f-telefono" value="${esc(f.telefono)}" placeholder="333 1234567" autocomplete="tel" required>
+            <div class="phone-wrap">
+              <select id="f-prefisso" class="phone-prefix" autocomplete="tel-country-code">
+                <option value="+39" data-flag="🇮🇹" selected>🇮🇹 +39</option>
+                <option value="+1"  data-flag="🇺🇸">🇺🇸 +1</option>
+                <option value="+44" data-flag="🇬🇧">🇬🇧 +44</option>
+                <option value="+33" data-flag="🇫🇷">🇫🇷 +33</option>
+                <option value="+49" data-flag="🇩🇪">🇩🇪 +49</option>
+                <option value="+34" data-flag="🇪🇸">🇪🇸 +34</option>
+                <option value="+351" data-flag="🇵🇹">🇵🇹 +351</option>
+                <option value="+41" data-flag="🇨🇭">🇨🇭 +41</option>
+                <option value="+43" data-flag="🇦🇹">🇦🇹 +43</option>
+                <option value="+32" data-flag="🇧🇪">🇧🇪 +32</option>
+                <option value="+31" data-flag="🇳🇱">🇳🇱 +31</option>
+                <option value="+48" data-flag="🇵🇱">🇵🇱 +48</option>
+                <option value="+40" data-flag="🇷🇴">🇷🇴 +40</option>
+                <option value="+30" data-flag="🇬🇷">🇬🇷 +30</option>
+                <option value="+7"  data-flag="🇷🇺">🇷🇺 +7</option>
+                <option value="+86" data-flag="🇨🇳">🇨🇳 +86</option>
+                <option value="+91" data-flag="🇮🇳">🇮🇳 +91</option>
+                <option value="+55" data-flag="🇧🇷">🇧🇷 +55</option>
+                <option value="+54" data-flag="🇦🇷">🇦🇷 +54</option>
+                <option value="+52" data-flag="🇲🇽">🇲🇽 +52</option>
+                <option value="+61" data-flag="🇦🇺">🇦🇺 +61</option>
+                <option value="+81" data-flag="🇯🇵">🇯🇵 +81</option>
+                <option value="+82" data-flag="🇰🇷">🇰🇷 +82</option>
+                <option value="+971" data-flag="🇦🇪">🇦🇪 +971</option>
+                <option value="+966" data-flag="🇸🇦">🇸🇦 +966</option>
+                <option value="+20" data-flag="🇪🇬">🇪🇬 +20</option>
+                <option value="+27" data-flag="🇿🇦">🇿🇦 +27</option>
+              </select>
+              <input type="tel" id="f-telefono" value="${esc(f.telefono)}" placeholder="333 1234567" autocomplete="tel" required>
+            </div>
           </div>
         </div>
         <div class="field-full">
@@ -376,7 +407,9 @@ function avanzaStep4() {
   const nome          = document.getElementById('f-nome').value.trim();
   const data_nascita  = document.getElementById('f-nascita').value;
   const sesso         = document.getElementById('f-sesso').value;
-  const telefono      = document.getElementById('f-telefono').value.trim();
+  const prefisso      = document.getElementById('f-prefisso')?.value || '+39';
+  const telNudo       = document.getElementById('f-telefono').value.trim().replace(/^\+\d+\s*/, '');
+  const telefono      = prefisso + telNudo;
   const email         = document.getElementById('f-email').value.trim();
   const codice_fiscale = document.getElementById('f-cf').value.trim().toUpperCase();
   const note          = document.getElementById('f-note').value.trim();
