@@ -13,12 +13,15 @@ const ST = {
   dataLabel:        null,
   slotScelta:       null,
   privacyAccettata: false,
+  config:           { pagamenti_attivi: false, importo_cent: 8000 },
+  pagaOnline:       false,
   form: {
     cognome:        '',
     nome:           '',
     data_nascita:   '',
     sesso:          '',
     telefono:       '',
+    email:          '',
     codice_fiscale: '',
     note:           '',
   }
@@ -60,6 +63,22 @@ function fmtOra(iso) {
   return new Date(iso).toLocaleTimeString('it-IT', {
     hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome'
   });
+}
+
+// ─── Formato importo in euro da centesimi (es. 2000 → "20") ───────────────
+function fmtEuroCent(cent) {
+  const v = (cent || 0) / 100;
+  return v.toLocaleString('it-IT', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
+}
+
+// ─── Scelta modalità di pagamento allo Step 4 ─────────────────────────────
+function setPaga(online) {
+  ST.pagaOnline = !!online;
+  goStep4();
+}
+
+function labelSubmit() {
+  return (ST.config.pagamenti_attivi && ST.pagaOnline) ? '💳 Paga e conferma' : '✅ Conferma prenotazione';
 }
 
 // ─── STEP 1 — Selezione esame ─────────────────────────────────────────────
@@ -313,6 +332,12 @@ function goStep3() {
         </div>
         <div class="field-full">
           <div class="field">
+            <label>Email *</label>
+            <input type="email" id="f-email" value="${esc(f.email)}" placeholder="nome@esempio.it" autocomplete="email" required>
+          </div>
+        </div>
+        <div class="field-full">
+          <div class="field">
             <label>Codice Fiscale (opzionale)</label>
             <input type="text" id="f-cf" value="${esc(f.codice_fiscale)}" placeholder="RSSMRA80A01H501Z"
               autocomplete="off" style="text-transform:uppercase">
@@ -357,6 +382,7 @@ function avanzaStep4() {
   const data_nascita  = document.getElementById('f-nascita').value;
   const sesso         = document.getElementById('f-sesso').value;
   const telefono      = document.getElementById('f-telefono').value.trim();
+  const email         = document.getElementById('f-email').value.trim();
   const codice_fiscale = document.getElementById('f-cf').value.trim().toUpperCase();
   const note          = document.getElementById('f-note').value.trim();
   const errEl         = document.getElementById('form-err');
@@ -366,12 +392,17 @@ function avanzaStep4() {
   if (!cognome || !nome) { showFormErr(errEl, 'Inserisci cognome e nome.'); return; }
   if (!data_nascita)     { showFormErr(errEl, 'Inserisci la data di nascita.'); return; }
   if (!telefono)         { showFormErr(errEl, 'Inserisci il numero di telefono.'); return; }
+  if (!email)            { showFormErr(errEl, 'Inserisci l\'indirizzo email.'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showFormErr(errEl, 'Inserisci un indirizzo email valido.');
+    return;
+  }
   if (!ST.privacyAccettata) {
     showFormErr(errEl, 'Devi accettare l\'informativa sulla privacy per procedere.');
     return;
   }
 
-  Object.assign(ST.form, { cognome, nome, data_nascita, sesso, telefono, codice_fiscale, note });
+  Object.assign(ST.form, { cognome, nome, data_nascita, sesso, telefono, email, codice_fiscale, note });
   goStep4();
 }
 
@@ -424,6 +455,10 @@ function goStep4() {
             <div class="recap-icon">📞</div>
             <div><div class="recap-lbl">Telefono</div><div class="recap-val">${esc(f.telefono)}</div></div>
           </div>
+          <div class="recap-row">
+            <div class="recap-icon">✉️</div>
+            <div><div class="recap-lbl">Email</div><div class="recap-val">${esc(f.email)}</div></div>
+          </div>
           ${f.codice_fiscale ? `
           <div class="recap-row">
             <div class="recap-icon">🪪</div>
@@ -435,15 +470,34 @@ function goStep4() {
             <div><div class="recap-lbl">Note</div><div class="recap-val">${esc(f.note)}</div></div>
           </div>` : ''}
         </div>
+        ${ST.config.pagamenti_attivi ? `
+        <div style="margin:18px 0 4px;display:flex;flex-direction:column;gap:10px">
+          <div onclick="setPaga(true)" style="cursor:pointer;border:2px solid ${ST.pagaOnline?'#16a34a':'#e2e8f0'};background:${ST.pagaOnline?'#f0fdf4':'#fff'};border-radius:12px;padding:14px 16px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:15px;color:#1e293b;font-weight:700">
+              <span style="width:18px;height:18px;border-radius:50%;border:2px solid ${ST.pagaOnline?'#16a34a':'#cbd5e1'};display:inline-block;position:relative;flex:none">${ST.pagaOnline?'<span style=\'position:absolute;inset:3px;background:#16a34a;border-radius:50%\'></span>':''}</span>
+              Conferma immediata
+              <span style="margin-left:auto;background:#16a34a;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;letter-spacing:.04em">CONSIGLIATO</span>
+            </div>
+            <div style="margin-top:6px;font-size:13px;color:#475569;line-height:1.5">Paga ora l'intero importo di <strong>${fmtEuroCent(ST.config.importo_cent)} €</strong> con carta: la prenotazione è <strong>confermata subito</strong>.</div>
+          </div>
+          <div onclick="setPaga(false)" style="cursor:pointer;border:2px solid ${!ST.pagaOnline?'#586570':'#e2e8f0'};background:${!ST.pagaOnline?'#f8fafc':'#fff'};border-radius:12px;padding:14px 16px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:15px;color:#1e293b;font-weight:700">
+              <span style="width:18px;height:18px;border-radius:50%;border:2px solid ${!ST.pagaOnline?'#586570':'#cbd5e1'};display:inline-block;position:relative;flex:none">${!ST.pagaOnline?'<span style=\'position:absolute;inset:3px;background:#586570;border-radius:50%\'></span>':''}</span>
+              Paga in studio
+            </div>
+            <div style="margin-top:6px;font-size:13px;color:#475569;line-height:1.5">Nessun pagamento adesso. La prenotazione sarà confermata dal medico e riceverai un SMS.</div>
+          </div>
+        </div>` : ''}
         <div class="recap-note">
-          ℹ️ La prenotazione deve essere approvata dal medico.<br>
-          Riceverai una conferma via <strong>SMS</strong> al numero <strong>${esc(f.telefono)}</strong>.
+          ${(ST.config.pagamenti_attivi && ST.pagaOnline)
+            ? `💳 Pagando online la prenotazione è <strong>confermata subito</strong>.<br>Riceverai un <strong>SMS</strong> di conferma al numero <strong>${esc(f.telefono)}</strong>.`
+            : `ℹ️ La prenotazione deve essere approvata dal medico.<br>Riceverai una conferma via <strong>SMS</strong> al numero <strong>${esc(f.telefono)}</strong>.`}
         </div>
         <div id="submit-err" class="pr-error hidden"></div>
         <div class="pr-btn-row">
           <button class="pr-btn-ghost" onclick="goStep3()">←</button>
           <button class="pr-btn-pri" id="btn-submit" onclick="inviaPrenota()">
-            ✅ Conferma prenotazione
+            ${labelSubmit()}
           </button>
         </div>
       </div>
@@ -468,8 +522,10 @@ async function inviaPrenota() {
     data_nascita:    f.data_nascita,
     sesso:           f.sesso || null,
     telefono:        f.telefono,
+    email:           f.email,
     codice_fiscale:  f.codice_fiscale || null,
     note:            f.note || null,
+    paga_online:     !!(ST.config.pagamenti_attivi && ST.pagaOnline),
   };
 
   try {
@@ -485,17 +541,23 @@ async function inviaPrenota() {
         ST.giorni = []; // forza reload disponibilità
         showFormErr(errEl, data.error || 'Slot non più disponibile. Scegli un altro orario.');
         btn.disabled = false;
-        btn.textContent = '✅ Conferma prenotazione';
+        btn.textContent = labelSubmit();
         return;
       }
       throw new Error(data.error || 'Errore del server');
     }
-    // Successo
+    // Pagamento online: vai a Stripe Checkout
+    if (data.checkout_url) {
+      btn.textContent = 'Reindirizzamento al pagamento…';
+      window.location.href = data.checkout_url;
+      return;
+    }
+    // Paga in studio: successo standard
     goSuccess(f.telefono);
   } catch (e) {
     showFormErr(errEl, e.message || 'Errore di rete. Riprova.');
     btn.disabled = false;
-    btn.textContent = '✅ Conferma prenotazione';
+    btn.textContent = labelSubmit();
   }
 }
 
@@ -519,6 +581,47 @@ function goSuccess(telefono) {
     </div>`;
 }
 
+// ─── RITORNO DAL PAGAMENTO (Stripe Checkout) ──────────────────────────────
+function renderEsitoPagamento(ok) {
+  const steps = document.getElementById('pr-steps');
+  if (steps) steps.classList.add('hidden');
+
+  if (ok) {
+    main().innerHTML = `
+      <div class="pr-card">
+        <div class="pr-success">
+          <div class="pr-success-icon">✅</div>
+          <h2>Pagamento ricevuto!</h2>
+          <p>La tua prenotazione è <strong>confermata</strong>.</p>
+          <p>Riceverai a breve un <strong>SMS di conferma</strong> con data e ora.</p>
+          <p style="margin-top:16px;font-size:13px;color:#94a3b8">
+            Pagamento completato: nessuna attesa di conferma.
+          </p>
+          <a href="https://studiosusino.it/" class="pr-btn-pri" style="margin-top:24px;text-decoration:none">
+            Torna al sito
+          </a>
+        </div>
+      </div>`;
+  } else {
+    main().innerHTML = `
+      <div class="pr-card">
+        <div class="pr-success">
+          <div class="pr-success-icon">⚠️</div>
+          <h2>Pagamento annullato</h2>
+          <p>Non è stato addebitato nulla.</p>
+          <p>La tua richiesta di prenotazione è comunque registrata e sarà
+             <strong>confermata dal medico</strong>: riceverai un <strong>SMS</strong>.</p>
+          <p style="margin-top:16px;font-size:13px;color:#94a3b8">
+            Vuoi la conferma immediata? Riprova la prenotazione scegliendo il pagamento online.
+          </p>
+          <a href="/prenota" class="pr-btn-pri" style="margin-top:24px;text-decoration:none">
+            Nuova prenotazione
+          </a>
+        </div>
+      </div>`;
+  }
+}
+
 // ─── AVVIO ────────────────────────────────────────────────────────────────
 function findEsameFromQuery() {
   const q = new URLSearchParams(window.location.search).get('esame');
@@ -532,6 +635,20 @@ function findEsameFromQuery() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Ritorno da Stripe Checkout
+  const pagamento = new URLSearchParams(window.location.search).get('pagamento');
+  if (pagamento === 'ok' || pagamento === 'annullato') {
+    renderEsitoPagamento(pagamento === 'ok');
+    return;
+  }
+
+  // Configurazione pagamenti (mostra/nasconde la corsia "paga online")
+  try {
+    const rc = await fetch('/api/public/config');
+    if (rc.ok) ST.config = await rc.json();
+  } catch (e) { /* pagamenti non disponibili: solo "paga in studio" */ }
+  ST.pagaOnline = !!ST.config.pagamenti_attivi;
+
   await goStep1();
   const match = findEsameFromQuery();
   if (match) {

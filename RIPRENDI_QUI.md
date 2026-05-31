@@ -345,9 +345,7 @@ GBP_LOCATION_NAME           = (opzionale — si scopre auto)
 
 ## 9. COSE IN SOSPESO ⚠️
 
-1. **Rimozione "Prenota con Google" da GBP** (porta a Mio Dottore):
-   Contattare supporto Mio Dottore (pro.miodottore.it) per rimuovere integrazione.
-   Poi impostare nuovo URL: GBP → Info → Prenotazioni.
+1. ~~**Rimozione MioDottore da GBP**~~ ✅ **Fatto** (verificato 2026-05-31): su Google compare solo RefertEco sotto Appuntamenti.
 
 2. **API GBP in attesa approvazione Google**:
    Case ID: **1-7862000040720** (inviata 2026-05-27, 7-10 gg lavorativi).

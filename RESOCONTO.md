@@ -95,15 +95,10 @@ Stato:
   - leggere `GBP_LOCATION_NAME` dai log `[GBP]` e salvarlo su Railway (ottimizz.);
   - verificare che gli orari sulla scheda si aggiornino (es. 5 giugno = chiuso).
 
-### B. MioDottore — rimozione residuo
-- ⏳ Il booking è stato disattivato lato MioDottore, ma su Google **residua ancora**
-  il modulo "Prenota un appuntamento" di MioDottore. È ritardo di cache di Google
-  (può volerci giorni/settimane). Per accelerare: verificare in incognito, usare
-  "Suggerisci una modifica", e/o contattare l'assistenza Google Business chiedendo
-  la rimozione del fornitore di prenotazione di terze parti.
-- Nota: il pulsante blu "Prenota" col calendario su Google è riservato ai partner
-  "Prenota con Google" (MioDottore, Doctolib). Il form proprio RefertEco resta come
-  link "Appuntamenti", NON come pulsante blu.
+### B. MioDottore — rimozione ✅ (2026-05-31)
+- ✅ Su Google Business compare **solo RefertEco** sotto Appuntamenti (verificato dal medico).
+- Nota: il pulsante blu "Prenota con Google" resta riservato ai partner (Doctolib, ecc.).
+  RefertEco appare come link "Appuntamenti" — normale e corretto.
 
 ### C. Coerenza nomi/numeri (da valutare)
 - ⏳ In giro compaiono ancora: "Centro Ecografico" (Facebook), MioDottore, e un
@@ -169,8 +164,7 @@ Stato:
 - ✅ **HTTPS** del sito attivato (Let's Encrypt + Enforce HTTPS + redirect http→https).
 - ✅ **Pulsante recensioni** Google nella pagina Contatti (g.page/r/CQUbXzXQvvzqEBM/review).
 - ✅ **Link prenotazione su Google**: "Appuntamenti: referteco-production.up.railway.app".
-- ⏳ **MioDottore**: booking disattivato lato MioDottore, ma su Google residua il loro modulo
-  "Prenota" (cache Google; va richiesta rimozione del fornitore terzo all'assistenza Google).
+- ✅ **MioDottore rimosso da Google** (2026-05-31): solo RefertEco sotto Appuntamenti.
 - ⏳ **Quota Google Business API**: in attesa di approvazione (vedi sezione 7-A).
 - ℹ️ **CUP Solidale**: portale privato a pagamento per il medico (come MioDottore); il
   concorrente locale è il Centro Moncada. Per ora si resta sul canale diretto.

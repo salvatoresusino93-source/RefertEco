@@ -7,6 +7,7 @@ const supabase = require('../services/supabase');
 const { notificaPrenotazioneOnline } = require('../services/email');
 const { leggiEventiPersonali, getCreds } = require('../services/googleCalendar');
 const { leggiImpegniIcal, icalConfigurato } = require('../services/icalCalendar');
+const { pagamentiAttivi, importoPagamentoCent, creaCheckoutPagamento } = require('../services/stripe');
 
 const router = express.Router();
 
@@ -139,6 +140,16 @@ function dedupeEsamiPerNome(rows) {
   });
 }
 
+// ─── GET /api/public/config ───────────────────────────────────────────────
+// Espone al frontend se il pagamento online è disponibile e l'importo
+// intero della visita, così da mostrare (o nascondere) la corsia agevolata.
+router.get('/config', (req, res) => {
+  res.json({
+    pagamenti_attivi: pagamentiAttivi(),
+    importo_cent:     importoPagamentoCent(),
+  });
+});
+
 // ─── GET /api/public/esami ────────────────────────────────────────────────
 router.get('/esami', async (req, res) => {
   const { data, error } = await supabase
@@ -261,11 +272,18 @@ router.post('/prenota', async (req, res) => {
   const {
     tipo_id, data_ora_inizio,
     cognome, nome, data_nascita, sesso,
-    telefono, codice_fiscale, note
+    telefono, email, codice_fiscale, note,
+    paga_online
   } = req.body;
 
-  if (!tipo_id || !data_ora_inizio || !cognome?.trim() || !nome?.trim() || !data_nascita || !telefono?.trim()) {
+  if (!tipo_id || !data_ora_inizio || !cognome?.trim() || !nome?.trim() || !data_nascita || !telefono?.trim() || !email?.trim()) {
     return res.status(400).json({ error: 'Dati obbligatori mancanti' });
+  }
+
+  // Email obbligatoria per la prenotazione online
+  const emailPulita = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailPulita)) {
+    return res.status(400).json({ error: 'Indirizzo email non valido' });
   }
 
   // Verifica esame
@@ -358,12 +376,20 @@ router.post('/prenota', async (req, res) => {
         sesso:          sesso || null,
         codice_fiscale: cfPulito,
         telefono:       telPulito,
+        email:          emailPulita,
       })
       .select('id')
       .single();
 
     if (errPaz) return res.status(500).json({ error: 'Errore durante la registrazione. Riprova.' });
     pazienteId = newPaz.id;
+  } else {
+    // Paziente esistente: completa l'email se mancante
+    await supabase
+      .from('pazienti')
+      .update({ email: emailPulita })
+      .eq('id', pazienteId)
+      .is('email', null);
   }
 
   // Crea appuntamento in_attesa
@@ -383,10 +409,40 @@ router.post('/prenota', async (req, res) => {
 
   if (errApp) return res.status(500).json({ error: 'Errore durante la prenotazione. Riprova.' });
 
-  // Token per email approvazione (7 giorni)
-  const token = jwt.sign({ id: app.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  // ── CORSIA AGEVOLATA: pagamento online → conferma immediata ───────────
+  // Se il paziente sceglie di pagare la visita online (importo intero, e i
+  // pagamenti sono attivi), apriamo Stripe Checkout. La conferma (stato
+  // 'prenotato', SMS, Google Calendar, notifica al medico) avviene nel webhook
+  // al termine del pagamento. Nessuna email di approvazione qui: non serve.
+  // In caso di abbandono, il webhook `checkout.session.expired` ripristina il
+  // flusso "paga in studio" inviando comunque la notifica al medico.
+  if (paga_online === true && pagamentiAttivi()) {
+    try {
+      const importoCent = importoPagamentoCent();
+      const sessione = await creaCheckoutPagamento(app, importoCent);
+      if (sessione?.url) {
+        await supabase
+          .from('appuntamenti')
+          .update({
+            importo_pagato_cent: importoCent,
+            stripe_session_id:   sessione.id,
+          })
+          .eq('id', app.id);
 
-  // Email al medico
+        return res.status(201).json({
+          ok: true,
+          checkout_url: sessione.url,
+          messaggio: 'Completa il pagamento per confermare subito la prenotazione.'
+        });
+      }
+    } catch (e) {
+      console.error('[Stripe] Creazione Checkout pagamento fallita:', e.message);
+      // Fallback sotto: prenotazione "paga in studio" con approvazione medico.
+    }
+  }
+
+  // ── PAGA IN STUDIO: resta in attesa della conferma del medico ─────────
+  const token = jwt.sign({ id: app.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
   notificaPrenotazioneOnline(app, token).catch(e =>
     console.error('[email] Notifica prenotazione online:', e.message)
   );

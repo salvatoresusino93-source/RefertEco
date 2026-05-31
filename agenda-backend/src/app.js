@@ -5,8 +5,13 @@ const http    = require('http');
 const cors    = require('cors');
 const path    = require('path');
 
-const { initSocket } = require('./socket');
+const jwt = require('jsonwebtoken');
+const { initSocket, getIO } = require('./socket');
 const { avviaReminder, inviaPromemoriDomani } = require('./services/reminder');
+const supabase = require('./services/supabase');
+const { costruisciEventoWebhook } = require('./services/stripe');
+const { creaEvento } = require('./services/googleCalendar');
+const { notificaPrenotazionePagata, notificaPrenotazioneOnline, inviaRicevutaPagamento } = require('./services/email');
 const authRoutes         = require('./routes/auth');
 const pazientiRoutes     = require('./routes/pazienti');
 const appuntamentiRoutes = require('./routes/appuntamenti');
@@ -23,6 +28,102 @@ const server = http.createServer(app);
 
 // ─── Middleware ───────────────────────────────────────────────────────────
 app.use(cors());
+
+// ─── Webhook Stripe (pagamento visita) ────────────────────────────────────
+// DEVE stare PRIMA di express.json(): la verifica della firma richiede il
+// body grezzo.
+//  • checkout.session.completed → visita pagata: conferma l'appuntamento
+//    (stato 'prenotato'), evento Google Calendar, notifica al medico e
+//    ricevuta via email al paziente. Nessun SMS (vedi nota sotto). Conferma
+//    automatica, nessuna approvazione necessaria.
+//  • checkout.session.expired   → pagamento abbandonato: l'appuntamento resta
+//    "in attesa" e si invia comunque al medico l'email con conferma/rifiuto
+//    (fallback "paga in studio"), così la notifica arriva sempre.
+
+async function recuperaAppuntamento(appId) {
+  const { data } = await supabase
+    .from('appuntamenti')
+    .select('*, pazienti(*), tipi_prestazione(*)')
+    .eq('id', appId)
+    .single();
+  return data || null;
+}
+
+async function confermaPagamentoOnline(session) {
+  const appId = session.metadata?.appuntamento_id;
+  const pi    = session.payment_intent;
+  if (!appId) return;
+
+  const app = await recuperaAppuntamento(appId);
+  if (!app) return;
+  if (app.stato !== 'in_attesa' || app.pagamento_stato === 'pagato') return; // idempotenza
+
+  const { error } = await supabase
+    .from('appuntamenti')
+    .update({
+      stato:                 'prenotato',
+      pagamento_stato:       'pagato',
+      stripe_payment_intent: pi || app.stripe_payment_intent,
+      updated_at:            new Date().toISOString(),
+    })
+    .eq('id', appId);
+  if (error) {
+    console.error('[Stripe] Conferma appuntamento (webhook) fallita:', error.message);
+    return;
+  }
+
+  const confermato = {
+    ...app,
+    stato:                 'prenotato',
+    pagamento_stato:       'pagato',
+    stripe_payment_intent: pi || app.stripe_payment_intent,
+  };
+  try { getIO().emit('appuntamento:aggiornato', confermato); } catch {}
+  // Nessun SMS per i pagamenti online: il paziente riceve già conferma e
+  // ricevuta via email, quindi l'SMS (a pagamento) sarebbe ridondante.
+  // L'SMS resta solo per il flusso "paga in studio" (vedi routes/prenota.js).
+  creaEvento(app).catch(e => console.error('[GCal] Crea evento (pagamento online):', e.message));
+  notificaPrenotazionePagata(confermato).catch(e => console.error('[email] Notifica pagata:', e.message));
+  // Ricevuta di pagamento (non fiscale) al paziente, copia al medico in BCC.
+  inviaRicevutaPagamento(confermato, app.importo_pagato_cent).catch(e => console.error('[email] Ricevuta pagamento:', e.message));
+}
+
+async function fallbackPagaInStudio(session) {
+  const appId = session.metadata?.appuntamento_id;
+  if (!appId) return;
+
+  const app = await recuperaAppuntamento(appId);
+  if (!app) return;
+  if (app.stato !== 'in_attesa' || app.pagamento_stato === 'pagato') return; // già gestito/pagato
+
+  const token = jwt.sign({ id: app.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+  notificaPrenotazioneOnline(app, token).catch(e =>
+    console.error('[email] Notifica fallback (pagamento scaduto):', e.message)
+  );
+}
+
+app.post('/api/public/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  let event;
+  try {
+    event = costruisciEventoWebhook(req.body, req.headers['stripe-signature']);
+  } catch (e) {
+    console.error('[Stripe] Verifica webhook fallita:', e.message);
+    return res.status(400).send(`Webhook Error: ${e.message}`);
+  }
+
+  try {
+    if (event.type === 'checkout.session.completed') {
+      await confermaPagamentoOnline(event.data.object);
+    } else if (event.type === 'checkout.session.expired') {
+      await fallbackPagaInStudio(event.data.object);
+    }
+  } catch (e) {
+    console.error('[Stripe] Gestione evento webhook fallita:', e.message);
+  }
+
+  res.json({ received: true });
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

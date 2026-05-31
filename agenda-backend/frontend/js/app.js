@@ -627,7 +627,7 @@ function resetPaziente() {
   // Nascondi pannello info e form paziente
   $('paz-info-panel').classList.add('hidden');
   $('nuovo-paz-form').classList.add('hidden');
-  ['np-cognome','np-nome','np-nascita','np-cf','np-telefono'].forEach(id => $(id).value = '');
+  ['np-cognome','np-nome','np-nascita','np-cf','np-telefono','np-email'].forEach(id => $(id).value = '');
   $('np-sesso').value = '';
   $('btn-salva-nuovo-paz').textContent = '✓ Salva paziente';
 }
@@ -665,6 +665,7 @@ function abilitaModificaPaz() {
   $('np-sesso').value    = p.sesso   || '';
   $('np-cf').value       = (p.codice_fiscale || '').toUpperCase();
   $('np-telefono').value = p.telefono || '';
+  $('np-email').value    = p.email || '';
   $('nuovo-paz-form').classList.remove('hidden');
   $('btn-modifica-paz').style.display = 'none'; // nasconde il link mentre il form è aperto
   $('btn-salva-nuovo-paz').textContent = '✓ Aggiorna paziente';
@@ -728,6 +729,7 @@ async function salvaNuovoPaz() {
     sesso:          $('np-sesso').value   || null,
     codice_fiscale: $('np-cf').value.trim().toUpperCase() || null,
     telefono,
+    email:          $('np-email').value.trim() || null,
   };
 
   btn.textContent = 'Salvataggio…'; btn.disabled = true;

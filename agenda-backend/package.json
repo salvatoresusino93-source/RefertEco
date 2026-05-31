@@ -18,6 +18,7 @@
     "node-ical": "^0.26.1",
     "resend": "^6.12.4",
     "socket.io": "^4.6.1",
+    "stripe": "^22.2.0",
     "ws": "^8.21.0"
   },
   "devDependencies": {

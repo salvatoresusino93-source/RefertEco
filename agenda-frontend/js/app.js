@@ -570,11 +570,12 @@ async function salvaNuovoPaz() {
       sesso:          $('np-sesso').value   || null,
       codice_fiscale: $('np-cf').value.trim() || null,
       telefono,
+      email:          $('np-email').value.trim() || null,
     });
     selezionaPaz(p.id, `${p.cognome} ${p.nome}`);
     $('nuovo-paz-form').classList.add('hidden');
     $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
-    ['np-cognome','np-nome','np-nascita','np-cf','np-telefono'].forEach(id => $(id).value='');
+    ['np-cognome','np-nome','np-nascita','np-cf','np-telefono','np-email'].forEach(id => $(id).value='');
     $('np-sesso').value = '';
   } catch(ex) {
     if (ex.status === 409 && ex.paziente) {
@@ -597,12 +598,13 @@ async function salvaNuovoPaz() {
             sesso:          $('np-sesso').value   || null,
             codice_fiscale: $('np-cf').value.trim() || null,
             telefono,
+            email:          $('np-email').value.trim() || null,
             forza_creazione: true
           });
           selezionaPaz(p2.id, `${p2.cognome} ${p2.nome}`);
           $('nuovo-paz-form').classList.add('hidden');
           $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
-          ['np-cognome','np-nome','np-nascita','np-cf','np-telefono'].forEach(id => $(id).value='');
+          ['np-cognome','np-nome','np-nascita','np-cf','np-telefono','np-email'].forEach(id => $(id).value='');
           $('np-sesso').value = '';
         } catch(ex2) {
           alert('Errore: ' + ex2.message);
@@ -618,7 +620,7 @@ async function salvaNuovoPaz() {
           selezionaPaz(p.id, `${p.cognome} ${p.nome}`);
           $('nuovo-paz-form').classList.add('hidden');
           $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
-          ['np-cognome','np-nome','np-nascita','np-cf','np-telefono'].forEach(id => $(id).value='');
+          ['np-cognome','np-nome','np-nascita','np-cf','np-telefono','np-email'].forEach(id => $(id).value='');
           $('np-sesso').value = '';
         }
       }
