@@ -20,25 +20,28 @@ const zlib   = require('zlib');
 const fs     = require('fs');
 const path   = require('path');
 
+const TEST_MODE      = process.env.SISTEMA_TS_TEST === 'true';
+
+// ─── Credenziali di TEST ufficiali del kit MEF ──────────────────────────────
+// Valori pubblici e fissi dell'ambiente di prova Sistema TS (non sono segreti).
+// In test l'utente che autentica (A9AZOS61) è distinto dal CF del proprietario
+// dei dati (PROVAX00X00X000Y); il pincode di test è 5485370458.
+const TEST_USERNAME       = 'A9AZOS61';
+const TEST_PASSWORD       = 'Salve123';
+const TEST_PINCODE        = '5485370458';
+const TEST_CF_PROPRIETARIO = 'PROVAX00X00X000Y';
+
+// ─── Valori reali (produzione), letti dalle variabili d'ambiente ────────────
 const CF_EROGATORE   = process.env.SISTEMA_TS_CF_EROGATORE  || '';
 const PIVA           = process.env.SISTEMA_TS_PIVA           || '';
 const CODICE_UFFICIO = process.env.SISTEMA_TS_CODICE_UFFICIO || '';
-const PINCODE_PROD   = process.env.SISTEMA_TS_PINCODE        || '';
-// Pincode dedicato all'ambiente di test MEF (associato all'utente di prova).
-const PINCODE_TEST   = process.env.SISTEMA_TS_PINCODE_TEST   || '';
-// Credenziali Sistema TS per l'autenticazione HTTP Basic della chiamata SOAP.
-// Sono distinte dal PINCODE (che serve a cifrare i dati). In ambiente di test
-// MEF si usano le credenziali di prova fornite nel kit.
-const USERNAME       = process.env.SISTEMA_TS_USERNAME       || '';
-const PASSWORD       = process.env.SISTEMA_TS_PASSWORD       || '';
-const TEST_MODE      = process.env.SISTEMA_TS_TEST === 'true';
-const PINCODE        = TEST_MODE ? (PINCODE_TEST || PINCODE_PROD) : PINCODE_PROD;
 
-// Il CF del "proprietario" dei dati DEVE coincidere con il soggetto autenticato.
-// In test ci si autentica con l'utente di prova del kit MEF (un CF fittizio),
-// quindi il proprietario è l'USERNAME di test. In produzione è il CF reale del
-// medico erogatore.
-const CF_PROPRIETARIO = TEST_MODE ? (USERNAME || CF_EROGATORE) : CF_EROGATORE;
+// In test si usano i valori fissi del kit; in produzione le variabili reali.
+const USERNAME        = TEST_MODE ? TEST_USERNAME        : (process.env.SISTEMA_TS_USERNAME || '');
+const PASSWORD        = TEST_MODE ? TEST_PASSWORD        : (process.env.SISTEMA_TS_PASSWORD || '');
+const PINCODE         = TEST_MODE ? TEST_PINCODE         : (process.env.SISTEMA_TS_PINCODE  || '');
+// Il CF del "proprietario" dei dati deve coincidere col soggetto autenticato.
+const CF_PROPRIETARIO = TEST_MODE ? TEST_CF_PROPRIETARIO : CF_EROGATORE;
 
 const WS_URL_PROD = 'https://invioss730p.sanita.finanze.it/InvioTelematicoSS730pMtomWeb/InvioTelematicoSS730pMtomPort';
 const WS_URL_TEST = 'https://invioSS730pTest.sanita.finanze.it/InvioTelematicoSS730pMtomWeb/InvioTelematicoSS730pMtomPort';
