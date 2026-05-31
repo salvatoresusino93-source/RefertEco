@@ -551,8 +551,8 @@ async function loadAppInModal(id) {
 
 // ─── Fattura elettronica ──────────────────────────────────────────────────
 function renderFatturaBox(a) {
-  const box    = $('field-fattura');
-  const info   = $('fattura-info');
+  const box  = $('field-fattura');
+  const info = $('fattura-info');
   const statiConFattura = ['prenotato','arrivato','refertato'];
 
   if (!statiConFattura.includes(a.stato)) {
@@ -560,54 +560,42 @@ function renderFatturaBox(a) {
   }
   box.classList.remove('hidden');
 
-  if (a.numero_fattura) {
-    // Fattura già emessa
-    info.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;
-                  background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;
-                  font-size:13px;color:#166534;">
-        ✅ <strong>Fattura ${a.numero_fattura}</strong> — già inviata al SDI
-      </div>`;
-  } else if (!a.pazienti?.codice_fiscale) {
-    // CF mancante — non si può fatturare
-    info.innerHTML = `
-      <div style="padding:8px 10px;background:#fef9c3;border:1px solid #fde047;
-                  border-radius:6px;font-size:13px;color:#854d0e;">
-        ⚠️ <strong>Codice fiscale mancante</strong> — aggiungilo nella scheda paziente per emettere la fattura.
-      </div>`;
-  } else {
-    // Fattura da emettere
-    const importo = ((a.importo_pagato_cent || 8000) / 100).toFixed(2);
-    const paziente = `${a.pazienti?.cognome || ''} ${a.pazienti?.nome || ''}`.trim();
-    info.innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <button onclick="emettiFattura('${a.id}')" id="btn-emetti-fattura"
-          style="background:#0ea5e9;color:#fff;border:none;border-radius:6px;
-                 padding:7px 14px;cursor:pointer;font-size:13px;font-weight:600;">
-          🧾 Emetti fattura (€ ${importo})
-        </button>
-        <span style="font-size:12px;color:#6b7280;">${paziente} · CF ${a.pazienti.codice_fiscale}</span>
-      </div>`;
-  }
+  info.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <input type="text" id="input-numero-fattura"
+        value="${a.numero_fattura || ''}"
+        placeholder="es. 5/2026"
+        style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;
+               font-size:13px;width:120px;">
+      <button onclick="salvaNumeroFattura('${a.id}')"
+        style="background:#0ea5e9;color:#fff;border:none;border-radius:6px;
+               padding:6px 12px;cursor:pointer;font-size:13px;font-weight:600;">
+        💾 Salva
+      </button>
+      ${a.numero_fattura ? `<span style="font-size:12px;color:#16a34a;">✅ ${a.numero_fattura}</span>` : ''}
+    </div>
+    <small style="color:#6b7280;font-size:11px;margin-top:4px;display:block;">
+      Inserisci il numero della fattura emessa su Aruba (es. 5/2026)
+    </small>`;
 }
 
-async function emettiFattura(appId) {
-  const btn = $('btn-emetti-fattura');
-  btn.textContent = '⏳ Invio in corso…';
-  btn.disabled    = true;
+async function salvaNumeroFattura(appId) {
+  const val = $('input-numero-fattura').value.trim();
+  if (!val) { alert('Inserisci un numero fattura'); return; }
   try {
-    const data = await api._req('POST', '/fatture/crea', { appuntamento_id: appId });
-
-    $('fattura-info').innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;
-                  background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;
-                  font-size:13px;color:#166534;">
-        ✅ <strong>Fattura ${data.numeroFattura}</strong> — inviata al SDI con successo
-      </div>`;
-  } catch (e) {
-    btn.textContent = '🧾 Emetti fattura';
-    btn.disabled    = false;
-    alert('Errore emissione fattura: ' + e.message);
+    await api._req('PATCH', `/appuntamenti/${appId}`, { numero_fattura: val });
+    $('fattura-info').querySelector('span') && ($('fattura-info').querySelector('span').textContent = '✅ ' + val);
+    // aggiorna inline senza chiudere il modal
+    const saved = $('fattura-info').querySelector('span');
+    if (saved) { saved.textContent = '✅ ' + val; saved.style.color = '#16a34a'; }
+    else {
+      const sp = document.createElement('span');
+      sp.style = 'font-size:12px;color:#16a34a;';
+      sp.textContent = '✅ ' + val;
+      $('fattura-info').querySelector('div').appendChild(sp);
+    }
+  } catch(e) {
+    alert('Errore salvataggio: ' + e.message);
   }
 }
 

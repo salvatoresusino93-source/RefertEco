@@ -202,7 +202,7 @@ router.put('/:id', async (req, res) => {
   const campiConsentiti = [
     'paziente_id', 'tipo_id', 'data_ora_inizio', 'data_ora_fine',
     'stato', 'note_segreteria', 'note_medico', 'worklist_status',
-    'invia_sms_promemoria'
+    'invia_sms_promemoria', 'numero_fattura'
   ];
 
   const updates = {};
@@ -230,6 +230,8 @@ router.put('/:id', async (req, res) => {
 
   res.json(data);
 });
+
+router.patch = router.put; // PATCH è alias di PUT per aggiornamenti parziali
 
 // ─── DELETE /api/appuntamenti/:id — soft delete (stato = annullato) ───────
 router.delete('/:id', async (req, res) => {
