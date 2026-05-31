@@ -242,6 +242,21 @@ Il `SISTEMA_TS_CODICE_UFFICIO` reale DEVE essere nel formato `regione-asl-ssa`.
 Colonna `appuntamenti.invia_sistema_ts` BOOLEAN DEFAULT false
 (true = già inviato al TS). Importo da `importo_pagato_cent`.
 
+### Flusso d'uso (semi-automatico, in 2 momenti)
+1. **Per ogni visita a pagamento**: il medico emette ricevuta e scrive il numero
+   nel campo "Numero documento / riceviuta" dentro l'appuntamento → viene salvato
+   in `numero_fattura`. Le visite GRATUITE non ricevono numero.
+2. **Periodicamente** (es. mensile): menu ☰ → "📋 Sistema TS / 730" → seleziona
+   le prestazioni → "📤 Invia". L'invio NON è automatico: il medico controlla
+   sempre cosa parte.
+
+### Filtro pannello Sistema TS
+Il pannello mostra SOLO le prestazioni che hanno:
+1. il codice fiscale del paziente, E
+2. un `numero_fattura` (numero documento/ricevuta) valorizzato.
+Le prestazioni gratuite (senza ricevuta/numero) NON compaiono → non rischiano
+di essere inviate al TS per errore.
+
 ### Per passare alla PRODUZIONE reale
 1. Verificare che tutte le 6 variabili Railway reali siano corrette
    (incluso `SISTEMA_TS_CODICE_UFFICIO` nel formato con trattini).
