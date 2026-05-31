@@ -25,8 +25,14 @@ router.get('/prestazioni', async (req, res) => {
 
     if (error) throw error;
 
-    // Filtra solo quelli con CF paziente
-    const filtrati = (data || []).filter(a => a.pazienti?.codice_fiscale);
+    // Mostra solo prestazioni da inviare al TS: devono avere
+    //  1) il codice fiscale del paziente, e
+    //  2) un numero documento/ricevuta inserito.
+    // Le prestazioni gratuite (senza ricevuta) restano fuori.
+    const filtrati = (data || []).filter(a =>
+      a.pazienti?.codice_fiscale &&
+      a.numero_fattura && String(a.numero_fattura).trim() !== ''
+    );
     res.json(filtrati);
   } catch (e) {
     res.status(500).json({ error: e.message });
