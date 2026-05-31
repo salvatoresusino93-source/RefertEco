@@ -23,13 +23,16 @@ const path   = require('path');
 const CF_EROGATORE   = process.env.SISTEMA_TS_CF_EROGATORE  || '';
 const PIVA           = process.env.SISTEMA_TS_PIVA           || '';
 const CODICE_UFFICIO = process.env.SISTEMA_TS_CODICE_UFFICIO || '';
-const PINCODE        = process.env.SISTEMA_TS_PINCODE        || '';
+const PINCODE_PROD   = process.env.SISTEMA_TS_PINCODE        || '';
+// Pincode dedicato all'ambiente di test MEF (associato all'utente di prova).
+const PINCODE_TEST   = process.env.SISTEMA_TS_PINCODE_TEST   || '';
 // Credenziali Sistema TS per l'autenticazione HTTP Basic della chiamata SOAP.
 // Sono distinte dal PINCODE (che serve a cifrare i dati). In ambiente di test
 // MEF si usano le credenziali di prova fornite nel kit.
 const USERNAME       = process.env.SISTEMA_TS_USERNAME       || '';
 const PASSWORD       = process.env.SISTEMA_TS_PASSWORD       || '';
 const TEST_MODE      = process.env.SISTEMA_TS_TEST === 'true';
+const PINCODE        = TEST_MODE ? (PINCODE_TEST || PINCODE_PROD) : PINCODE_PROD;
 
 // Il CF del "proprietario" dei dati DEVE coincidere con il soggetto autenticato.
 // In test ci si autentica con l'utente di prova del kit MEF (un CF fittizio),
