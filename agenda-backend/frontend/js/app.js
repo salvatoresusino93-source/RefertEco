@@ -1000,7 +1000,7 @@ function renderTS(righe) {
     const paz    = r.pazienti ? `${r.pazienti.cognome} ${r.pazienti.nome}` : '—';
     const cf     = r.pazienti?.codice_fiscale || '—';
     const esame  = r.tipi_prestazione?.nome || '—';
-    const data   = fmtData(r.data_ora_inizio);
+    const data   = new Date(r.data_ora_inizio).toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'});
     const imp    = r.importo_pagato_cent != null ? r.importo_pagato_cent : 8000;
     const impEur = (imp / 100).toFixed(2);
     const pag    = r.pagamento_stato === 'pagato' ? 'Tracciato' : 'Contanti';
