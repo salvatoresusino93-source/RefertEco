@@ -111,7 +111,7 @@ function renderEsamiGrid() {
       <div class="esame-icon">${getIcon(e.nome)}</div>
       <div>
         <div class="esame-nome">${esc(e.nome)}</div>
-        <div class="esame-durata">⏱ ${e.durata_minuti} minuti</div>
+        <div class="esame-durata">⏱ ${e.durata_minuti} minuti · 80 €</div>
       </div>
       <div class="esame-arrow">›</div>
     </div>`;
@@ -151,7 +151,7 @@ function renderEsameSceltoStep1() {
         <div class="esame-icon">🩺</div>
         <div>
           <div class="esame-nome">${esc(ST.esameName)}</div>
-          <div class="esame-durata">⏱ 30 minuti</div>
+          <div class="esame-durata">⏱ 30 minuti · 80 €</div>
         </div>
       </div>
       ${prepBlock()}
@@ -401,6 +401,10 @@ function goStep4() {
           <div class="recap-row">
             <div class="recap-icon">🩺</div>
             <div><div class="recap-lbl">Esame</div><div class="recap-val">${esc(ST.esameName)}</div></div>
+          </div>
+          <div class="recap-row">
+            <div class="recap-icon">💶</div>
+            <div><div class="recap-lbl">Costo</div><div class="recap-val">80 €</div></div>
           </div>
           <div class="recap-row">
             <div class="recap-icon">📅</div>
