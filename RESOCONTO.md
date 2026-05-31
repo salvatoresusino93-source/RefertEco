@@ -185,44 +185,64 @@ Stato:
 
 ---
 
-## 13. SISTEMA TS / 730 PRECOMPILATA (in sviluppo — NON ancora deployato)
+## 13. SISTEMA TS / 730 PRECOMPILATA — ✅ FUNZIONANTE (testato su ambiente MEF)
 ### Cosa fa
 Invia le spese sanitarie dei pazienti al MEF (Sistema Tessera Sanitaria)
 per la dichiarazione precompilata 730. Obbligo per i medici in regime ordinario.
 (Il Dr. Susino è attualmente forfettario → dovrà attivarlo quando passa all'ordinario.)
 
-### Stato tecnico (tutto risolto)
-- ✅ Kit MEF ufficiale scaricato in `/tmp/kit730/kit730P_ver_20240214/`
-- ✅ **Cifratura corretta**: RSA-1024 con certificato `SanitelCF.cer` (NON AES!)
-  — il file `src/services/sistemaTS.js` attuale usa AES: VA RISCRITTO prima del deploy.
-- ✅ **XML schema**: struttura confermata da `medico.xml` + `radiologo.xml` nel kit.
-- ✅ **Ambiente test MEF**: credenziali in `UtenzeTestMedico.txt` nel kit.
-- ✅ **Credenziali produzione** su Railway: `SISTEMA_TS_CF_EROGATORE`, `SISTEMA_TS_PIVA`,
-  `SISTEMA_TS_CODICE_UFFICIO`, `SISTEMA_TS_PINCODE` (già inserite dal medico).
-- ✅ **UI locale** (NON committata): voce "📋 Sistema TS / 730" nel menu hamburger di
-  RefertEco; archivio prestazioni con spunta per includere/escludere l'invio;
-  campo importo modificabile per prestazione. File modificati localmente (non pushati):
-  `frontend/index.html`, `frontend/css/style.css`, `frontend/js/app.js`.
+### Stato: TEST SUPERATO — Esito 000, protocollo assegnato dal MEF
+Il 2026-06-01 l'invio di test ha ricevuto **Esito 000** ("file in attesa di
+elaborazione") con protocollo `26060100293737808`. Tutta la catena funziona end-to-end.
 
-### Decisioni ancora aperte (da confermare con il commercialista)
-1. **tipoSpesa**: `SR` (specialistica) o `SP` (altro)? — probabilmente SR per ecografie.
-2. **IVA**: `naturaIVA N2` (esente) o `aliquotaIVA 10.00`? — le prestazioni mediche
-   sono esenti IVA: probabilmente N2, ma va confermato.
+### Componenti tecnici (tutti verificati)
+- ✅ **Cifratura RSA**: `crypto.publicEncrypt` con `RSA_PKCS1_PADDING` e certificato
+  `src/certs/SanitelCF.cer` (RSA-1024, valido fino a gen 2027). NON AES.
+- ✅ **MTOM/SOAP**: envelope multipart/related con XOP Include, operazione
+  `inviaFileMtom`, ZIP allegato come base64 (`cid:...@sistemats`).
+- ✅ **ZIP in memoria**: costruito a mano con `zlib.deflateRaw` + header ZIP + CRC32
+  (Node non ha ZIP nativo).
+- ✅ **Autenticazione**: HTTP Basic Auth (username + password), DISTINTA dal pincode
+  (il pincode cifra i dati, le credenziali autenticano la chiamata).
+- ✅ **Blocco proprietario**: richiede `codiceRegione` + `codiceAsl` + `codiceSSA`
+  (ricavati dal codice ufficio formato `regione-asl-ssa`) + `cfProprietario` cifrato.
+- ✅ **CF proprietario** = soggetto autenticato (devono coincidere).
+- ✅ **TLS**: l'endpoint di TEST usa CA privata Sogei non pubblica → `rejectUnauthorized:
+  false` SOLO in test. In produzione (catena Sectigo pubblica) la verifica resta attiva.
+- ✅ **tipoSpesa**: `SR`. **IVA**: `naturaIVA N2` (esente). **tipoDocumento**: `F` (fattura).
+- ✅ **UI**: voce "📋 Sistema TS / 730" nel menu hamburger; archivio prestazioni
+  (solo non-annullati con CF) con checkbox per selezionare e importo modificabile.
+  File: `frontend/index.html`, `frontend/js/app.js`, route `src/routes/sistemaTS.js`.
 
-### Architettura finale prevista
+### Credenziali di TEST (valori pubblici fissi del kit MEF, hardcoded in test mode)
+Repo di riferimento: github.com/BigNerd95/STSClient
 ```
-Paziente paga (Stripe) → RefertEco crea fattura su Aruba FE → numero fattura
-→ Sistema TS usa quel numero come numDocumento
+username:       A9AZOS61
+password:       Salve123
+pincode:        5485370458
+cfProprietario: PROVAX00X00X000Y
+partita IVA:    98765432104
+codice ufficio: 604-120-010011  (regione=604, asl=120, ssa=010011)
 ```
-Il numero di documento da usare nel XML = **numero della fattura elettronica Aruba**
-(non un ID interno). Quindi il Sistema TS dipende dall'integrazione Aruba.
+In `sistemaTS.js`: se `SISTEMA_TS_TEST=true` usa questi valori e l'endpoint
+`invioSS730pTest.sanita.finanze.it`; altrimenti usa le variabili reali e `invioss730p`.
 
-### Cosa fare quando si vuole attivare
-1. Confermare tipoSpesa e IVA con il commercialista.
-2. Riscrivere la cifratura in `sistemaTS.js` con RSA/SanitelCF.cer.
-3. Testare sull'ambiente MEF di test (credenziali in UtenzeTestMedico.txt).
-4. Integrare con Aruba per il numero fattura (vedi sezione 14).
-5. Committare UI e routes del gestionale.
+### Variabili Railway (produzione reale)
+`SISTEMA_TS_CF_EROGATORE`, `SISTEMA_TS_PIVA`, `SISTEMA_TS_CODICE_UFFICIO`,
+`SISTEMA_TS_PINCODE`, `SISTEMA_TS_USERNAME`, `SISTEMA_TS_PASSWORD`.
+Il `SISTEMA_TS_CODICE_UFFICIO` reale DEVE essere nel formato `regione-asl-ssa`.
+
+### Database
+Colonna `appuntamenti.invia_sistema_ts` BOOLEAN DEFAULT false
+(true = già inviato al TS). Importo da `importo_pagato_cent`.
+
+### Per passare alla PRODUZIONE reale
+1. Verificare che tutte le 6 variabili Railway reali siano corrette
+   (incluso `SISTEMA_TS_CODICE_UFFICIO` nel formato con trattini).
+2. Impostare `SISTEMA_TS_TEST=false` su Railway.
+3. Confermare con il commercialista tipoSpesa (SR) e naturaIVA (N2).
+4. Il `numDocumento` nell'XML = numero fattura digitato a mano nell'appuntamento
+   (vedi sezione 14 — integrazione Aruba abbandonata per costi, si usa campo manuale).
 
 ---
 
