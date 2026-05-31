@@ -373,12 +373,12 @@ function goStep3() {
         </div>
         <div class="field-row">
           <div class="field">
-            <label>CAP *</label>
+            <label>CAP residenza *</label>
             <input type="text" id="f-cap" value="${esc(f.cap)}" placeholder="97016"
               maxlength="5" pattern="[0-9]{5}" autocomplete="postal-code" required>
           </div>
           <div class="field">
-            <label>Comune *</label>
+            <label>Comune di residenza *</label>
             <input type="text" id="f-comune" value="${esc(f.comune)}" placeholder="Pozzallo"
               autocomplete="address-level2" required>
           </div>
