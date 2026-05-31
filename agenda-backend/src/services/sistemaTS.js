@@ -216,6 +216,12 @@ function inviaAlWebService(body, contentType) {
       hostname: url.hostname,
       path:     url.pathname,
       method:   'POST',
+      // L'endpoint di TEST del MEF usa un certificato firmato dalla CA privata
+      // "Sogei Certification Authority Test", non attendibile pubblicamente: in
+      // modalità test disabilitiamo la verifica TLS. In PRODUZIONE l'endpoint usa
+      // una catena Sectigo/USERTrust pubblica e valida, quindi la verifica resta
+      // attiva (rejectUnauthorized: true) per sicurezza.
+      rejectUnauthorized: !TEST_MODE,
       headers:  {
         'Content-Type':   contentType,
         'Content-Length': bodyBuf.length,
