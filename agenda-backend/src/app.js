@@ -102,7 +102,7 @@ async function fallbackPagaInStudio(session) {
   );
 }
 
-app.post('/api/public/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+app.post('/api/public/stripe-webhook', express.raw({ type: '*/*' }), async (req, res) => {
   let event;
   try {
     event = costruisciEventoWebhook(req.body, req.headers['stripe-signature']);
