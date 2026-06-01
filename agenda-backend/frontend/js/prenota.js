@@ -167,6 +167,9 @@ const ST = {
 const main    = () => document.getElementById('pr-main');
 const dots    = n  => document.getElementById(`dot-${n}`);
 const esc     = s  => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// Traduzione nomi esame / categorie in inglese (i dati arrivano in italiano)
+const trNome  = nome => (window.ESAMI_CATEGORIE ? ESAMI_CATEGORIE.nomeTradotto(nome, EN) : nome);
+const trCat   = cat  => (window.ESAMI_CATEGORIE ? ESAMI_CATEGORIE.catTradotta(cat, EN) : cat);
 
 // Applica le traduzioni alle parti statiche dell'HTML (header, step)
 function applyStaticI18n() {
@@ -275,7 +278,7 @@ function renderEsamiGrid() {
     return `<div class="esame-item${e.id === ST.esameId ? ' selected' : ''}" onclick="selectEsame('${e.id}')">
       <div class="esame-icon">${getIcon(e.nome)}</div>
       <div>
-        <div class="esame-nome">${esc(e.nome)}</div>
+        <div class="esame-nome">${esc(trNome(e.nome))}</div>
         <div class="esame-durata">⏱ ${e.durata_minuti} ${T.minutes} · €80</div>
       </div>
       <div class="esame-arrow">›</div>
@@ -288,7 +291,7 @@ function renderEsamiGrid() {
 
   return ESAMI_CATEGORIE.raggruppa(ST.esami).map(function (g) {
     return `<div class="esame-section">
-      <div class="esame-section-title">${esc(g.cat)}</div>
+      <div class="esame-section-title">${esc(trCat(g.cat))}</div>
       <div class="esame-grid">${g.items.map(renderItem).join('')}</div>
     </div>`;
   }).join('');
@@ -315,7 +318,7 @@ function renderEsameSceltoStep1() {
       <div class="esame-item selected" style="cursor:default">
         <div class="esame-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h4l2.5-6 4 13 3-8 1.5 3H22"/></svg></div>
         <div>
-          <div class="esame-nome">${esc(ST.esameName)}</div>
+          <div class="esame-nome">${esc(trNome(ST.esameName))}</div>
           <div class="esame-durata">⏱ 30 ${T.minutes} · €80</div>
         </div>
       </div>
@@ -334,7 +337,7 @@ async function goStep2() {
   updateDots(2);
   main().innerHTML = `
     <div class="pr-card">
-      <div class="pr-card-title">${T.chooseTheDate} <span>· ${esc(ST.esameName)}</span></div>
+      <div class="pr-card-title">${T.chooseTheDate} <span>· ${esc(trNome(ST.esameName))}</span></div>
       <div class="pr-card-body">
         ${prepBlock()}
         <div id="date-wrap"><div class="pr-loader"><div class="pr-spinner"></div><br>${T.checkingAvail}</div></div>
@@ -643,7 +646,7 @@ function goStep4() {
         <div class="recap">
           <div class="recap-row">
             <div class="recap-icon">🩺</div>
-            <div><div class="recap-lbl">${T.lblExam}</div><div class="recap-val">${esc(ST.esameName)}</div></div>
+            <div><div class="recap-lbl">${T.lblExam}</div><div class="recap-val">${esc(trNome(ST.esameName))}</div></div>
           </div>
           <div class="recap-row">
             <div class="recap-icon">💶</div>
