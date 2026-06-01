@@ -32,6 +32,17 @@ const server = http.createServer(app);
 // ─── Middleware ───────────────────────────────────────────────────────────
 app.use(cors());
 
+// ─── Sottodominio conferma.studiosusino.it ────────────────────────────────
+// Questo dominio serve SOLO le pagine di conferma presenza paziente (/p/...).
+// Se qualcuno apre la radice o un altro percorso, lo mandiamo al sito vetrina
+// così non viene esposto il login dell'agenda su quel sottodominio.
+app.use((req, res, next) => {
+  if (req.hostname === 'conferma.studiosusino.it' && !req.path.startsWith('/p/') && req.path !== '/p') {
+    return res.redirect(302, 'https://studiosusino.it');
+  }
+  next();
+});
+
 // ─── Webhook Stripe (pagamento visita) ────────────────────────────────────
 // DEVE stare PRIMA di express.json(): la verifica della firma richiede il
 // body grezzo.
