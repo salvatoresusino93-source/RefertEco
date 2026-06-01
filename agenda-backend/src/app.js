@@ -24,6 +24,7 @@ const prenotaRoutes           = require('./routes/prenota');
 const indisponibilitaRoutes   = require('./routes/indisponibilita');
 const fattureRoutes           = require('./routes/fatture');
 const sistemaTSRoutes         = require('./routes/sistemaTS');
+const presenzaRoutes          = require('./routes/presenza');
 
 const app    = express();
 const server = http.createServer(app);
@@ -147,6 +148,7 @@ app.use('/api/prenota',           prenotaRoutes);        // no auth — conferma
 app.use('/api/indisponibilita',   indisponibilitaRoutes);
 app.use('/api/fatture',           fattureRoutes);
 app.use('/api/sistema-ts',        sistemaTSRoutes);
+app.use('/p',                     presenzaRoutes);        // no auth — conferma presenza paziente via SMS
 
 // ─── Health check ────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

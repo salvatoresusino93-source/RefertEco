@@ -2,8 +2,25 @@
 // SERVIZIO SMS — SMS Hosting REST API
 // ═══════════════════════════════════════════════════════════════════════════
 
-const STUDIO = process.env.STUDIO_NOME     || 'Studio Medico';
-const TEL    = process.env.STUDIO_TELEFONO || '';
+const crypto   = require('crypto');
+const supabase = require('./supabase');
+
+const STUDIO   = process.env.STUDIO_NOME     || 'Studio Medico';
+const TEL      = process.env.STUDIO_TELEFONO || '';
+const BASE_URL = process.env.APP_URL    || 'https://referteco-production.up.railway.app';
+const SITO     = process.env.STUDIO_SITO || 'studiosusino.it';
+
+// ─── Genera/recupera il link di conferma presenza per un appuntamento ─────
+// Usa un token breve salvato su DB (conferma_token) così l'URL nell'SMS resta
+// corto. Se il token non esiste ancora, lo crea e lo salva.
+async function urlConferma(app) {
+  let token = app.conferma_token;
+  if (!token) {
+    token = crypto.randomBytes(5).toString('base64url'); // ~7 caratteri
+    await supabase.from('appuntamenti').update({ conferma_token: token }).eq('id', app.id);
+  }
+  return `${BASE_URL}/p/${token}`;
+}
 
 // ─── Normalizza numero italiano → formato E.164 (+39XXXXXXXXXX) ───────────
 function normalizzaNumero(tel) {
@@ -84,11 +101,13 @@ async function inviaPromemoria(appuntamento) {
   const ora   = fmtOra(appuntamento.data_ora_inizio);
   const esame = appuntamento.tipi_prestazione?.nome || 'visita';
 
+  const link = await urlConferma(appuntamento);
+
   const testo =
-    `PROMEMORIA: Gentile paziente, le ricordiamo il suo appuntamento ` +
-    `di domani ${data} alle ore ${ora} ` +
-    `per ${esame} presso lo ${STUDIO}.` +
-    (TEL ? ` Per info: ${TEL}.` : '');
+    `Promemoria ${STUDIO}: appuntamento domani ${data} ore ${ora} per ${esame}. ` +
+    `Conferma o disdici qui: ${link} ` +
+    `Info: ${SITO}` +
+    (TEL ? ` - ${TEL}` : '');
 
   const result = await inviaSms(numero, testo);
   return { sid: result.id || 'ok', numero, testo };
