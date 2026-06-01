@@ -47,7 +47,7 @@
     const en = (typeof document !== 'undefined') && document.documentElement.lang === 'en';
     const text = en
       ? '<strong>Exam preparation:</strong><br>' +
-        'Come <strong>FASTING</strong> (at least 6 hours) and with a <strong>FULL BLADDER</strong>.'
+        'Please come on an <strong>EMPTY STOMACH</strong> (fasting, at least 6 hours) and with a <strong>FULL BLADDER</strong>.'
       : '<strong>Preparazione per l\'esame:</strong><br>' +
         'Venire a <strong>DIGIUNO</strong> (almeno 6 ore) e con <strong>VESCICA PIENA</strong>.';
     return (
