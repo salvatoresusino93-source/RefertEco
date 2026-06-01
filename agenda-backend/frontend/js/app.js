@@ -256,10 +256,12 @@ function renderCalendar() {
       const stato   = a.stato || 'prenotato';
       const pazNome = a.pazienti ? `${esc(a.pazienti.cognome)} ${esc(a.pazienti.nome)}` : '—';
       const esame   = esc(a.tipi_prestazione?.nome || '');
+      const conf    = a.conferma_paziente === 'confermato' ? ' ✅' : '';
+      const confTitle = a.conferma_paziente === 'confermato' ? ' — presenza confermata' : '';
       appHtml += `<div class="cal-app stato-${stato}" style="top:${top}px;height:${height}px"
-        onclick="onAppClick('${a.id}',event)" title="${pazNome} — ${esame}">
+        onclick="onAppClick('${a.id}',event)" title="${pazNome} — ${esame}${confTitle}">
         <div class="cal-app-time">${fmtTime(a.data_ora_inizio)}</div>
-        <div class="cal-app-nome">${pazNome}</div>
+        <div class="cal-app-nome">${pazNome}${conf}</div>
         ${height>=50?`<div class="cal-app-esame">${esame}</div>`:''}
       </div>`;
     }
