@@ -69,6 +69,14 @@ async function inviaPromemoriDomani() {
       continue;
     }
 
+    // Chi ha già pagato (online) NON riceve SMS: ha già conferma e ricevuta
+    // via email, ed è il paziente meno a rischio di no-show.
+    if (app.pagamento_stato === 'pagato') {
+      console.log(`  [SALTATO] ${nome} — ha già pagato online (nessun SMS)`);
+      saltati++;
+      continue;
+    }
+
     try {
       const result = await inviaPromemoria(app);
       console.log(`  [OK] ${nome} → ${result.numero} (SID: ${result.sid})`);
@@ -106,6 +114,11 @@ async function controllaSmsUnaOra() {
     if (!telefono) continue;
     if (app.invia_sms_promemoria === false) {
       console.log(`[SMS 1h] Saltato ${nome} — promemoria SMS disattivato`);
+      continue;
+    }
+    // Chi ha già pagato online non riceve SMS
+    if (app.pagamento_stato === 'pagato') {
+      console.log(`[SMS 1h] Saltato ${nome} — ha già pagato online`);
       continue;
     }
 
