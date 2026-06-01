@@ -5,6 +5,7 @@
 const express  = require('express');
 const { requireAuth } = require('../middleware/auth');
 const {
+  leggiOrari,
   aggiornaOreSettimana,
   impostaOrariBase,
   impostaUrlPrenotazione,
@@ -150,6 +151,17 @@ router.post('/set-regular-hours', requireAuth, async (req, res) => {
       message: 'Orari settimanali base impostati su Google Business Profile',
       orari:   'Martedì: 9-13 e 15-19 | Venerdì: 9-13 e 15-19 | Altri giorni: chiuso',
     });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── GET /api/gbp/orari-attuali — legge gli orari salvati su Google ───────
+// Verifica cosa Google ha effettivamente accettato (regularHours + specialHours)
+router.get('/orari-attuali', requireAuth, async (req, res) => {
+  try {
+    const orari = await leggiOrari();
+    res.json(orari);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

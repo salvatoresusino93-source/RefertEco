@@ -136,6 +136,28 @@ async function getLocationName(token) {
   return loc.name; // "locations/XXXXXXXXXXXXXXXXXX"
 }
 
+// ─── Legge gli orari attualmente registrati su Google ────────────────────
+// Serve a verificare cosa Google ha effettivamente accettato/salvato.
+async function leggiOrari() {
+  const token        = await refreshAccessToken();
+  const locationName = await getLocationName(token);
+
+  const res = await fetch(
+    `https://mybusinessbusinessinformation.googleapis.com/v1/${locationName}?readMask=title,regularHours,specialHours`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(`GBP leggiOrari error: ${JSON.stringify(data)}`);
+  }
+  return {
+    location:     locationName,
+    title:        data.title || null,
+    regularHours: data.regularHours || null,
+    specialHours: data.specialHours || null,
+  };
+}
+
 // ─── Imposta orari settimanali base (da eseguire una volta) ──────────────
 async function impostaOrariBase() {
   const token        = await refreshAccessToken();
@@ -368,6 +390,7 @@ async function impostaUrlPrenotazione(bookingUrl) {
 }
 
 module.exports = {
+  leggiOrari,
   aggiornaOreSettimana,
   impostaOrariBase,
   impostaUrlPrenotazione,
