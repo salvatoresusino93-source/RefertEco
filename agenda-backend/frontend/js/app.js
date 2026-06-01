@@ -545,6 +545,7 @@ async function loadAppInModal(id) {
     $('app-invia-sms').checked = a.invia_sms_promemoria !== false; // default true
     $('field-stato').style.display = '';
     renderStatoBtns(a.stato);
+    renderConfermaPaziente(a);
     renderFatturaBox(a);
   } catch { alert('Errore nel caricamento'); closeModal(); }
 }
@@ -613,6 +614,20 @@ function renderStatoBtns(attuale) {
     `<button class="stato-btn stato-${s}${s===attuale?' active':''}"
       data-stato="${s}" onclick="clickStato(this,'${s}')">${STATI[s]}</button>`
   ).join('');
+}
+
+function renderConfermaPaziente(a) {
+  // Mostra un banner se il paziente ha confermato la presenza via SMS
+  const esistente = document.getElementById('banner-conferma-paz');
+  if (esistente) esistente.remove();
+  if (a.conferma_paziente !== 'confermato') return;
+
+  const div = document.createElement('div');
+  div.id = 'banner-conferma-paz';
+  div.style.cssText = 'background:#dcfce7;border:1px solid #86efac;border-radius:6px;' +
+    'padding:8px 10px;margin-bottom:8px;font-size:12px;color:#166534;font-weight:600;';
+  div.innerHTML = '✅ Presenza confermata dal paziente';
+  $('stato-btns').insertAdjacentElement('beforebegin', div);
 }
 
 function clickStato(btn, stato) {
