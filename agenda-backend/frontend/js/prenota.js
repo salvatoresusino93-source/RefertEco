@@ -1,6 +1,139 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// PRENOTA.JS — Prenotazione online per i pazienti
+// PRENOTA.JS — Prenotazione online per i pazienti (bilingue IT/EN)
+// La lingua si attiva con ?lang=en nell'URL.
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ─── Lingua e dizionario ──────────────────────────────────────────────────
+const LANG = (new URLSearchParams(window.location.search).get('lang') === 'en') ? 'en' : 'it';
+const EN   = LANG === 'en';
+const SITE_URL = EN ? 'https://studiosusino.it/index-en.html' : 'https://studiosusino.it/';
+const NEW_BOOKING_URL = EN ? '/prenota?lang=en' : '/prenota';
+
+const T = EN ? {
+  // header / steps
+  backSite: '← Back to site', headerTitle: 'Book an exam',
+  stExam: 'Exam', stDate: 'Date', stData: 'Details', stConfirm: 'Confirm',
+  // step 1
+  whichExam: 'Which exam would you like to book?', loadingExams: 'Loading exams…',
+  loadExamsErr: 'Unable to load the exams. Please reload the page.',
+  noExams: 'No exams available at the moment.',
+  minutes: 'minutes', selectedExam: 'Selected exam',
+  changeExam: '← Change exam', chooseDate: 'Choose date →',
+  // step 2
+  chooseTheDate: 'Choose the date', checkingAvail: 'Checking availability…',
+  loadAvailErr: 'Unable to load availability. Please try again shortly.',
+  goBack: '← Go back', noSlots: 'No slots available in the next 45 days.',
+  tryLater: 'Try again later or contact the practice.',
+  times: 'times', changeDate: '← Change date',
+  chooseTime: 'Choose the time', morning: '🌅 Morning', afternoon: '🌆 Afternoon',
+  // step 3
+  yourDetails: 'Your details', surname: 'Surname', firstName: 'First name',
+  birthDate: 'Date of birth', sex: 'Sex', male: 'Male', female: 'Female',
+  phone: 'Phone', email: 'Email', emailPh: 'name@example.com',
+  taxCode: 'Tax code (Codice Fiscale)', street: 'Street / Address', streetPh: 'Via Roma',
+  houseNo: 'House no.', postcode: 'Postcode (CAP)', town: 'Town of residence', townPh: 'Pozzallo',
+  notes: 'Additional notes (optional)', notesPh: 'E.g. allergies, clinical notes…',
+  privacyPre: "I have read the ", privacyLink: 'privacy policy',
+  privacyPost: " and consent to the processing of my personal data, including health data, for managing the booking.",
+  next: 'Next →',
+  // validations
+  vName: 'Please enter your surname and first name.', vBirth: 'Please enter your date of birth.',
+  vPhone: 'Please enter your phone number.', vEmail: 'Please enter your email address.',
+  vEmailValid: 'Please enter a valid email address.', vCf: 'Please enter your tax code.',
+  vCfValid: 'Please enter a valid tax code (16 characters).',
+  vStreet: 'Please enter your street and address.', vCivico: 'Please enter the house number.',
+  vCap: 'Please enter a valid postcode (5 digits).', vComune: 'Please enter your town of residence.',
+  vPrivacy: 'You must accept the privacy policy to continue.',
+  // step 4
+  summary: 'Booking summary', lblExam: 'Exam', lblCost: 'Cost', lblDateTime: 'Date and time',
+  at: 'at', lblPatient: 'Patient', lblPhone: 'Phone', lblEmail: 'Email',
+  lblTaxCode: 'Tax code', lblResidence: 'Residence', lblNotes: 'Notes',
+  immConfirm: 'Immediate confirmation', recommended: 'RECOMMENDED',
+  payOnlineDesc1: 'Pay the full amount of ', payOnlineDesc2: ' now by card: your booking is ',
+  confirmedNow: 'confirmed immediately', payAtStudio: 'Pay at the practice',
+  payAtStudioDesc: 'No payment now. The booking will be confirmed by the doctor and you will receive an SMS.',
+  noteOnlinePaid: ' Paying online, your booking is ', noteConfirmedNow: 'confirmed immediately',
+  noteSmsTo: ' You will receive a confirmation ', noteSms: 'SMS', noteToNumber: ' at the number ',
+  noteNeedsApproval: ' The booking must be approved by the doctor.',
+  submitPay: '💳 Pay and confirm', submitConfirm: '✅ Confirm booking',
+  sending: 'Sending…', redirecting: 'Redirecting to payment…',
+  slotTaken: 'Slot no longer available. Please choose another time.',
+  serverErr: 'Server error', networkErr: 'Network error. Please try again.',
+  // success
+  sentTitle: 'Booking sent!', sentP1: 'Your request has been received.',
+  sentP2a: 'The doctor will review it and you will receive a ', sentP2b: 'confirmation by SMS',
+  sentP2c: ' at the number ',
+  sentHelp: 'If you have any problems or need information,<br>please contact the practice by phone.',
+  backToSite: 'Back to site',
+  // payment result
+  payOkTitle: 'Payment received!', payOkP1a: 'Your booking is ', payOkP1b: 'confirmed',
+  payOkP2a: 'You will shortly receive an ', payOkP2b: 'SMS confirmation', payOkP2c: ' with the date and time.',
+  payOkNote: 'Payment completed: no waiting for confirmation.',
+  payKoTitle: 'Payment cancelled', payKoP1: 'Nothing was charged.',
+  payKoP2a: 'Your booking request is still recorded and will be ', payKoP2b: 'confirmed by the doctor',
+  payKoP2c: ': you will receive an ', payKoP2d: 'SMS',
+  payKoNote: 'Want immediate confirmation? Try booking again and choose online payment.',
+  newBooking: 'New booking',
+} : {
+  backSite: '← Torna al sito', headerTitle: 'Prenota un esame',
+  stExam: 'Esame', stDate: 'Data', stData: 'Dati', stConfirm: 'Conferma',
+  whichExam: 'Quale esame vuoi prenotare?', loadingExams: 'Caricamento esami…',
+  loadExamsErr: 'Impossibile caricare gli esami. Ricarica la pagina.',
+  noExams: 'Nessun esame disponibile al momento.',
+  minutes: 'minuti', selectedExam: 'Esame selezionato',
+  changeExam: '← Cambia esame', chooseDate: 'Scegli data →',
+  chooseTheDate: 'Scegli la data', checkingAvail: 'Controllo disponibilità…',
+  loadAvailErr: 'Impossibile caricare le disponibilità. Riprova tra poco.',
+  goBack: '← Torna indietro', noSlots: 'Nessuno slot disponibile nei prossimi 45 giorni.',
+  tryLater: 'Riprova più tardi o contatta lo studio.',
+  times: 'orari', changeDate: '← Cambia data',
+  chooseTime: "Scegli l'orario", morning: '🌅 Mattina', afternoon: '🌆 Pomeriggio',
+  yourDetails: 'I tuoi dati', surname: 'Cognome', firstName: 'Nome',
+  birthDate: 'Data di nascita', sex: 'Sesso', male: 'Maschio', female: 'Femmina',
+  phone: 'Telefono', email: 'Email', emailPh: 'nome@esempio.it',
+  taxCode: 'Codice Fiscale', street: 'Via / Indirizzo', streetPh: 'Via Roma',
+  houseNo: 'N° civico', postcode: 'CAP', town: 'Comune di residenza', townPh: 'Pozzallo',
+  notes: 'Note aggiuntive (opzionale)', notesPh: 'Es. allergie, particolarità cliniche…',
+  privacyPre: "Ho letto l'", privacyLink: 'informativa sulla privacy',
+  privacyPost: " e acconsento al trattamento dei miei dati personali, inclusi i dati sanitari, per la gestione della prenotazione.",
+  next: 'Avanti →',
+  vName: 'Inserisci cognome e nome.', vBirth: 'Inserisci la data di nascita.',
+  vPhone: 'Inserisci il numero di telefono.', vEmail: "Inserisci l'indirizzo email.",
+  vEmailValid: 'Inserisci un indirizzo email valido.', vCf: 'Inserisci il codice fiscale.',
+  vCfValid: 'Inserisci un codice fiscale valido (16 caratteri).',
+  vStreet: 'Inserisci via e indirizzo.', vCivico: 'Inserisci il numero civico.',
+  vCap: 'Inserisci un CAP valido (5 cifre).', vComune: 'Inserisci il comune di residenza.',
+  vPrivacy: "Devi accettare l'informativa sulla privacy per procedere.",
+  summary: 'Riepilogo prenotazione', lblExam: 'Esame', lblCost: 'Costo', lblDateTime: 'Data e ora',
+  at: 'alle', lblPatient: 'Paziente', lblPhone: 'Telefono', lblEmail: 'Email',
+  lblTaxCode: 'Codice Fiscale', lblResidence: 'Residenza', lblNotes: 'Note',
+  immConfirm: 'Conferma immediata', recommended: 'CONSIGLIATO',
+  payOnlineDesc1: "Paga ora l'intero importo di ", payOnlineDesc2: ' con carta: la prenotazione è ',
+  confirmedNow: 'confermata subito', payAtStudio: 'Paga in studio',
+  payAtStudioDesc: 'Nessun pagamento adesso. La prenotazione sarà confermata dal medico e riceverai un SMS.',
+  noteOnlinePaid: ' Pagando online la prenotazione è ', noteConfirmedNow: 'confermata subito',
+  noteSmsTo: ' Riceverai un ', noteSms: 'SMS', noteToNumber: ' di conferma al numero ',
+  noteNeedsApproval: ' La prenotazione deve essere approvata dal medico.',
+  submitPay: '💳 Paga e conferma', submitConfirm: '✅ Conferma prenotazione',
+  sending: 'Invio in corso…', redirecting: 'Reindirizzamento al pagamento…',
+  slotTaken: 'Slot non più disponibile. Scegli un altro orario.',
+  serverErr: 'Errore del server', networkErr: 'Errore di rete. Riprova.',
+  sentTitle: 'Prenotazione inviata!', sentP1: 'La tua richiesta è stata ricevuta.',
+  sentP2a: 'Il medico la esaminerà e riceverai una ', sentP2b: 'conferma via SMS',
+  sentP2c: ' al numero ',
+  sentHelp: 'In caso di problemi o per informazioni,<br>contatta lo studio telefonicamente.',
+  backToSite: 'Torna al sito',
+  payOkTitle: 'Pagamento ricevuto!', payOkP1a: 'La tua prenotazione è ', payOkP1b: 'confermata',
+  payOkP2a: 'Riceverai a breve un ', payOkP2b: 'SMS di conferma', payOkP2c: ' con data e ora.',
+  payOkNote: 'Pagamento completato: nessuna attesa di conferma.',
+  payKoTitle: 'Pagamento annullato', payKoP1: 'Non è stato addebitato nulla.',
+  payKoP2a: 'La tua richiesta di prenotazione è comunque registrata e sarà ', payKoP2b: 'confermata dal medico',
+  payKoP2c: ': riceverai un ', payKoP2d: 'SMS',
+  payKoNote: 'Vuoi la conferma immediata? Riprova la prenotazione scegliendo il pagamento online.',
+  newBooking: 'Nuova prenotazione',
+};
+
+const LOCALE = EN ? 'en-GB' : 'it-IT';
 
 // ─── Stato globale ────────────────────────────────────────────────────────
 const ST = {
@@ -35,6 +168,21 @@ const main    = () => document.getElementById('pr-main');
 const dots    = n  => document.getElementById(`dot-${n}`);
 const esc     = s  => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
+// Applica le traduzioni alle parti statiche dell'HTML (header, step)
+function applyStaticI18n() {
+  const back = document.querySelector('.pr-header-back');
+  if (back) back.textContent = T.backSite;
+  const h1 = document.querySelector('.pr-header h1');
+  if (h1) h1.textContent = T.headerTitle;
+  if (back) back.setAttribute('href', SITE_URL);
+  const labels = [T.stExam, T.stDate, T.stData, T.stConfirm];
+  for (let i = 1; i <= 4; i++) {
+    const small = document.querySelector(`#dot-${i} small`);
+    if (small) small.textContent = labels[i - 1];
+  }
+  if (EN) document.documentElement.lang = 'en';
+}
+
 function prepBlock() {
   if (!ST.esameName || !window.PREPARAZIONE_ESAMI) return '';
   if (!PREPARAZIONE_ESAMI.richiedePreparazione(ST.esameName)) return '';
@@ -64,7 +212,7 @@ function updateDots(currentStep) {
 
 // ─── Formato ora locale ───────────────────────────────────────────────────
 function fmtOra(iso) {
-  return new Date(iso).toLocaleTimeString('it-IT', {
+  return new Date(iso).toLocaleTimeString(LOCALE, {
     hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome'
   });
 }
@@ -72,7 +220,7 @@ function fmtOra(iso) {
 // ─── Formato importo in euro da centesimi (es. 2000 → "20") ───────────────
 function fmtEuroCent(cent) {
   const v = (cent || 0) / 100;
-  return v.toLocaleString('it-IT', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  return v.toLocaleString(LOCALE, { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 });
 }
 
 // ─── Scelta modalità di pagamento allo Step 4 ─────────────────────────────
@@ -82,7 +230,7 @@ function setPaga(online) {
 }
 
 function labelSubmit() {
-  return (ST.config.pagamenti_attivi && ST.pagaOnline) ? '💳 Paga e conferma' : '✅ Conferma prenotazione';
+  return (ST.config.pagamenti_attivi && ST.pagaOnline) ? T.submitPay : T.submitConfirm;
 }
 
 // ─── STEP 1 — Selezione esame ─────────────────────────────────────────────
@@ -90,9 +238,9 @@ async function goStep1() {
   ST.step = 1;
   updateDots(1);
   main().innerHTML = `<div class="pr-card">
-    <div class="pr-card-title">Quale esame vuoi prenotare?</div>
+    <div class="pr-card-title">${T.whichExam}</div>
     <div class="pr-card-body">
-      <div id="esami-wrap"><div class="pr-loader"><div class="pr-spinner"></div><br>Caricamento esami…</div></div>
+      <div id="esami-wrap"><div class="pr-loader"><div class="pr-spinner"></div><br>${T.loadingExams}</div></div>
     </div>
   </div>`;
 
@@ -104,14 +252,14 @@ async function goStep1() {
       ST.esami = dedupeEsami(await r.json());
     } catch (e) {
       document.getElementById('esami-wrap').innerHTML =
-        `<div class="pr-error">Impossibile caricare gli esami. Ricarica la pagina.</div>`;
+        `<div class="pr-error">${T.loadExamsErr}</div>`;
       return;
     }
   }
 
   if (ST.esami.length === 0) {
     document.getElementById('esami-wrap').innerHTML =
-      `<div class="pr-empty"><div class="pr-empty-icon">🩺</div>Nessun esame disponibile al momento.</div>`;
+      `<div class="pr-empty"><div class="pr-empty-icon">🩺</div>${T.noExams}</div>`;
     return;
   }
 
@@ -120,7 +268,6 @@ async function goStep1() {
 
 function renderEsamiGrid() {
   function getIcon() {
-    // Icona unica e uniforme: linea "battito" (ecografia/diagnostica)
     return '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h4l2.5-6 4 13 3-8 1.5 3H22"/></svg>';
   }
 
@@ -129,7 +276,7 @@ function renderEsamiGrid() {
       <div class="esame-icon">${getIcon(e.nome)}</div>
       <div>
         <div class="esame-nome">${esc(e.nome)}</div>
-        <div class="esame-durata">⏱ ${e.durata_minuti} minuti · 80 €</div>
+        <div class="esame-durata">⏱ ${e.durata_minuti} ${T.minutes} · €80</div>
       </div>
       <div class="esame-arrow">›</div>
     </div>`;
@@ -163,19 +310,19 @@ function renderEsameSceltoStep1() {
   ST.step = 1;
   updateDots(1);
   main().innerHTML = `<div class="pr-card">
-    <div class="pr-card-title">Esame selezionato</div>
+    <div class="pr-card-title">${T.selectedExam}</div>
     <div class="pr-card-body">
       <div class="esame-item selected" style="cursor:default">
         <div class="esame-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h4l2.5-6 4 13 3-8 1.5 3H22"/></svg></div>
         <div>
           <div class="esame-nome">${esc(ST.esameName)}</div>
-          <div class="esame-durata">⏱ 30 minuti · 80 €</div>
+          <div class="esame-durata">⏱ 30 ${T.minutes} · €80</div>
         </div>
       </div>
       ${prepBlock()}
       <div class="pr-btn-row" style="margin-top:16px">
-        <button class="pr-btn-ghost" onclick="goStep1()">← Cambia esame</button>
-        <button class="pr-btn-pri" onclick="goStep2()">Scegli data →</button>
+        <button class="pr-btn-ghost" onclick="goStep1()">${T.changeExam}</button>
+        <button class="pr-btn-pri" onclick="goStep2()">${T.chooseDate}</button>
       </div>
     </div>
   </div>`;
@@ -187,10 +334,10 @@ async function goStep2() {
   updateDots(2);
   main().innerHTML = `
     <div class="pr-card">
-      <div class="pr-card-title">Scegli la data <span>· ${esc(ST.esameName)}</span></div>
+      <div class="pr-card-title">${T.chooseTheDate} <span>· ${esc(ST.esameName)}</span></div>
       <div class="pr-card-body">
         ${prepBlock()}
-        <div id="date-wrap"><div class="pr-loader"><div class="pr-spinner"></div><br>Controllo disponibilità…</div></div>
+        <div id="date-wrap"><div class="pr-loader"><div class="pr-spinner"></div><br>${T.checkingAvail}</div></div>
       </div>
     </div>`;
 
@@ -202,8 +349,8 @@ async function goStep2() {
       ST.giorni = json.giorni || [];
     } catch (e) {
       document.getElementById('date-wrap').innerHTML =
-        `<div class="pr-error">Impossibile caricare le disponibilità. Riprova tra poco.</div>
-         <div style="margin-top:12px"><button class="pr-btn-ghost" onclick="goStep1()">← Torna indietro</button></div>`;
+        `<div class="pr-error">${T.loadAvailErr}</div>
+         <div style="margin-top:12px"><button class="pr-btn-ghost" onclick="goStep1()">${T.goBack}</button></div>`;
       return;
     }
   }
@@ -212,10 +359,10 @@ async function goStep2() {
     document.getElementById('date-wrap').innerHTML = `
       <div class="pr-empty">
         <div class="pr-empty-icon">📅</div>
-        Nessuno slot disponibile nei prossimi 45 giorni.<br>
-        <small style="color:#94a3b8">Riprova più tardi o contatta lo studio.</small>
+        ${T.noSlots}<br>
+        <small style="color:#94a3b8">${T.tryLater}</small>
       </div>
-      <div style="margin-top:12px"><button class="pr-btn-ghost" onclick="goStep1()">← Torna indietro</button></div>`;
+      <div style="margin-top:12px"><button class="pr-btn-ghost" onclick="goStep1()">${T.goBack}</button></div>`;
     return;
   }
 
@@ -224,11 +371,11 @@ async function goStep2() {
       ${ST.giorni.map(g => `
         <div class="date-item${g.data===ST.dataScelta?' selected':''}" onclick="selectData('${g.data}','${esc(g.giorno)}')">
           <div class="date-item-txt">${esc(g.giorno)}</div>
-          <div class="date-item-cnt">${g.slots.length} orari</div>
+          <div class="date-item-cnt">${g.slots.length} ${T.times}</div>
         </div>
       `).join('')}
     </div>
-    <div style="margin-top:14px"><button class="pr-btn-ghost" onclick="goStep1()">← Cambia esame</button></div>`;
+    <div style="margin-top:14px"><button class="pr-btn-ghost" onclick="goStep1()">${T.changeExam}</button></div>`;
 }
 
 function selectData(data, label) {
@@ -243,24 +390,19 @@ function goStep2b() {
   const giorno = ST.giorni.find(g => g.data === ST.dataScelta);
   if (!giorno) return;
 
-  // Tieni riferimento globale agli slot del giorno per selectSlotByIdx
   ST._slotsGiorno = giorno.slots;
 
-  const mattina    = giorno.slots.filter((s, i) => ({ ...s, _idx: i })).filter(s => parseInt(s.ora) < 13);
-  const pomeriggio = giorno.slots.filter((s, i) => ({ ...s, _idx: i })).filter(s => parseInt(s.ora) >= 15);
-
-  // Calcola gli indici originali
   const mattinaI    = giorno.slots.map((s, i) => ({ s, i })).filter(({s}) => parseInt(s.ora) < 13);
   const pomeriggioI = giorno.slots.map((s, i) => ({ s, i })).filter(({s}) => parseInt(s.ora) >= 15);
 
   main().innerHTML = `
     <div class="pr-card">
-      <div class="pr-card-title">Scegli l'orario <span>· ${esc(ST.dataLabel)}</span></div>
+      <div class="pr-card-title">${T.chooseTime} <span>· ${esc(ST.dataLabel)}</span></div>
       <div class="pr-card-body">
         ${prepBlock()}
         ${mattinaI.length > 0 ? `
           <div class="ora-section">
-            <div class="ora-section-lbl">🌅 Mattina</div>
+            <div class="ora-section-lbl">${T.morning}</div>
             <div class="ora-grid">
               ${mattinaI.map(({s, i}) => `
                 <button class="ora-btn${ST.slotScelta?.ora===s.ora?' selected':''}"
@@ -269,7 +411,7 @@ function goStep2b() {
           </div>` : ''}
         ${pomeriggioI.length > 0 ? `
           <div class="ora-section">
-            <div class="ora-section-lbl">🌆 Pomeriggio</div>
+            <div class="ora-section-lbl">${T.afternoon}</div>
             <div class="ora-grid">
               ${pomeriggioI.map(({s, i}) => `
                 <button class="ora-btn${ST.slotScelta?.ora===s.ora?' selected':''}"
@@ -277,7 +419,7 @@ function goStep2b() {
             </div>
           </div>` : ''}
         <div style="margin-top:14px">
-          <button class="pr-btn-ghost" onclick="goStep2()">← Cambia data</button>
+          <button class="pr-btn-ghost" onclick="goStep2()">${T.changeDate}</button>
         </div>
       </div>
     </div>`;
@@ -296,36 +438,36 @@ function goStep3() {
   const f = ST.form;
   main().innerHTML = `
     <div class="pr-card">
-      <div class="pr-card-title">I tuoi dati</div>
+      <div class="pr-card-title">${T.yourDetails}</div>
       <div class="pr-card-body">
         ${prepBlock()}
         <div class="field-row">
           <div class="field">
-            <label>Cognome *</label>
+            <label>${T.surname} *</label>
             <input type="text" id="f-cognome" value="${esc(f.cognome)}" placeholder="Rossi" autocomplete="family-name" required>
           </div>
           <div class="field">
-            <label>Nome *</label>
+            <label>${T.firstName} *</label>
             <input type="text" id="f-nome" value="${esc(f.nome)}" placeholder="Mario" autocomplete="given-name" required>
           </div>
         </div>
         <div class="field-row">
           <div class="field">
-            <label>Data di nascita *</label>
+            <label>${T.birthDate} *</label>
             <input type="date" id="f-nascita" value="${esc(f.data_nascita)}" required>
           </div>
           <div class="field">
-            <label>Sesso</label>
+            <label>${T.sex}</label>
             <select id="f-sesso">
               <option value="">—</option>
-              <option value="M"${f.sesso==='M'?' selected':''}>Maschio</option>
-              <option value="F"${f.sesso==='F'?' selected':''}>Femmina</option>
+              <option value="M"${f.sesso==='M'?' selected':''}>${T.male}</option>
+              <option value="F"${f.sesso==='F'?' selected':''}>${T.female}</option>
             </select>
           </div>
         </div>
         <div class="field-full">
           <div class="field">
-            <label>Telefono *</label>
+            <label>${T.phone} *</label>
             <div class="phone-wrap">
               <select id="f-prefisso" class="phone-prefix" autocomplete="tel-country-code">
                 <option value="+39" data-flag="🇮🇹" selected>🇮🇹 +39</option>
@@ -362,45 +504,45 @@ function goStep3() {
         </div>
         <div class="field-full">
           <div class="field">
-            <label>Email *</label>
-            <input type="email" id="f-email" value="${esc(f.email)}" placeholder="nome@esempio.it" autocomplete="email" required>
+            <label>${T.email} *</label>
+            <input type="email" id="f-email" value="${esc(f.email)}" placeholder="${T.emailPh}" autocomplete="email" required>
           </div>
         </div>
         <div class="field-full">
           <div class="field">
-            <label>Codice Fiscale *</label>
+            <label>${T.taxCode} *</label>
             <input type="text" id="f-cf" value="${esc(f.codice_fiscale)}" placeholder="RSSMRA80A01H501Z"
               autocomplete="off" style="text-transform:uppercase" required>
           </div>
         </div>
         <div class="field-row">
           <div class="field">
-            <label>Via / Indirizzo *</label>
-            <input type="text" id="f-indirizzo" value="${esc(f.indirizzo)}" placeholder="Via Roma"
+            <label>${T.street} *</label>
+            <input type="text" id="f-indirizzo" value="${esc(f.indirizzo)}" placeholder="${T.streetPh}"
               autocomplete="street-address" required>
           </div>
           <div class="field" style="max-width:90px">
-            <label>N° civico *</label>
+            <label>${T.houseNo} *</label>
             <input type="text" id="f-civico" value="${esc(f.civico)}" placeholder="10"
               autocomplete="address-line2" required>
           </div>
         </div>
         <div class="field-row">
           <div class="field" style="max-width:100px">
-            <label>CAP *</label>
+            <label>${T.postcode} *</label>
             <input type="text" id="f-cap" value="${esc(f.cap)}" placeholder="97016"
               maxlength="5" pattern="[0-9]{5}" autocomplete="postal-code" required>
           </div>
           <div class="field">
-            <label>Comune di residenza *</label>
-            <input type="text" id="f-comune" value="${esc(f.comune)}" placeholder="Pozzallo"
+            <label>${T.town} *</label>
+            <input type="text" id="f-comune" value="${esc(f.comune)}" placeholder="${T.townPh}"
               autocomplete="address-level2" required>
           </div>
         </div>
         <div class="field-full">
           <div class="field">
-            <label>Note aggiuntive (opzionale)</label>
-            <textarea id="f-note" rows="2" placeholder="Es. allergie, particolarità cliniche…">${esc(f.note)}</textarea>
+            <label>${T.notes}</label>
+            <textarea id="f-note" rows="2" placeholder="${T.notesPh}">${esc(f.note)}</textarea>
           </div>
         </div>
         <!-- Privacy consent — obbligatorio GDPR -->
@@ -409,21 +551,18 @@ function goStep3() {
             <input type="checkbox" id="f-privacy" ${ST.privacyAccettata ? 'checked' : ''}
               onchange="ST.privacyAccettata=this.checked">
             <span>
-              Ho letto l'<a href="/privacy" target="_blank" class="pr-link">informativa sulla privacy</a>
-              e acconsento al trattamento dei miei dati personali, inclusi i dati sanitari,
-              per la gestione della prenotazione.
+              ${T.privacyPre}<a href="/privacy" target="_blank" class="pr-link">${T.privacyLink}</a>${T.privacyPost}
             </span>
           </label>
         </div>
         <div id="form-err" class="pr-error hidden"></div>
         <div class="pr-btn-row">
           <button class="pr-btn-ghost" onclick="goStep2b()">←</button>
-          <button class="pr-btn-pri" onclick="avanzaStep4()">Avanti →</button>
+          <button class="pr-btn-pri" onclick="avanzaStep4()">${T.next}</button>
         </div>
       </div>
     </div>`;
 
-  // Focus primo campo
   setTimeout(() => {
     const el = document.getElementById('f-cognome');
     if (el && !el.value) el.focus();
@@ -449,29 +588,29 @@ function avanzaStep4() {
 
   errEl.classList.add('hidden');
 
-  if (!cognome || !nome) { showFormErr(errEl, 'Inserisci cognome e nome.'); return; }
-  if (!data_nascita)     { showFormErr(errEl, 'Inserisci la data di nascita.'); return; }
-  if (!telefono)         { showFormErr(errEl, 'Inserisci il numero di telefono.'); return; }
-  if (!email)            { showFormErr(errEl, 'Inserisci l\'indirizzo email.'); return; }
+  if (!cognome || !nome) { showFormErr(errEl, T.vName); return; }
+  if (!data_nascita)     { showFormErr(errEl, T.vBirth); return; }
+  if (!telefono)         { showFormErr(errEl, T.vPhone); return; }
+  if (!email)            { showFormErr(errEl, T.vEmail); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    showFormErr(errEl, 'Inserisci un indirizzo email valido.');
+    showFormErr(errEl, T.vEmailValid);
     return;
   }
-  if (!codice_fiscale)   { showFormErr(errEl, 'Inserisci il codice fiscale.'); return; }
+  if (!codice_fiscale)   { showFormErr(errEl, T.vCf); return; }
   if (!/^[A-Z]{6}[0-9]{2}[A-Z][0-9]{2}[A-Z][0-9]{3}[A-Z]$/.test(codice_fiscale)) {
-    showFormErr(errEl, 'Inserisci un codice fiscale valido (16 caratteri).');
+    showFormErr(errEl, T.vCfValid);
     return;
   }
-  if (!indirizzo) { showFormErr(errEl, 'Inserisci via e indirizzo.'); return; }
-  if (!civico)    { showFormErr(errEl, 'Inserisci il numero civico.'); return; }
+  if (!indirizzo) { showFormErr(errEl, T.vStreet); return; }
+  if (!civico)    { showFormErr(errEl, T.vCivico); return; }
   if (!cap || !/^[0-9]{5}$/.test(cap)) {
-    showFormErr(errEl, 'Inserisci un CAP valido (5 cifre).'); return;
+    showFormErr(errEl, T.vCap); return;
   }
   if (!comune) {
-    showFormErr(errEl, 'Inserisci il comune di residenza.'); return;
+    showFormErr(errEl, T.vComune); return;
   }
   if (!ST.privacyAccettata) {
-    showFormErr(errEl, 'Devi accettare l\'informativa sulla privacy per procedere.');
+    showFormErr(errEl, T.vPrivacy);
     return;
   }
 
@@ -492,60 +631,60 @@ function goStep4() {
 
   const f = ST.form;
   const nascitaFmt = f.data_nascita
-    ? new Date(f.data_nascita + 'T00:00:00').toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' })
+    ? new Date(f.data_nascita + 'T00:00:00').toLocaleDateString(LOCALE, { day:'2-digit', month:'2-digit', year:'numeric' })
     : '—';
   const orarioFmt = ST.slotScelta?.ora || fmtOra(ST.slotScelta?.data_ora_inizio || '');
 
   main().innerHTML = `
     <div class="pr-card">
-      <div class="pr-card-title">Riepilogo prenotazione</div>
+      <div class="pr-card-title">${T.summary}</div>
       <div class="pr-card-body">
         ${prepBlock()}
         <div class="recap">
           <div class="recap-row">
             <div class="recap-icon">🩺</div>
-            <div><div class="recap-lbl">Esame</div><div class="recap-val">${esc(ST.esameName)}</div></div>
+            <div><div class="recap-lbl">${T.lblExam}</div><div class="recap-val">${esc(ST.esameName)}</div></div>
           </div>
           <div class="recap-row">
             <div class="recap-icon">💶</div>
-            <div><div class="recap-lbl">Costo</div><div class="recap-val">80 €</div></div>
+            <div><div class="recap-lbl">${T.lblCost}</div><div class="recap-val">€80</div></div>
           </div>
           <div class="recap-row">
             <div class="recap-icon">📅</div>
             <div>
-              <div class="recap-lbl">Data e ora</div>
-              <div class="recap-val" style="text-transform:capitalize">${esc(ST.dataLabel)} alle <strong>${esc(orarioFmt)}</strong></div>
+              <div class="recap-lbl">${T.lblDateTime}</div>
+              <div class="recap-val" style="text-transform:capitalize">${esc(ST.dataLabel)} ${T.at} <strong>${esc(orarioFmt)}</strong></div>
             </div>
           </div>
           <div class="recap-row">
             <div class="recap-icon">👤</div>
             <div>
-              <div class="recap-lbl">Paziente</div>
+              <div class="recap-lbl">${T.lblPatient}</div>
               <div class="recap-val">${esc(f.cognome)} ${esc(f.nome)} · ${nascitaFmt}</div>
             </div>
           </div>
           <div class="recap-row">
             <div class="recap-icon">📞</div>
-            <div><div class="recap-lbl">Telefono</div><div class="recap-val">${esc(f.telefono)}</div></div>
+            <div><div class="recap-lbl">${T.lblPhone}</div><div class="recap-val">${esc(f.telefono)}</div></div>
           </div>
           <div class="recap-row">
             <div class="recap-icon">✉️</div>
-            <div><div class="recap-lbl">Email</div><div class="recap-val">${esc(f.email)}</div></div>
+            <div><div class="recap-lbl">${T.lblEmail}</div><div class="recap-val">${esc(f.email)}</div></div>
           </div>
           ${f.codice_fiscale ? `
           <div class="recap-row">
             <div class="recap-icon">🪪</div>
-            <div><div class="recap-lbl">Codice Fiscale</div><div class="recap-val">${esc(f.codice_fiscale)}</div></div>
+            <div><div class="recap-lbl">${T.lblTaxCode}</div><div class="recap-val">${esc(f.codice_fiscale)}</div></div>
           </div>` : ''}
           ${f.indirizzo ? `
           <div class="recap-row">
             <div class="recap-icon">📍</div>
-            <div><div class="recap-lbl">Residenza</div><div class="recap-val">${esc(f.indirizzo)} ${esc(f.civico)}, ${esc(f.cap)} ${esc(f.comune)}</div></div>
+            <div><div class="recap-lbl">${T.lblResidence}</div><div class="recap-val">${esc(f.indirizzo)} ${esc(f.civico)}, ${esc(f.cap)} ${esc(f.comune)}</div></div>
           </div>` : ''}
           ${f.note ? `
           <div class="recap-row">
             <div class="recap-icon">📝</div>
-            <div><div class="recap-lbl">Note</div><div class="recap-val">${esc(f.note)}</div></div>
+            <div><div class="recap-lbl">${T.lblNotes}</div><div class="recap-val">${esc(f.note)}</div></div>
           </div>` : ''}
         </div>
         ${ST.config.pagamenti_attivi ? `
@@ -553,23 +692,23 @@ function goStep4() {
           <div onclick="setPaga(true)" style="cursor:pointer;border:2px solid ${ST.pagaOnline?'#16a34a':'#e2e8f0'};background:${ST.pagaOnline?'#f0fdf4':'#fff'};border-radius:12px;padding:14px 16px">
             <div style="display:flex;align-items:center;gap:8px;font-size:15px;color:#1e293b;font-weight:700">
               <span style="width:18px;height:18px;border-radius:50%;border:2px solid ${ST.pagaOnline?'#16a34a':'#cbd5e1'};display:inline-block;position:relative;flex:none">${ST.pagaOnline?'<span style=\'position:absolute;inset:3px;background:#16a34a;border-radius:50%\'></span>':''}</span>
-              Conferma immediata
-              <span style="margin-left:auto;background:#16a34a;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;letter-spacing:.04em">CONSIGLIATO</span>
+              ${T.immConfirm}
+              <span style="margin-left:auto;background:#16a34a;color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;letter-spacing:.04em">${T.recommended}</span>
             </div>
-            <div style="margin-top:6px;font-size:13px;color:#475569;line-height:1.5">Paga ora l'intero importo di <strong>${fmtEuroCent(ST.config.importo_cent)} €</strong> con carta: la prenotazione è <strong>confermata subito</strong>.</div>
+            <div style="margin-top:6px;font-size:13px;color:#475569;line-height:1.5">${T.payOnlineDesc1}<strong>€${fmtEuroCent(ST.config.importo_cent)}</strong>${T.payOnlineDesc2}<strong>${T.confirmedNow}</strong>.</div>
           </div>
           <div onclick="setPaga(false)" style="cursor:pointer;border:2px solid ${!ST.pagaOnline?'#586570':'#e2e8f0'};background:${!ST.pagaOnline?'#f8fafc':'#fff'};border-radius:12px;padding:14px 16px">
             <div style="display:flex;align-items:center;gap:8px;font-size:15px;color:#1e293b;font-weight:700">
               <span style="width:18px;height:18px;border-radius:50%;border:2px solid ${!ST.pagaOnline?'#586570':'#cbd5e1'};display:inline-block;position:relative;flex:none">${!ST.pagaOnline?'<span style=\'position:absolute;inset:3px;background:#586570;border-radius:50%\'></span>':''}</span>
-              Paga in studio
+              ${T.payAtStudio}
             </div>
-            <div style="margin-top:6px;font-size:13px;color:#475569;line-height:1.5">Nessun pagamento adesso. La prenotazione sarà confermata dal medico e riceverai un SMS.</div>
+            <div style="margin-top:6px;font-size:13px;color:#475569;line-height:1.5">${T.payAtStudioDesc}</div>
           </div>
         </div>` : ''}
         <div class="recap-note">
           ${(ST.config.pagamenti_attivi && ST.pagaOnline)
-            ? `💳 Pagando online la prenotazione è <strong>confermata subito</strong>.<br>Riceverai un <strong>SMS</strong> di conferma al numero <strong>${esc(f.telefono)}</strong>.`
-            : `ℹ️ La prenotazione deve essere approvata dal medico.<br>Riceverai una conferma via <strong>SMS</strong> al numero <strong>${esc(f.telefono)}</strong>.`}
+            ? `💳${T.noteOnlinePaid}<strong>${T.noteConfirmedNow}</strong>.<br>${T.noteSmsTo}<strong>${T.noteSms}</strong>${T.noteToNumber}<strong>${esc(f.telefono)}</strong>.`
+            : `ℹ️${T.noteNeedsApproval}<br>${T.noteSmsTo}<strong>${T.noteSms}</strong>${T.noteToNumber}<strong>${esc(f.telefono)}</strong>.`}
         </div>
         <div id="submit-err" class="pr-error hidden"></div>
         <div class="pr-btn-row">
@@ -589,7 +728,7 @@ async function inviaPrenota() {
   errEl.classList.add('hidden');
 
   btn.disabled = true;
-  btn.textContent = 'Invio in corso…';
+  btn.textContent = T.sending;
 
   const f = ST.form;
   const payload = {
@@ -619,25 +758,22 @@ async function inviaPrenota() {
     const data = await r.json();
     if (!r.ok) {
       if (r.status === 409) {
-        // Slot preso — torna alla selezione orario
-        ST.giorni = []; // forza reload disponibilità
-        showFormErr(errEl, data.error || 'Slot non più disponibile. Scegli un altro orario.');
+        ST.giorni = [];
+        showFormErr(errEl, data.error || T.slotTaken);
         btn.disabled = false;
         btn.textContent = labelSubmit();
         return;
       }
-      throw new Error(data.error || 'Errore del server');
+      throw new Error(data.error || T.serverErr);
     }
-    // Pagamento online: vai a Stripe Checkout
     if (data.checkout_url) {
-      btn.textContent = 'Reindirizzamento al pagamento…';
+      btn.textContent = T.redirecting;
       window.location.href = data.checkout_url;
       return;
     }
-    // Paga in studio: successo standard
     goSuccess(f.telefono);
   } catch (e) {
-    showFormErr(errEl, e.message || 'Errore di rete. Riprova.');
+    showFormErr(errEl, e.message || T.networkErr);
     btn.disabled = false;
     btn.textContent = labelSubmit();
   }
@@ -645,22 +781,20 @@ async function inviaPrenota() {
 
 // ─── PAGINA SUCCESSO ──────────────────────────────────────────────────────
 function goSuccess(telefono) {
-  // Nascondi step indicator
   document.getElementById('pr-steps').classList.add('hidden');
 
   main().innerHTML = `
     <div class="pr-card">
       <div class="pr-success">
         <div class="pr-success-icon">✅</div>
-        <h2>Prenotazione inviata!</h2>
-        <p>La tua richiesta è stata ricevuta.</p>
-        <p>Il medico la esaminerà e riceverai una <strong>conferma via SMS</strong>
-           al numero <span class="tel">${esc(telefono)}</span>.</p>
+        <h2>${T.sentTitle}</h2>
+        <p>${T.sentP1}</p>
+        <p>${T.sentP2a}<strong>${T.sentP2b}</strong>${T.sentP2c}<span class="tel">${esc(telefono)}</span>.</p>
         <p style="margin-top:16px;font-size:13px;color:#94a3b8">
-          In caso di problemi o per informazioni,<br>contatta lo studio telefonicamente.
+          ${T.sentHelp}
         </p>
-        <a href="https://studiosusino.it/" class="pr-btn-pri" style="margin-top:24px;text-decoration:none">
-          Torna al sito
+        <a href="${SITE_URL}" class="pr-btn-pri" style="margin-top:24px;text-decoration:none">
+          ${T.backToSite}
         </a>
       </div>
     </div>`;
@@ -676,14 +810,14 @@ function renderEsitoPagamento(ok) {
       <div class="pr-card">
         <div class="pr-success">
           <div class="pr-success-icon">✅</div>
-          <h2>Pagamento ricevuto!</h2>
-          <p>La tua prenotazione è <strong>confermata</strong>.</p>
-          <p>Riceverai a breve un <strong>SMS di conferma</strong> con data e ora.</p>
+          <h2>${T.payOkTitle}</h2>
+          <p>${T.payOkP1a}<strong>${T.payOkP1b}</strong>.</p>
+          <p>${T.payOkP2a}<strong>${T.payOkP2b}</strong>${T.payOkP2c}</p>
           <p style="margin-top:16px;font-size:13px;color:#94a3b8">
-            Pagamento completato: nessuna attesa di conferma.
+            ${T.payOkNote}
           </p>
-          <a href="https://studiosusino.it/" class="pr-btn-pri" style="margin-top:24px;text-decoration:none">
-            Torna al sito
+          <a href="${SITE_URL}" class="pr-btn-pri" style="margin-top:24px;text-decoration:none">
+            ${T.backToSite}
           </a>
         </div>
       </div>`;
@@ -692,15 +826,14 @@ function renderEsitoPagamento(ok) {
       <div class="pr-card">
         <div class="pr-success">
           <div class="pr-success-icon">⚠️</div>
-          <h2>Pagamento annullato</h2>
-          <p>Non è stato addebitato nulla.</p>
-          <p>La tua richiesta di prenotazione è comunque registrata e sarà
-             <strong>confermata dal medico</strong>: riceverai un <strong>SMS</strong>.</p>
+          <h2>${T.payKoTitle}</h2>
+          <p>${T.payKoP1}</p>
+          <p>${T.payKoP2a}<strong>${T.payKoP2b}</strong>${T.payKoP2c}<strong>${T.payKoP2d}</strong>.</p>
           <p style="margin-top:16px;font-size:13px;color:#94a3b8">
-            Vuoi la conferma immediata? Riprova la prenotazione scegliendo il pagamento online.
+            ${T.payKoNote}
           </p>
-          <a href="/prenota" class="pr-btn-pri" style="margin-top:24px;text-decoration:none">
-            Nuova prenotazione
+          <a href="${NEW_BOOKING_URL}" class="pr-btn-pri" style="margin-top:24px;text-decoration:none">
+            ${T.newBooking}
           </a>
         </div>
       </div>`;
@@ -720,14 +853,14 @@ function findEsameFromQuery() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Ritorno da Stripe Checkout
+  applyStaticI18n();
+
   const pagamento = new URLSearchParams(window.location.search).get('pagamento');
   if (pagamento === 'ok' || pagamento === 'annullato') {
     renderEsitoPagamento(pagamento === 'ok');
     return;
   }
 
-  // Configurazione pagamenti (mostra/nasconde la corsia "paga online")
   try {
     const rc = await fetch('/api/public/config');
     if (rc.ok) ST.config = await rc.json();
