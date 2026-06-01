@@ -15,7 +15,10 @@
 
 const SECRET_KEY     = process.env.STRIPE_SECRET_KEY || '';
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
-const BASE_URL       = process.env.PUBLIC_BASE_URL || process.env.APP_URL || 'https://referteco-production.up.railway.app';
+// NB: NON usare APP_URL come fallback — quello punta a conferma.studiosusino.it
+// (dominio dei link SMS, che reindirizza al sito vetrina). Gli URL di ritorno del
+// pagamento devono restare sul dominio dell'app che serve /prenota.
+const BASE_URL       = process.env.PUBLIC_BASE_URL || 'https://referteco-production.up.railway.app';
 
 // Inizializzazione "lazy": se la chiave non è configurata, i pagamenti restano
 // disattivati e la prenotazione online funziona solo in modalità "paga in studio".
@@ -51,7 +54,10 @@ async function creaCheckoutPagamento(app, importoCent) {
 
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
-    payment_method_types: ['card', 'google_pay'],
+    // Solo 'card': Google Pay e Apple Pay vengono offerti automaticamente da
+    // Stripe sotto 'card'. NB: 'google_pay' NON è un payment_method_type valido
+    // e farebbe fallire la creazione del Checkout (fallback a "paga in studio").
+    payment_method_types: ['card'],
     expires_at: Math.floor(Date.now() / 1000) + 30 * 60, // 30 min (minimo Stripe)
     // Email del paziente: pre-compila il campo in Checkout e, soprattutto,
     // imposta `receipt_email` sul PaymentIntent così Stripe invia in automatico
