@@ -1,5 +1,5 @@
 # RESOCONTO — Studio Ecografico Dr. Salvatore Susino
-_Ultimo aggiornamento: 31 maggio 2026_
+_Ultimo aggiornamento: 1 giugno 2026_
 
 Documento di stato del progetto digitale dello studio: sito web, sistema di
 prenotazione (RefertEco), Google Business Profile, integrazioni.
@@ -293,3 +293,77 @@ Il numero della fattura elettronica emessa su Aruba deve alimentare il Sistema T
 - `ARUBA_FE_USERNAME` — username account Aruba FE
 - `ARUBA_FE_PASSWORD` — password account Aruba FE
 - (Mai scriverle in chat o in file di codice)
+
+---
+
+## 15. CONFERMA PRESENZA PAZIENTE via SMS — ✅ ATTIVO (1 giugno 2026)
+### Cosa fa
+Riduce i no-show: il promemoria SMS della sera prima contiene un link con cui il
+paziente conferma o disdice la presenza con un tap (nessuna risposta SMS da parte
+sua, nessun costo per lui).
+
+### Flusso
+1. Cron 19:00 → SMS di promemoria SOLO ai pazienti che **pagano in studio**
+   (chi ha già pagato online è escluso da TUTTI gli SMS — vedi sotto).
+2. SMS contiene: `Conferma o disdici qui: https://conferma.studiosusino.it/p/<token>`
+   + link al sito `studiosusino.it`.
+3. Il paziente apre la pagina `/p/:code` → due pulsanti:
+   - **✅ CONFERMO** → `conferma_paziente='confermato'`; in agenda appare il badge
+     verde ✅ (sia nel modal sia sul blocchetto del calendario).
+   - **❌ NON POSSO VENIRE** → appuntamento `annullato` + email di avviso al medico
+     (così può riempire lo slot).
+
+### Regola SMS aggiornata (chi riceve cosa)
+| Tipo paziente | SMS conferma iniziale | Promemoria sera prima | Promemoria 1h prima |
+|---|---|---|---|
+| Paga ONLINE  | ❌ no | ❌ no | ❌ no |
+| Paga in STUDIO | ✅ sì | ✅ sì (con link conferma) | ✅ sì |
+
+Il filtro è `pagamento_stato === 'pagato'` in `src/services/reminder.js`.
+
+### File coinvolti
+- `src/services/sms.js` — `urlConferma(app)` genera/salva token breve; link nel testo
+- `src/routes/presenza.js` — pagine `/p/:code`, `/p/:code/si`, `/p/:code/no`
+- `src/app.js` — monta `/p`; redirect dominio conferma (vedi sotto)
+- `frontend/js/app.js` — badge ✅ (modal `renderConfermaPaziente` + calendario)
+
+### Database (SQL già eseguito su Supabase)
+```sql
+ALTER TABLE appuntamenti ADD COLUMN IF NOT EXISTS conferma_token TEXT;
+ALTER TABLE appuntamenti ADD COLUMN IF NOT EXISTS conferma_paziente TEXT;
+```
+
+### Testato end-to-end (1 giu 2026)
+SMS reale inviato al numero di lavoro 351 374 6102 → link aperto → CONFERMO →
+`conferma_paziente=confermato` salvato → badge verde in agenda. ✅
+
+---
+
+## 16. DOMINIO conferma.studiosusino.it — ✅ ATTIVO (1 giugno 2026)
+Sottodominio dedicato per i link SMS (più pulito del dominio Railway).
+- **DNS su Aruba**: CNAME `conferma` → `ss2x5b22.up.railway.app` +
+  TXT `_railway-verify.conferma` → `railway-verify=a71d5e20...` (verifica Railway).
+  NB: CNAME e TXT su nomi DIVERSI (il TXT NON è su `conferma`, altrimenti conflitto).
+- **Railway**: Custom Domain aggiunto al servizio RefertEco, SSL emesso.
+- **Env**: `APP_URL=https://conferma.studiosusino.it` su Railway → gli SMS usano questo.
+- **Redirect**: in `app.js`, se si apre `conferma.studiosusino.it` su un percorso
+  diverso da `/p/...`, si viene rimandati (302) a `studiosusino.it` — così il login
+  dell'agenda NON è esposto sul sottodominio pazienti. L'agenda resta accessibile dal
+  suo dominio Railway.
+
+---
+
+## 17. CONTATORE VISITE SITO — Cloudflare Web Analytics ✅ (1 giugno 2026)
+- Strumento: **Cloudflare Web Analytics** (gratis, SENZA cookie, SENZA banner, GDPR-ok).
+- Snippet beacon inserito prima di `</body>` in tutte le 13 pagine HTML del repo
+  `studio-susino-web` (token `0510c857500244ef9115f66be08e0432`).
+- Dashboard: Cloudflare → Analytics & Logs → Web Analytics → studiosusino.it.
+- I dati (visite, pagine, provenienza, dispositivo) compaiono man mano che arrivano
+  visitatori. NON è stato spostato il DNS su Cloudflare: usato solo il beacon JS.
+- Motivo della scelta: Google Analytics avrebbe richiesto il banner cookie; Cloudflare
+  no. Alternative valutate: Plausible/Umami (a pagamento o self-hosted).
+
+### Nota fiscale (Sistema TS) emersa il 1 giugno
+L'obbligo di invio al Sistema TS dipende dalla professione (medico iscritto all'albo),
+NON dal regime forfettario → verosimilmente il Dr. Susino È tenuto a trasmettere anche
+da forfettario. DA CONFERMARE col commercialista (vedi `DOMANDE-COMMERCIALISTA-SistemaTS.md`).
