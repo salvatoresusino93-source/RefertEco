@@ -495,7 +495,7 @@ function goStep4() {
         </div>` : ''}
         <div class="recap-note">
           ${(ST.config.pagamenti_attivi && ST.pagaOnline)
-            ? `💳 Pagando online la prenotazione è <strong>confermata subito</strong>.<br>Riceverai un <strong>SMS</strong> di conferma al numero <strong>${esc(f.telefono)}</strong>.`
+            ? `💳 Pagando online la prenotazione è <strong>confermata subito</strong>.<br>Riceverai una <strong>email di conferma</strong> con i dettagli dell'appuntamento.`
             : `ℹ️ La prenotazione deve essere approvata dal medico.<br>Riceverai una conferma via <strong>SMS</strong> al numero <strong>${esc(f.telefono)}</strong>.`}
         </div>
         <div id="submit-err" class="pr-error hidden"></div>
@@ -598,7 +598,7 @@ function renderEsitoPagamento(ok) {
           <div class="pr-success-icon">✅</div>
           <h2>Pagamento ricevuto!</h2>
           <p>La tua prenotazione è <strong>confermata</strong>.</p>
-          <p>Riceverai a breve un <strong>SMS di conferma</strong> con data e ora.</p>
+          <p>Riceverai a breve una <strong>email di conferma</strong> con i dettagli dell'appuntamento.</p>
           <p style="margin-top:16px;font-size:13px;color:#94a3b8">
             Pagamento completato: nessuna attesa di conferma.
           </p>

@@ -54,6 +54,7 @@ const T = EN ? {
   payAtStudioDesc: 'No payment now. The booking will be confirmed by the doctor and you will receive an SMS.',
   noteOnlinePaid: ' Paying online, your booking is ', noteConfirmedNow: 'confirmed immediately',
   noteSmsTo: ' You will receive a confirmation ', noteSms: 'SMS', noteToNumber: ' at the number ',
+  noteEmailConfirm: 'You will receive a confirmation email with your appointment details.',
   noteNeedsApproval: ' The booking must be approved by the doctor.',
   submitPay: '💳 Pay and confirm', submitConfirm: '✅ Confirm booking',
   sending: 'Sending…', redirecting: 'Redirecting to payment…',
@@ -67,7 +68,7 @@ const T = EN ? {
   backToSite: 'Back to site',
   // payment result
   payOkTitle: 'Payment received!', payOkP1a: 'Your booking is ', payOkP1b: 'confirmed',
-  payOkP2a: 'You will shortly receive an ', payOkP2b: 'SMS confirmation', payOkP2c: ' with the date and time.',
+  payOkP2a: 'You will shortly receive a ', payOkP2b: 'confirmation email', payOkP2c: ' with your appointment details.',
   payOkNote: 'Payment completed: no waiting for confirmation.',
   payKoTitle: 'Payment cancelled', payKoP1: 'Nothing was charged.',
   payKoP2a: 'Your booking request is still recorded and will be ', payKoP2b: 'confirmed by the doctor',
@@ -113,6 +114,7 @@ const T = EN ? {
   payAtStudioDesc: 'Nessun pagamento adesso. La prenotazione sarà confermata dal medico e riceverai un SMS.',
   noteOnlinePaid: ' Pagando online la prenotazione è ', noteConfirmedNow: 'confermata subito',
   noteSmsTo: ' Riceverai un ', noteSms: 'SMS', noteToNumber: ' di conferma al numero ',
+  noteEmailConfirm: 'Riceverai una email di conferma con i dettagli dell\'appuntamento.',
   noteNeedsApproval: ' La prenotazione deve essere approvata dal medico.',
   submitPay: '💳 Paga e conferma', submitConfirm: '✅ Conferma prenotazione',
   sending: 'Invio in corso…', redirecting: 'Reindirizzamento al pagamento…',
@@ -124,7 +126,7 @@ const T = EN ? {
   sentHelp: 'In caso di problemi o per informazioni,<br>contatta lo studio telefonicamente.',
   backToSite: 'Torna al sito',
   payOkTitle: 'Pagamento ricevuto!', payOkP1a: 'La tua prenotazione è ', payOkP1b: 'confermata',
-  payOkP2a: 'Riceverai a breve un ', payOkP2b: 'SMS di conferma', payOkP2c: ' con data e ora.',
+  payOkP2a: 'Riceverai a breve una ', payOkP2b: 'email di conferma', payOkP2c: ' con i dettagli dell\'appuntamento.',
   payOkNote: 'Pagamento completato: nessuna attesa di conferma.',
   payKoTitle: 'Pagamento annullato', payKoP1: 'Non è stato addebitato nulla.',
   payKoP2a: 'La tua richiesta di prenotazione è comunque registrata e sarà ', payKoP2b: 'confermata dal medico',
@@ -710,7 +712,7 @@ function goStep4() {
         </div>` : ''}
         <div class="recap-note">
           ${(ST.config.pagamenti_attivi && ST.pagaOnline)
-            ? `💳${T.noteOnlinePaid}<strong>${T.noteConfirmedNow}</strong>.<br>${T.noteSmsTo}<strong>${T.noteSms}</strong>${T.noteToNumber}<strong>${esc(f.telefono)}</strong>.`
+            ? `💳${T.noteOnlinePaid}<strong>${T.noteConfirmedNow}</strong>.<br>${T.noteEmailConfirm}`
             : `ℹ️${T.noteNeedsApproval}<br>${T.noteSmsTo}<strong>${T.noteSms}</strong>${T.noteToNumber}<strong>${esc(f.telefono)}</strong>.`}
         </div>
         <div id="submit-err" class="pr-error hidden"></div>
