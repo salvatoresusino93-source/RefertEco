@@ -1,5 +1,12 @@
 const MEDICO_EMAIL = 'salvatore.susino93@gmail.com';
 
+// Mittente di tutte le email. Di default usa l'indirizzo di test di Resend
+// (onboarding@resend.dev), che però consegna SOLO al proprietario dell'account
+// Resend — quindi le email ai pazienti NON partono. Per inviare ai pazienti
+// occorre verificare un dominio su Resend (es. studiosusino.it) e impostare
+// EMAIL_FROM su Railway, es: "Studio Ecografico <noreply@studiosusino.it>".
+const MITTENTE = process.env.EMAIL_FROM || 'Agenda Studio <onboarding@resend.dev>';
+
 // ─── Dati dello studio mostrati sulla ricevuta di pagamento ──────────────
 // Personalizzabili via variabili d'ambiente senza toccare il codice.
 // NB: questi sono dati di intestazione "informali" della ricevuta di
@@ -90,7 +97,7 @@ async function notificaNuovoAppuntamento(appuntamento) {
 
   try {
     await resend.emails.send({
-      from: 'Agenda Studio <onboarding@resend.dev>',
+      from: MITTENTE,
       to: MEDICO_EMAIL,
       subject: `📅 ${nome} — ${tipoEsame} — ${data} ore ${ora}`,
       html,
@@ -144,7 +151,7 @@ async function notificaAppuntamentoAnnullato(appuntamento) {
 
   try {
     await resend.emails.send({
-      from: 'Agenda Studio <onboarding@resend.dev>',
+      from: MITTENTE,
       to: MEDICO_EMAIL,
       subject: `❌ ANNULLATO: ${nome} — ${tipoEsame} — ${data} ore ${ora}`,
       html,
@@ -238,7 +245,7 @@ async function notificaPrenotazioneOnline(appuntamento, tokenJwt) {
 
   try {
     await resend.emails.send({
-      from:    'Agenda Studio <onboarding@resend.dev>',
+      from:    MITTENTE,
       to:      MEDICO_EMAIL,
       subject: `🌐 ONLINE: ${nome} — ${tipoEsame} — ${data} ore ${ora}`,
       html,
@@ -308,7 +315,7 @@ async function notificaPrenotazionePagata(appuntamento) {
 
   try {
     await resend.emails.send({
-      from:    'Agenda Studio <onboarding@resend.dev>',
+      from:    MITTENTE,
       to:      MEDICO_EMAIL,
       subject: `✅ PAGATA: ${nome} — ${tipoEsame} — ${data} ore ${ora}`,
       html,
@@ -426,7 +433,7 @@ async function inviaRicevutaPagamento(appuntamento, importoCent) {
 
   try {
     await resend.emails.send({
-      from:    'Agenda Studio <onboarding@resend.dev>',
+      from:    MITTENTE,
       to:      emailPaz,
       bcc:     MEDICO_EMAIL,
       subject: `🧾 Ricevuta di pagamento — ${tipoEsame} del ${data}`,
@@ -498,7 +505,7 @@ async function notificaCambioCredenziali({ utente, cambiaUsername, cambiaPasswor
 
   try {
     await resend.emails.send({
-      from:    'Agenda Studio <onboarding@resend.dev>',
+      from:    MITTENTE,
       to:      MEDICO_EMAIL,
       subject: `🔐 Credenziali modificate — utente: ${utente}`,
       html,
