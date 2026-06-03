@@ -231,16 +231,32 @@ function renderCalendar() {
     for (let m = 0; m <= totalMin; m += 30)
       lines += `<div class="cal-hline${m%60===0?' major':''}" style="top:${m*PX_PER_MIN}px"></div>`;
 
+    const dayMs2  = new Date(dateStr + 'T00:00:00').getTime();
+    const nextMs2 = dayMs2 + 86400000;
+    const blocchiGcalTimed = _blocchi.filter(b =>
+      !b.tutto_il_giorno && b.tipo === 'google_calendar' &&
+      new Date(b.data_ora_inizio).getTime() < nextMs2 &&
+      new Date(b.data_ora_fine).getTime()   > dayMs2
+    );
+
     let slots = '';
     for (let m = 0; m < totalMin; m += SLOT_MIN) {
       const absMin = CAL_START * 60 + m;
       const hh = String(Math.floor(absMin/60)).padStart(2,'0');
       const mm = String(absMin%60).padStart(2,'0');
+      const gcalSlot = !isChiuso && blocchiGcalTimed.find(b => {
+        const bSm = minFromMidnight(b.data_ora_inizio);
+        const bEm = minFromMidnight(b.data_ora_fine);
+        return bSm < absMin + SLOT_MIN && bEm > absMin;
+      });
       slots += isChiuso
         ? `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
             onclick="onSlotBlockedClick('${esc(motivoCh)}')"></div>`
-        : `<div class="cal-slot" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
-            onclick="onSlotClick('${dateStr}','${hh}:${mm}')"></div>`;
+        : gcalSlot
+          ? `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
+              onclick="onSlotBlockedClick('Impegno personale')"></div>`
+          : `<div class="cal-slot" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
+              onclick="onSlotClick('${dateStr}','${hh}:${mm}')"></div>`;
     }
 
     const bloccoOverlay = isChiuso

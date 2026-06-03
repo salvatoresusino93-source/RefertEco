@@ -184,21 +184,39 @@ function renderCalendar() {
     const bloccoGiorno = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
     const festivoCls   = bloccoGiorno ? ' festivo' : '';
 
+    // Blocchi a orario specifico (impegni personali GCal non tutto-il-giorno)
+    const dayMs   = new Date(dateStr + 'T00:00:00').getTime();
+    const nextMs  = dayMs + 86400000;
+    const blocchiTimed = _blocchi.filter(b => {
+      if (b.tutto_il_giorno) return false;
+      const bS = new Date(b.data_ora_inizio).getTime();
+      const bE = new Date(b.data_ora_fine).getTime();
+      return bS < nextMs && bE > dayMs;
+    });
+
     // Hour lines
     let lines = '';
     for (let m=0; m<=totalMin; m+=20) {
       lines += `<div class="cal-hline${m%60===0?' major':''}" style="top:${m*PX_PER_MIN}px"></div>`;
     }
 
-    // Click slots (bloccati se giorno festivo)
+    // Click slots (bloccati se giorno festivo o coperto da impegno personale)
     let slots = '';
     for (let m=0; m<totalMin; m+=SLOT_MIN) {
       const absMin = CAL_START*60 + m;
       const hh = String(Math.floor(absMin/60)).padStart(2,'0');
       const mm = String(absMin%60).padStart(2,'0');
+      const bloccoSlot = !bloccoGiorno && blocchiTimed.find(b => {
+        const bSm = minFromMidnight(b.data_ora_inizio);
+        const bEm = minFromMidnight(b.data_ora_fine);
+        return bSm < absMin + SLOT_MIN && bEm > absMin;
+      });
       if (bloccoGiorno) {
         slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
           onclick="onSlotBlockedClick('${esc(bloccoGiorno.motivo)}')"></div>`;
+      } else if (bloccoSlot) {
+        slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
+          onclick="onSlotBlockedClick('${esc(bloccoSlot.motivo || 'Impegno personale')}')"></div>`;
       } else {
         slots += `<div class="cal-slot" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
           onclick="onSlotClick('${dateStr}','${hh}:${mm}')"></div>`;
@@ -211,6 +229,25 @@ function renderCalendar() {
            <span class="cal-blocco-label">${esc(bloccoGiorno.motivo)}</span>
          </div>`
       : '';
+
+    // Overlay blocchi a orario (impegni personali GCal)
+    let blocchiTimedHtml = '';
+    if (!bloccoGiorno) {
+      for (const b of blocchiTimed) {
+        const startM = minFromMidnight(b.data_ora_inizio);
+        const endM   = minFromMidnight(b.data_ora_fine);
+        const top    = (startM - CAL_START*60) * PX_PER_MIN;
+        const height = Math.max((endM - startM) * PX_PER_MIN, 22);
+        if (top < 0 || top >= totalPx) continue;
+        const motivo = esc(b.motivo || 'Impegno personale');
+        blocchiTimedHtml += `<div class="cal-blocco"
+          style="top:${top}px;height:${height}px"
+          onclick="onSlotBlockedClick('${motivo}')">
+          <span class="cal-blocco-icon">🔒</span>
+          ${height >= 36 ? `<span class="cal-blocco-motivo">${motivo}</span>` : ''}
+        </div>`;
+      }
+    }
 
     // Appointments
     let appHtml = '';
@@ -235,7 +272,7 @@ function renderCalendar() {
       </div>`;
     }
 
-    days += `<div class="cal-day${todayCls}${festivoCls}" style="height:${totalPx}px">${lines}${slots}${bloccoOverlay}${appHtml}</div>`;
+    days += `<div class="cal-day${todayCls}${festivoCls}" style="height:${totalPx}px">${lines}${slots}${bloccoOverlay}${blocchiTimedHtml}${appHtml}</div>`;
   }
 
   $('cal-wrap').innerHTML = `${hdr}
