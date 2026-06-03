@@ -401,7 +401,7 @@ function onCalMainScroll() {
     if (!el2) return;
     const cw        = getColW();
     const maxScroll = el2.scrollWidth - el2.clientWidth;
-    const triggerPx = 7 * cw;   // 1 settimana dal bordo
+    const triggerPx = 3 * cw;   // 3 giorni dal bordo (7 causava oscillazione: nuova posizione ricadeva nel trigger opposto)
 
     if (el2.scrollLeft < triggerPx) {
       _extendingRange = true;
