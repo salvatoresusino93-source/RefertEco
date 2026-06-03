@@ -167,19 +167,25 @@ app.get('/api/health', (req, res) => {
 });
 
 // ─── Test email notifica ─────────────────────────────────────────────────
+// Usa il mittente configurato (EMAIL_FROM) e permette di indicare il
+// destinatario nel body: { "to": "indirizzo@esempio.it" }. Così si può
+// verificare l'invio reale verso un indirizzo qualsiasi (non solo l'owner),
+// cosa possibile solo dopo aver verificato il dominio su Resend.
 app.post('/api/test-email', async (req, res) => {
   const key = process.env.RESEND_API_KEY;
   if (!key) return res.status(500).json({ error: 'RESEND_API_KEY non impostata su Railway' });
+  const mittente    = process.env.EMAIL_FROM || 'Agenda Studio <onboarding@resend.dev>';
+  const destinatario = (req.body && req.body.to) || 'salvatore.susino93@gmail.com';
   try {
     const { Resend } = require('resend');
     const resend = new Resend(key);
     const r = await resend.emails.send({
-      from: 'Agenda Studio <onboarding@resend.dev>',
-      to: 'salvatore.susino93@gmail.com',
+      from: mittente,
+      to: destinatario,
       subject: 'Test da Railway — RefertEco',
       html: '<p>Email di test dal server Railway. Funziona!</p>',
     });
-    res.json({ ok: true, id: r.id });
+    res.json({ ok: true, id: r.id, from: mittente, to: destinatario });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
