@@ -828,6 +828,17 @@ async function richiediPermessoMic() {
   }
 }
 
+function toggleExpandTA(taId, btnId) {
+  const ta  = document.getElementById(taId);
+  const btn = document.getElementById(btnId);
+  if (!ta || !btn) return;
+  const espansa = ta.classList.toggle('ta-espansa');
+  btn.classList.toggle('espanso', espansa);
+  btn.title = espansa ? 'Riduci area testo' : 'Espandi area testo';
+  btn.textContent = espansa ? '⤡' : '⤢';
+  if (espansa) ta.focus();
+}
+
 async function toggleDictation(taId, btnId, barId) {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
     toast('Dettatura non supportata: usa Chrome', 'err'); return;
