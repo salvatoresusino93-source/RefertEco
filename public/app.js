@@ -990,8 +990,9 @@ function openModal(id) {
     '<div class="ii"><label>Età</label><span>' + etaLabel(r.nascita, r.data) + '</span></div>';
   document.getElementById('m-referto').textContent = r.referto || '—';
   document.getElementById('m-del').onclick = () => confermaElimina(id);
-  document.getElementById('m-pdf-solo').onclick = () => esportaPDF(id, false);
-  document.getElementById('m-pdf-img').onclick  = () => esportaPDF(id, true);
+  document.getElementById('m-pdf-solo').onclick    = () => esportaPDF(id, false);
+  document.getElementById('m-pdf-img').onclick     = () => esportaPDF(id, true);
+  document.getElementById('m-firma-stampa').onclick = () => apriModalFirma(id);
   document.getElementById('modal-ov').classList.add('open');
   loadImmagini(id);
 }
@@ -3164,6 +3165,222 @@ async function importaDaOrthanc(studyId) {
   document.getElementById('orthanc-overlay').classList.remove('open');
   await ricaricaViewer([]);
   toast(`Importate ${res.importati} immagini da Orthanc`, 'ok');
+}
+
+// ── FIRMA DIGITALE ────────────────────────────────────────────
+
+let _firmaRefertoId = null;
+
+async function apriModalFirma(id) {
+  const cfg = await apiGet('/api/firma/config').catch(() => null);
+  if (!cfg || !cfg.configurato) {
+    toast('Credenziali firma non configurate. Vai in Impostazioni → Firma Digitale.', 'err');
+    return;
+  }
+  _firmaRefertoId = id;
+  document.getElementById('firma-otp-input').value = '';
+  document.getElementById('firma-stato').textContent = '';
+  document.getElementById('firma-btn-ok').disabled = false;
+  document.getElementById('firma-ov').style.display = 'flex';
+  setTimeout(() => document.getElementById('firma-otp-input').focus(), 100);
+}
+
+function chiudiModalFirma() {
+  document.getElementById('firma-ov').style.display = 'none';
+  _firmaRefertoId = null;
+}
+
+async function confermaFirma() {
+  const otp = document.getElementById('firma-otp-input').value.trim();
+  if (!otp) { document.getElementById('firma-stato').textContent = 'Inserisci il codice OTP.'; return; }
+  if (!_firmaRefertoId) return;
+
+  const btn = document.getElementById('firma-btn-ok');
+  btn.disabled = true;
+  document.getElementById('firma-stato').textContent = 'Generazione PDF in corso…';
+
+  try {
+    const html = await generaHtmlFirma(_firmaRefertoId);
+    document.getElementById('firma-stato').textContent = 'Firma e stampa in corso…';
+
+    const resp = await fetch('/api/firma-e-stampa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ html, otp, refertoId: _firmaRefertoId }),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) throw new Error(data.error || 'Errore sconosciuto');
+
+    chiudiModalFirma();
+    toast('✅ Referto firmato e inviato in stampa', 'ok');
+  } catch (e) {
+    document.getElementById('firma-stato').textContent = '❌ ' + e.message;
+    btn.disabled = false;
+  }
+}
+
+// Genera l'HTML del PDF con il blocco "Firmato digitalmente da..."
+async function generaHtmlFirma(id) {
+  const r = referti.find(x => x.id === id);
+  if (!r) throw new Error('Referto non trovato');
+
+  const imgFiles = await apiGet('/api/referti/' + id + '/immagini');
+  const imgDataUrls = [];
+  for (const f of imgFiles) {
+    const url = '/immagini/' + id + '/' + encodeURIComponent(f);
+    const isDcm = /\.dcm$/i.test(f);
+    if (isDcm) {
+      try {
+        const buf = await (await fetch(url)).arrayBuffer();
+        const ds  = dicomParser.parseDicom(new Uint8Array(buf));
+        if (_isDicomCine(ds)) continue;
+        const dataUrl = await dicomDsToDataUrl(ds, buf);
+        if (dataUrl) imgDataUrls.push(dataUrl);
+      } catch {}
+    } else {
+      const dataUrl = await imgToDataUrl(url);
+      if (dataUrl) imgDataUrls.push(dataUrl);
+    }
+  }
+
+  const pdfPP = _printPerPage;
+  let paginaImmagini = '';
+  for (let p = 0; p * pdfPP < imgDataUrls.length; p++) {
+    const batch = imgDataUrls.slice(p * pdfPP, p * pdfPP + pdfPP);
+    paginaImmagini += `
+    <div class="img-page">
+      <div class="img-hdr">${esc(r.cognome)} ${esc(r.nome)} — ${esc(r.tipo)} — ${fmt(r.data)}</div>
+      <div class="img-grid-print" style="grid-template-rows:repeat(${pdfPP/2},1fr)">
+        ${batch.map(src => `<div class="img-cell"><img src="${src}"></div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  const dataStampa = new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
+  const etaStr = etaLabel(r.nascita, r.data);
+  const T = PDF_THEMES[localStorage.getItem('pdf_tema') || 'verde'];
+
+  return `<!DOCTYPE html>
+<html lang="it"><head><meta charset="UTF-8">
+<title>Referto — ${esc(r.cognome)} ${esc(r.nome)}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@300;400;600&display=swap');
+@page{margin:0;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;background:white;}
+.page{max-width:800px;margin:0 auto;padding:36px 48px 44px;min-height:100vh;display:flex;flex-direction:column;box-sizing:border-box;}
+.hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid ${T.accent};margin-bottom:0;}
+.hdr-nome{font-family:'Lora',serif;font-size:17pt;font-weight:600;color:${T.accent};letter-spacing:-0.01em;}
+.hdr-titolo{font-size:9.5pt;color:#555;margin-top:2px;font-weight:300;letter-spacing:0.01em;}
+.hdr-studio{font-size:10pt;color:#222;margin-top:6px;font-weight:600;}
+.hdr-indirizzo{font-size:9pt;color:#555;margin-top:1px;}
+.hdr-right{text-align:right;font-size:8.5pt;color:#555;line-height:1.7;}
+.hdr-bar{background:${T.accent};height:2px;margin-bottom:20px;}
+.paz-box{display:flex;justify-content:space-between;align-items:flex-start;background:${T.light};border-left:4px solid ${T.accent};padding:13px 16px;margin-bottom:22px;border-radius:0 4px 4px 0;}
+.paz-nome{font-family:'Lora',serif;font-size:14pt;font-weight:600;color:#111;}
+.paz-sub{font-size:9pt;color:#666;margin-top:2px;}
+.paz-right{text-align:right;font-size:9pt;color:#555;line-height:1.8;}
+.paz-right strong{color:#333;}
+.esame-title{font-family:'Lora',serif;font-size:13.5pt;font-weight:600;color:${T.accent};text-align:center;margin-bottom:22px;letter-spacing:0.01em;text-transform:uppercase;}
+.sec{font-size:8pt;text-transform:uppercase;letter-spacing:0.12em;color:${T.mid};font-weight:700;margin:18px 0 7px;display:flex;align-items:center;gap:8px;}
+.sec::after{content:'';flex:1;height:1px;background:${T.line};}
+.body-text{font-size:12.5pt;line-height:1.6;color:#111;white-space:pre-wrap;text-align:justify;}
+.firma-wrap{margin-top:auto;padding-top:40px;display:flex;justify-content:flex-end;}
+.firma-digitale-box{border:1px solid ${T.line};border-radius:6px;padding:12px 18px;text-align:center;background:${T.light};}
+.firma-digitale-chi{font-family:'Lora',serif;font-size:11pt;font-weight:600;color:${T.accent};margin-bottom:3px;}
+.firma-digitale-data{font-size:9pt;color:#555;margin-bottom:2px;}
+.firma-digitale-tipo{font-size:8pt;color:#888;letter-spacing:0.04em;text-transform:uppercase;}
+.doc-footer{margin-top:32px;padding-top:10px;border-top:1px solid #ddd;display:flex;justify-content:space-between;font-size:7.5pt;color:#999;}
+@media print{.page{padding:20px 30px;}body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+.img-page{page-break-before:always;padding:14px 20px;height:100vh;box-sizing:border-box;display:flex;flex-direction:column;}
+.img-hdr{font-size:8pt;color:#888;margin-bottom:8px;border-bottom:1px solid #ddd;padding-bottom:5px;flex-shrink:0;}
+.img-grid-print{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1;min-height:0;}
+.img-cell{border:1px solid #ddd;padding:4px;background:#fff;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;}
+.img-cell img{width:100%;height:100%;object-fit:contain;display:block;}
+</style></head><body>
+<div class="page">
+  <div class="hdr">
+    <div>
+      <div class="hdr-nome">${esc(MEDICO.nome)}</div>
+      <div class="hdr-titolo">${esc(MEDICO.titolo)}</div>
+      <div class="hdr-studio">${esc(MEDICO.studio)}</div>
+      <div class="hdr-indirizzo">${esc(MEDICO.indirizzo)}</div>
+    </div>
+    <div class="hdr-right">
+      <div>✉ ${esc(MEDICO.email)}</div>
+      <div>✆ ${esc(MEDICO.cell)}</div>
+      <div style="margin-top:6px">${esc(MEDICO.ordine)}</div>
+      <div>${esc(MEDICO.cf)}</div>
+    </div>
+  </div>
+  <div class="hdr-bar"></div>
+  <div class="paz-box">
+    <div>
+      <div class="paz-nome">${esc(r.cognome)} ${esc(r.nome)}</div>
+      <div class="paz-sub">${r.nascita ? 'nato/a il ' + fmt(r.nascita) + (etaStr && etaStr !== '—' ? ' — ' + etaStr : '') : ''}</div>
+    </div>
+    <div class="paz-right">
+      <div>Data esame: <strong>${fmt(r.data)}</strong></div>
+    </div>
+  </div>
+  <div class="esame-title">${esc(r.tipo)}</div>
+  <div class="sec">Referto</div>
+  <div class="body-text">${esc(r.referto || '—')}</div>
+  <div class="firma-wrap">
+    <div class="firma-digitale-box">
+      <div class="firma-digitale-chi">Firmato digitalmente da ${esc(MEDICO.nome)}</div>
+      <div class="firma-digitale-data">il ${dataStampa}</div>
+      <div class="firma-digitale-tipo">Firma Qualificata Namirial · ${esc(MEDICO.cf)}</div>
+    </div>
+  </div>
+  <div class="doc-footer">
+    <span>${esc(MEDICO.studio)} — ${esc(MEDICO.indirizzo)}</span>
+    <span>Documento generato il ${dataStampa}</span>
+  </div>
+</div>
+${paginaImmagini}
+</body></html>`;
+}
+
+async function salvaConfigFirma() {
+  const key = document.getElementById('firma-api-key').value.trim();
+  const usr = document.getElementById('firma-username').value.trim();
+  const pin = document.getElementById('firma-pin').value.trim();
+  if (!key && !usr && !pin) { toast('Inserisci almeno un campo', 'err'); return; }
+
+  const resp = await fetch('/api/firma/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ openapiKey: key || undefined, namirialUsername: usr || undefined, namirialPin: pin || undefined }),
+  });
+  if (!resp.ok) { toast('Errore salvataggio', 'err'); return; }
+
+  document.getElementById('firma-api-key').value = '';
+  document.getElementById('firma-pin').value = '';
+  const stato = document.getElementById('firma-config-status');
+  stato.textContent = '✅ Credenziali salvate';
+  stato.style.color = 'var(--accent)';
+  toast('Credenziali firma salvate', 'ok');
+  setTimeout(() => { stato.textContent = ''; }, 4000);
+}
+
+async function caricaConfigFirma() {
+  try {
+    const cfg = await apiGet('/api/firma/config');
+    const el = document.getElementById('firma-username');
+    if (el && cfg.namirialUsername) el.value = cfg.namirialUsername;
+    const stato = document.getElementById('firma-config-status');
+    if (stato) {
+      if (cfg.configurato) {
+        stato.textContent = '✅ Firma digitale configurata e pronta';
+        stato.style.color = 'green';
+      } else {
+        stato.textContent = 'Configura API Key, email e PIN per abilitare la firma.';
+        stato.style.color = 'var(--text-muted)';
+      }
+    }
+  } catch {}
 }
 
 init();

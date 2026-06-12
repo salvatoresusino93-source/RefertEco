@@ -541,6 +541,29 @@
 
         <div class="form-card" style="max-width:660px;margin-top:18px">
           <div class="form-section">
+            <div class="sec-lbl">✍ Firma Digitale (Namirial via OpenAPI.com)</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">
+              Configura le credenziali per la firma digitale qualificata (FQS). Ottieni API Key e certificato Namirial su <strong>openapi.com</strong>.
+            </p>
+            <div class="fg" style="margin-bottom:10px">
+              <label>OpenAPI.com API Key</label>
+              <input type="password" id="firma-api-key" placeholder="Bearer token da openapi.com" autocomplete="off" style="font-family:'DM Mono',monospace;font-size:12px;">
+            </div>
+            <div class="fg" style="margin-bottom:10px">
+              <label>Namirial — Email certificato</label>
+              <input type="email" id="firma-username" placeholder="salvatore.susino93@gmail.com" autocomplete="off">
+            </div>
+            <div class="fg" style="margin-bottom:10px">
+              <label>Namirial — PIN</label>
+              <input type="password" id="firma-pin" placeholder="PIN del certificato Namirial" autocomplete="off">
+            </div>
+            <div id="firma-config-status" style="font-size:12px;margin-bottom:10px"></div>
+            <button class="btn btn-primary btn-sm" onclick="salvaConfigFirma()">💾 Salva credenziali firma</button>
+          </div>
+        </div>
+
+        <div class="form-card" style="max-width:660px;margin-top:18px">
+          <div class="form-section">
             <div class="sec-lbl">AI — Correzione referto</div>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">
               Inserisci la tua chiave API Anthropic per abilitare il pulsante <strong>✨ Correggi e formatta con AI</strong>.<br>
@@ -633,6 +656,7 @@
       <button class="btn btn-primary btn-sm" id="m-btn-salva-mod" style="display:none" onclick="salvaModificaReferto()">💾 Salva modifiche</button>
       <button class="btn btn-primary btn-sm" id="m-pdf-solo" title="PDF solo testo del referto, senza immagini">📄 Solo referto</button>
       <button class="btn btn-primary btn-sm" id="m-pdf-img"  title="PDF con testo e tutte le immagini allegate">🖼 Referto + immagini</button>
+      <button class="btn btn-success btn-sm" id="m-firma-stampa" title="Firma digitale Namirial + stampa automatica">✍ Firma e Stampa</button>
     </div>
     <div class="m-body">
       <div id="m-view-section">
@@ -674,6 +698,26 @@
     <div class="conf-act">
       <button class="btn btn-secondary btn-sm" onclick="closeConfirm()">Annulla</button>
       <button class="btn btn-danger btn-sm" id="conf-ok">Elimina</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL OTP FIRMA -->
+<div class="conf-ov" id="firma-ov" style="display:none">
+  <div class="conf-box" style="max-width:380px">
+    <div class="conf-title">✍ Firma Digitale Namirial</div>
+    <div class="conf-msg" style="text-align:left;line-height:1.6">
+      Apri l'app <strong>Namirial Sign</strong> sul telefono e inserisci il codice OTP mostrato.
+    </div>
+    <div style="margin:14px 0 4px">
+      <input type="text" id="firma-otp-input" placeholder="Codice OTP (6 cifre)"
+        maxlength="8" inputmode="numeric" autocomplete="one-time-code"
+        style="width:100%;padding:10px 12px;font-size:18px;letter-spacing:4px;text-align:center;border:2px solid var(--border);border-radius:8px;font-family:'DM Mono',monospace">
+    </div>
+    <div id="firma-stato" style="font-size:12px;color:var(--text-muted);min-height:18px;margin-bottom:8px;text-align:center"></div>
+    <div class="conf-act">
+      <button class="btn btn-secondary btn-sm" onclick="chiudiModalFirma()">Annulla</button>
+      <button class="btn btn-success btn-sm" id="firma-btn-ok" onclick="confermaFirma()">✍ Firma e Stampa</button>
     </div>
   </div>
 </div>

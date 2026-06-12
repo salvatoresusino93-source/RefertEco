@@ -1,7 +1,8 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
+const os = require('os');
 const multer = require('multer');
 const db = require('./database');
 const config = require('./config');
@@ -816,6 +817,146 @@ app.post('/api/orthanc/archivia/:refertoId', async (req, res) => {
   } catch (e) {
     console.error('[orthanc archivia]', e);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ── FIRMA DIGITALE (OpenAPI.com + Namirial) ──────────────────
+
+function trovaChrome() {
+  const exe = 'chrome.exe';
+  const pf   = process.env['PROGRAMFILES']      || 'C:\\Program Files';
+  const pf86 = process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)';
+  const loc  = process.env['LOCALAPPDATA']       || '';
+  const candidates = [
+    path.join(pf,   'Google\\Chrome\\Application', exe),
+    path.join(pf86, 'Google\\Chrome\\Application', exe),
+    path.join(loc,  'Google\\Chrome\\Application', exe),
+  ];
+  return candidates.find(p => { try { return fs.existsSync(p); } catch { return false; } }) || null;
+}
+
+async function htmlToPdf(htmlContent, outputPath) {
+  const chromePath = trovaChrome();
+  if (!chromePath) throw new Error('Chrome non trovato. Installa Google Chrome.');
+  const tmpHtml = path.join(os.tmpdir(), 'referteco_' + Date.now() + '.html');
+  fs.writeFileSync(tmpHtml, htmlContent, 'utf8');
+  await new Promise((resolve, reject) => {
+    const htmlUrl = 'file:///' + tmpHtml.replace(/\\/g, '/');
+    const proc = spawn(chromePath, [
+      '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-extensions',
+      `--print-to-pdf=${outputPath}`, '--no-pdf-header-footer', htmlUrl,
+    ]);
+    const timer = setTimeout(() => { proc.kill(); reject(new Error('Chrome timeout')); }, 30000);
+    proc.on('close', code => {
+      clearTimeout(timer);
+      try { fs.unlinkSync(tmpHtml); } catch {}
+      if (fs.existsSync(outputPath)) resolve();
+      else reject(new Error('Chrome non ha generato il PDF (code ' + code + ')'));
+    });
+  });
+}
+
+function stampaPdf(pdfPath) {
+  return new Promise(resolve => {
+    // Usa il visualizzatore PDF predefinito di Windows in modalità stampa
+    exec(`powershell -Command "Start-Process -FilePath '${pdfPath}' -Verb Print"`, () => resolve());
+  });
+}
+
+app.get('/api/firma/config', (req, res) => {
+  const cfg = config.load();
+  res.json({
+    namirialUsername: cfg.namirialUsername || '',
+    hasKey:  !!cfg.openapiKey,
+    hasPin:  !!cfg.namirialPin,
+    configurato: !!(cfg.openapiKey && cfg.namirialUsername && cfg.namirialPin),
+  });
+});
+
+app.post('/api/firma/config', (req, res) => {
+  const { openapiKey, namirialUsername, namirialPin } = req.body;
+  const cfg = config.load();
+  if (openapiKey)       cfg.openapiKey       = openapiKey;
+  if (namirialUsername) cfg.namirialUsername  = namirialUsername;
+  if (namirialPin)      cfg.namirialPin       = namirialPin;
+  config.save(cfg);
+  res.json({ ok: true });
+});
+
+app.post('/api/firma-e-stampa', async (req, res) => {
+  const { html, otp, refertoId } = req.body;
+  if (!html || !otp) return res.status(400).json({ error: 'html e otp richiesti' });
+
+  const cfg = config.load();
+  if (!cfg.openapiKey || !cfg.namirialUsername || !cfg.namirialPin) {
+    return res.status(400).json({ error: 'Credenziali firma non configurate. Vai in Impostazioni → Firma Digitale.' });
+  }
+
+  const pdfPath = path.join(os.tmpdir(), 'referteco_unsigned_' + Date.now() + '.pdf');
+  try {
+    // 1. HTML → PDF con Chrome headless
+    await htmlToPdf(html, pdfPath);
+
+    const pdfBase64 = fs.readFileSync(pdfPath).toString('base64');
+
+    // 2. Chiama OpenAPI.com per firmare
+    // ⚠️ Verificare il body esatto dalla documentazione OpenAPI.com dopo aver creato l'account
+    const sigResp = await fetch('https://api.openapi.com/EU-QES_otp', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cfg.openapiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        inputDocument: [{ sourceType: 'base64', fileContent: pdfBase64 }],
+        certificateUsername: cfg.namirialUsername,
+        certificatePassword: cfg.namirialPin,
+        otp: otp,             // ⚠️ verificare nome campo: potrebbe essere "otpCode" o simile
+        signatureType: 'pades',
+      }),
+    });
+
+    if (!sigResp.ok) {
+      const err = await sigResp.text().catch(() => sigResp.status.toString());
+      throw new Error(`OpenAPI.com errore ${sigResp.status}: ${err}`);
+    }
+
+    const sigData = await sigResp.json();
+
+    // 3. Ottieni il PDF firmato dalla risposta
+    let signedBuffer;
+    // Caso A: PDF inline come base64 nella risposta
+    const inlineB64 = sigData?.data?.signedDocument || sigData?.signedDocument;
+    if (inlineB64) {
+      signedBuffer = Buffer.from(inlineB64, 'base64');
+    } else {
+      // Caso B: scarica tramite ID documento — ⚠️ verificare endpoint di download
+      const docId = sigData?.data?.document?.validatedDocument?.id || sigData?.data?.id;
+      if (!docId) throw new Error('Risposta OpenAPI.com non contiene il documento firmato. Controllare la documentazione.');
+      const dlResp = await fetch(`https://api.openapi.com/documents/${docId}/content`, {
+        headers: { 'Authorization': `Bearer ${cfg.openapiKey}` },
+      });
+      if (!dlResp.ok) throw new Error(`Download PDF firmato fallito (${dlResp.status})`);
+      signedBuffer = Buffer.from(await dlResp.arrayBuffer());
+    }
+
+    // 4. Salva PDF firmato
+    const firmaDir = path.join(config.getDataDir(), 'firmati');
+    fs.mkdirSync(firmaDir, { recursive: true });
+    const today = new Date().toISOString().slice(0, 10);
+    const safeName = (refertoId || Date.now()).toString().replace(/[^a-zA-Z0-9_-]/g, '_');
+    const signedPath = path.join(firmaDir, `referto_${safeName}_${today}_firmato.pdf`);
+    fs.writeFileSync(signedPath, signedBuffer);
+
+    // 5. Stampa automaticamente
+    await stampaPdf(signedPath);
+
+    res.json({ ok: true, file: signedPath });
+  } catch (e) {
+    console.error('[firma-e-stampa]', e.message);
+    res.status(500).json({ error: e.message });
+  } finally {
+    try { if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath); } catch {}
   }
 });
 
