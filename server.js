@@ -863,7 +863,7 @@ function firmaBaseUrl(cfg) {
 async function openapiOAuthToken(cfg) {
   const EMAIL = 'salvatore.susino93@gmail.com';
   const isTest = cfg.firmaTest !== false;
-  const oauthUrl = 'https://test.oauth.openapi.it/token';
+  const oauthUrl = isTest ? 'https://test.oauth.openapi.it/token' : 'https://oauth.openapi.it/token';
   const esignDomain = isTest ? 'test.esignature.openapi.com' : 'esignature.openapi.com';
   const scopes = [
     `POST:${esignDomain}/EU-QES_automatic`,
