@@ -3220,6 +3220,7 @@ async function importaDaOrthanc(studyId) {
 // ── FIRMA DIGITALE ────────────────────────────────────────────
 
 let _firmaRefertoId = null;
+let _firmaHtml = null;
 
 async function apriModalFirma(id) {
   const cfg = await apiGet('/api/firma/config').catch(() => null);
@@ -3228,27 +3229,45 @@ async function apriModalFirma(id) {
     return;
   }
   _firmaRefertoId = id;
+  _firmaHtml = null;
   document.getElementById('firma-stato').textContent = '';
-  document.getElementById('firma-btn-ok').disabled = false;
-  // Mostra l'avviso giallo se siamo in modalità test (sandbox)
+  document.getElementById('firma-btn-ok').disabled = true;
   document.getElementById('firma-test-badge').style.display = cfg.firmaTest ? 'block' : 'none';
+  const iframe = document.getElementById('firma-iframe');
+  const loading = document.getElementById('firma-preview-loading');
+  iframe.style.display = 'none';
+  loading.style.display = 'flex';
+  loading.textContent = 'Generazione anteprima…';
   document.getElementById('firma-ov').style.display = 'flex';
+
+  try {
+    _firmaHtml = await generaHtmlFirma(id);
+    iframe.srcdoc = _firmaHtml;
+    iframe.onload = () => {
+      loading.style.display = 'none';
+      iframe.style.display = 'block';
+      document.getElementById('firma-btn-ok').disabled = false;
+    };
+  } catch (e) {
+    loading.textContent = '❌ Errore anteprima: ' + e.message;
+  }
 }
 
 function chiudiModalFirma() {
   document.getElementById('firma-ov').style.display = 'none';
   _firmaRefertoId = null;
+  _firmaHtml = null;
 }
 
 async function confermaFirma() {
-  if (!_firmaRefertoId) return;
+  if (!_firmaRefertoId || !_firmaHtml) return;
 
   const btn = document.getElementById('firma-btn-ok');
   btn.disabled = true;
-  document.getElementById('firma-stato').textContent = 'Generazione PDF in corso…';
+  document.getElementById('firma-stato').textContent = 'Firma in corso (può richiedere qualche secondo)…';
 
   try {
-    const html = await generaHtmlFirma(_firmaRefertoId);
+    const html = _firmaHtml;
     document.getElementById('firma-stato').textContent = 'Firma in corso (può richiedere qualche secondo)…';
 
     const resp = await fetch('/api/firma-e-stampa', {
