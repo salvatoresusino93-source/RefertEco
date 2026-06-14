@@ -3317,7 +3317,9 @@ async function generaHtmlFirma(id) {
     </div>`;
   }
 
-  const dataStampa = new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
+  const _now = new Date();
+  const dataStampa = _now.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
+  const oraStampa  = _now.toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
   const etaStr = etaLabel(r.nascita, r.data);
   const T = PDF_THEMES[localStorage.getItem('pdf_tema') || 'verde'];
 
@@ -3347,10 +3349,12 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
 .sec::after{content:'';flex:1;height:1px;background:${T.line};}
 .body-text{font-size:12.5pt;line-height:1.6;color:#111;white-space:pre-wrap;text-align:justify;}
 .firma-wrap{margin-top:auto;padding-top:40px;display:flex;justify-content:flex-end;}
-.firma-digitale-box{border:1px solid ${T.line};border-radius:6px;padding:12px 18px;text-align:center;background:${T.light};}
-.firma-digitale-chi{font-family:'Lora',serif;font-size:11pt;font-weight:600;color:${T.accent};margin-bottom:3px;}
-.firma-digitale-data{font-size:9pt;color:#555;margin-bottom:2px;}
-.firma-digitale-tipo{font-size:8pt;color:#888;letter-spacing:0.04em;text-transform:uppercase;}
+.firma-digitale-box{text-align:right;padding-left:80px;}
+.firma-digitale-linea{border-top:1px solid #999;margin-bottom:10px;}
+.firma-digitale-chi{font-family:'Lora',serif;font-size:11.5pt;font-weight:600;color:#1c1c1c;}
+.firma-digitale-ruolo{font-size:9.5pt;color:#444;margin-top:2px;}
+.firma-digitale-data{font-size:9pt;color:#333;margin-top:12px;}
+.firma-digitale-tipo{font-size:7.5pt;color:#777;margin-top:3px;}
 .doc-footer{margin-top:32px;padding-top:10px;border-top:1px solid #ddd;display:flex;justify-content:space-between;font-size:7.5pt;color:#999;}
 @media print{.page{padding:20px 30px;}body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
 .img-page{page-break-before:always;padding:14px 20px;height:100vh;box-sizing:border-box;display:flex;flex-direction:column;}
@@ -3389,9 +3393,11 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
   <div class="body-text">${esc(r.referto || '—')}</div>
   <div class="firma-wrap">
     <div class="firma-digitale-box">
-      <div class="firma-digitale-chi">Firmato digitalmente da ${esc(MEDICO.nome)}</div>
-      <div class="firma-digitale-data">il ${dataStampa}</div>
-      <div class="firma-digitale-tipo">Firma Qualificata Namirial · ${esc(MEDICO.cf)}</div>
+      <div class="firma-digitale-linea"></div>
+      <div class="firma-digitale-chi">${esc(MEDICO.nome)}</div>
+      <div class="firma-digitale-ruolo">${esc(MEDICO.titolo)}</div>
+      <div class="firma-digitale-data">Firmato digitalmente il ${dataStampa} alle ore ${oraStampa}</div>
+      <div class="firma-digitale-tipo">Firma Elettronica Qualificata (FEQ) ai sensi del D.Lgs. 82/2005 e s.m.i. — Namirial S.p.A. / AgID</div>
     </div>
   </div>
   <div class="doc-footer">
