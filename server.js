@@ -934,8 +934,10 @@ app.post('/api/firma-e-stampa', async (req, res) => {
     const dataFirma = now.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const oraFirma  = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
     const footerHtml = `
-<div style="margin-top:32px;padding-top:10px;border-top:1px solid #ccc;font-size:10px;color:#555;text-align:center;font-family:Arial,sans-serif;">
-  Firmato digitalmente da Dott. Salvatore Susino il ${dataFirma} alle ore ${oraFirma} &mdash; Firma Qualificata EU-QES (Namirial TSP)
+<div style="margin-top:40px;padding-top:10px;border-top:1px solid #bbb;font-family:Arial,sans-serif;font-size:9px;color:#555;line-height:1.6;">
+  <div style="font-weight:bold;margin-bottom:2px;">Documento informatico firmato digitalmente ai sensi del D.Lgs. n. 82/2005 e s.m.i. (Codice del Consumo Digitale).</div>
+  <div>Medico refertante: <strong>Dott. Salvatore Susino</strong> &nbsp;|&nbsp; Data e ora firma: <strong>${dataFirma} ore ${oraFirma}</strong> &nbsp;|&nbsp; Certificato: EU-QES &mdash; Namirial TSP (eIDAS)</div>
+  <div style="margin-top:2px;font-style:italic;">La stampa del presente documento costituisce copia dell&rsquo;originale informatico. Il documento originale firmato digitalmente ha pieno valore legale.</div>
 </div>`;
     const htmlFirmato = html.replace(/<\/body>/i, footerHtml + '</body>');
     await htmlToPdf(htmlFirmato, pdfPath);

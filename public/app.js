@@ -273,6 +273,33 @@ async function salvaReferto() {
   resetForm();
 }
 
+async function salvaEFirma() {
+  const cognome = capitalizeWords(document.getElementById('f-cognome').value);
+  const nome    = capitalizeWords(document.getElementById('f-nome').value);
+  const tipo    = getTipoAttivo();
+  const data    = document.getElementById('f-data').value;
+  if (!cognome || !nome) { toast('Inserire cognome e nome', 'err'); return; }
+  if (!tipo)             { toast('Selezionare il tipo di esame', 'err'); return; }
+  if (!data)             { toast("Inserire la data dell'esame", 'err'); return; }
+  const r = {
+    id: _tempRefertoId || Date.now().toString(),
+    cognome, nome,
+    nascita: document.getElementById('f-nascita').value || null,
+    tipo, data,
+    referto: document.getElementById('f-referto').value.trim() || null,
+    creato: new Date().toISOString(),
+  };
+  const res = await apiPost('/api/referti', r);
+  if (res.error) { toast('Errore salvataggio: ' + res.error, 'err'); return; }
+  const savedId = res.id || r.id;
+  _viewerFiles = []; _viewerIndex = 0; _tempRefertoId = null;
+  await loadReferti();
+  await marcaRefertato();
+  fetch('/api/orthanc/archivia/' + savedId, { method: 'POST' }).catch(() => {});
+  resetForm();
+  apriModalFirma(savedId);
+}
+
 function resetForm() {
   ['f-cognome','f-nome','f-nascita','f-referto','f-tipo-custom'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
