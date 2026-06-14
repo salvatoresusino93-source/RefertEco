@@ -3352,7 +3352,7 @@ async function generaHtmlFirma(id) {
 @page{margin:0;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;background:white;}
-.page{max-width:800px;margin:0 auto;padding:36px 48px 44px;min-height:100vh;display:flex;flex-direction:column;box-sizing:border-box;}
+.page{max-width:800px;margin:0 auto;padding:36px 48px 44px;box-sizing:border-box;}
 .hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid ${T.accent};margin-bottom:0;}
 .hdr-nome{font-family:'Lora',serif;font-size:17pt;font-weight:600;color:${T.accent};letter-spacing:-0.01em;}
 .hdr-titolo{font-size:9.5pt;color:#555;margin-top:2px;font-weight:300;letter-spacing:0.01em;}
@@ -3369,7 +3369,7 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
 .sec{font-size:8pt;text-transform:uppercase;letter-spacing:0.12em;color:${T.mid};font-weight:700;margin:18px 0 7px;display:flex;align-items:center;gap:8px;}
 .sec::after{content:'';flex:1;height:1px;background:${T.line};}
 .body-text{font-size:12.5pt;line-height:1.6;color:#111;white-space:pre-wrap;text-align:justify;}
-.firma-wrap{margin-top:auto;padding-top:40px;display:flex;justify-content:flex-start;page-break-inside:avoid;break-inside:avoid;page-break-before:avoid;break-before:avoid;}
+.firma-wrap{margin-top:40px;padding-top:0;display:flex;justify-content:flex-start;page-break-inside:avoid;break-inside:avoid;page-break-before:avoid;break-before:avoid;}
 .firma-digitale-box{text-align:left;padding-right:80px;page-break-inside:avoid;break-inside:avoid;}
 .firma-digitale-linea{border-top:1px solid #999;margin-bottom:10px;}
 .firma-digitale-chi{font-family:'Lora',serif;font-size:11.5pt;font-weight:600;color:#1c1c1c;}
