@@ -910,6 +910,23 @@ app.post('/api/firma/config', (req, res) => {
   res.json({ ok: true });
 });
 
+// Anteprima PDF (non firmato) — identica al PDF finale di stampa, per vedere i salti pagina reali.
+app.post('/api/firma/anteprima-pdf', async (req, res) => {
+  const { html } = req.body;
+  if (!html) return res.status(400).json({ error: 'html richiesto' });
+  const pdfPath = path.join(os.tmpdir(), 'referteco_anteprima_' + Date.now() + '.pdf');
+  try {
+    await htmlToPdf(html, pdfPath);
+    const pdfBase64 = fs.readFileSync(pdfPath).toString('base64');
+    res.json({ ok: true, pdfBase64 });
+  } catch (e) {
+    console.error('[anteprima-pdf]', e.message);
+    res.status(500).json({ error: e.message });
+  } finally {
+    try { if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath); } catch {}
+  }
+});
+
 // Firma automatica (senza OTP) + stampa.
 // Flusso: HTML → PDF → POST /EU-QES_automatic → attende fine firma → scarica PDF firmato → salva → stampa.
 app.post('/api/firma-e-stampa', async (req, res) => {

@@ -3221,6 +3221,7 @@ async function importaDaOrthanc(studyId) {
 
 let _firmaRefertoId = null;
 let _firmaHtml = null;
+let _firmaPreviewUrl = null;
 
 async function apriModalFirma(id) {
   const cfg = await apiGet('/api/firma/config').catch(() => null);
@@ -3237,19 +3238,28 @@ async function apriModalFirma(id) {
   const loading = document.getElementById('firma-preview-loading');
   iframe.style.display = 'none';
   loading.style.display = 'flex';
-  loading.textContent = 'Generazione anteprima…';
+  loading.textContent = 'Generazione anteprima PDF…';
   document.getElementById('firma-ov').style.display = 'flex';
 
   try {
+    // Genera l'HTML del referto, poi chiede al server il PDF VERO (identico alla stampa):
+    // così l'anteprima mostra i salti pagina reali, non una pagina continua.
     _firmaHtml = await generaHtmlFirma(id);
-    iframe.srcdoc = _firmaHtml;
-    iframe.onload = () => {
-      const h = iframe.contentDocument.documentElement.scrollHeight;
-      iframe.style.height = h + 'px';
-      loading.style.display = 'none';
-      iframe.style.display = 'block';
-      document.getElementById('firma-btn-ok').disabled = false;
-    };
+    const resp = await fetch('/api/firma/anteprima-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ html: _firmaHtml }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Errore generazione PDF');
+
+    const blob = new Blob([Uint8Array.from(atob(data.pdfBase64), c => c.charCodeAt(0))], { type: 'application/pdf' });
+    if (_firmaPreviewUrl) URL.revokeObjectURL(_firmaPreviewUrl);
+    _firmaPreviewUrl = URL.createObjectURL(blob);
+    iframe.src = _firmaPreviewUrl + '#toolbar=1&view=FitH';
+    loading.style.display = 'none';
+    iframe.style.display = 'block';
+    document.getElementById('firma-btn-ok').disabled = false;
   } catch (e) {
     loading.textContent = '❌ Errore anteprima: ' + e.message;
   }
@@ -3257,6 +3267,8 @@ async function apriModalFirma(id) {
 
 function chiudiModalFirma() {
   document.getElementById('firma-ov').style.display = 'none';
+  if (_firmaPreviewUrl) { URL.revokeObjectURL(_firmaPreviewUrl); _firmaPreviewUrl = null; }
+  document.getElementById('firma-iframe').src = 'about:blank';
   _firmaRefertoId = null;
   _firmaHtml = null;
 }
