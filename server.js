@@ -857,6 +857,29 @@ function firmaBaseUrl(cfg) {
     : 'https://esignature.openapi.com';
 }
 
+// Genera un token OAuth OpenAPI.com per le chiamate eSignature.
+// Il flow corretto: Basic(email:apikey) → POST oauth.openapi.it/token → Bearer token.
+// Gli scope devono usare il dominio .com (test.esignature.openapi.com o esignature.openapi.com).
+async function openapiOAuthToken(cfg) {
+  const EMAIL = 'salvatore.susino93@gmail.com';
+  const isTest = cfg.firmaTest !== false;
+  const oauthUrl = 'https://test.oauth.openapi.it/token';
+  const esignDomain = isTest ? 'test.esignature.openapi.com' : 'esignature.openapi.com';
+  const scopes = [
+    `POST:${esignDomain}/EU-QES_automatic`,
+    `GET:${esignDomain}/signatures`,
+  ];
+  const basic = 'Basic ' + Buffer.from(EMAIL + ':' + cfg.openapiKey).toString('base64');
+  const r = await fetch(oauthUrl, {
+    method: 'POST',
+    headers: { 'Authorization': basic, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scopes }),
+  });
+  const data = await r.json();
+  if (!r.ok || !data.token) throw new Error('Impossibile ottenere token OAuth OpenAPI.com: ' + JSON.stringify(data).slice(0, 200));
+  return data.token;
+}
+
 // Log compatto delle risposte API (per rifinire i nomi dei campi durante i test in sandbox)
 function logFirma(tag, obj) {
   try {
@@ -899,21 +922,24 @@ app.post('/api/firma-e-stampa', async (req, res) => {
   }
 
   const base = firmaBaseUrl(cfg);
-  const auth = { 'Authorization': `Bearer ${cfg.openapiKey}`, 'Content-Type': 'application/json' };
   const pdfPath = path.join(os.tmpdir(), 'referteco_unsigned_' + Date.now() + '.pdf');
   try {
-    // 1. HTML → PDF con Chrome headless
+    // 1. Genera token OAuth (API key → token Bearer per eSignature)
+    const oauthToken = await openapiOAuthToken(cfg);
+    const auth = { 'Authorization': `Bearer ${oauthToken}`, 'Content-Type': 'application/json' };
+
+    // 2bis. HTML → PDF con Chrome headless
     await htmlToPdf(html, pdfPath);
     const pdfBase64 = fs.readFileSync(pdfPath).toString('base64');
 
-    // 2. Avvia la firma automatica (PAdES, nessun OTP)
+    // 3. Avvia la firma automatica (PAdES, nessun OTP)
     // ⚠️ DA VERIFICARE in sandbox i nomi esatti dei campi (console/Postman OpenAPI.com).
     const safeName = (refertoId || Date.now()).toString().replace(/[^a-zA-Z0-9_-]/g, '_');
     const sigResp = await fetch(`${base}/EU-QES_automatic`, {
       method: 'POST',
       headers: auth,
       body: JSON.stringify({
-        inputDocument: [{ sourceType: 'base64', payload: pdfBase64 }],
+        inputDocuments: [{ sourceType: 'base64', payload: pdfBase64 }],
         certificateUsername: cfg.namirialUsername,
         certificatePassword: cfg.namirialPin,
         signatureType: 'pades',
@@ -928,7 +954,7 @@ app.post('/api/firma-e-stampa', async (req, res) => {
     const sigId = sigData?.data?.id || sigData?.id;
     if (!sigId) throw new Error('Risposta firma senza id pratica. Controllare il log [firma].');
 
-    // 3. Attende il completamento (gestisce sia firma sincrona sia asincrona)
+    // 4. Attende il completamento (gestisce sia firma sincrona sia asincrona)
     let signedB64 = sigData?.data?.signedDocument || sigData?.signedDocument || null;
     if (!signedB64) {
       const statiFatti = ['DONE', 'COMPLETED', 'SIGNED', 'done', 'completed', 'signed'];
@@ -962,7 +988,7 @@ app.post('/api/firma-e-stampa', async (req, res) => {
     }
     if (!signedB64) throw new Error('Timeout: PDF firmato non disponibile. Controllare il log [firma].');
 
-    // 4. Salva PDF firmato
+    // 5. Salva PDF firmato
     const signedBuffer = Buffer.from(signedB64, 'base64');
     const firmaDir = path.join(config.getDataDir(), 'firmati');
     fs.mkdirSync(firmaDir, { recursive: true });
@@ -970,10 +996,10 @@ app.post('/api/firma-e-stampa', async (req, res) => {
     const signedPath = path.join(firmaDir, `referto_${safeName}_${today}_firmato.pdf`);
     fs.writeFileSync(signedPath, signedBuffer);
 
-    // 5. Stampa automaticamente (best-effort, non blocca se il viewer non supporta Print verb)
+    // 6. Stampa automaticamente (best-effort, non blocca se il viewer non supporta Print verb)
     stampaPdf(signedPath).catch(() => {});
 
-    // 6. Restituisce anche il PDF firmato come base64 per il download browser
+    // 7. Restituisce anche il PDF firmato come base64 per il download browser
     res.json({ ok: true, file: signedPath, test: !!cfg.firmaTest, pdfBase64: signedB64 });
   } catch (e) {
     console.error('[firma-e-stampa]', e.message);
