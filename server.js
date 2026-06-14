@@ -922,6 +922,7 @@ app.post('/api/firma-e-stampa', async (req, res) => {
     });
     const sigText = await sigResp.text();
     logFirma('EU-QES_automatic ' + sigResp.status, sigText);
+    if (sigResp.status === 401) throw new Error('Token OpenAPI.com non valido o scaduto. Genera un nuovo token in console.openapi.com → Authentication e aggiornalo in Impostazioni → Firma Digitale.');
     if (!sigResp.ok) throw new Error(`OpenAPI.com errore ${sigResp.status}: ${sigText.slice(0, 300)}`);
     const sigData = JSON.parse(sigText);
     const sigId = sigData?.data?.id || sigData?.id;
