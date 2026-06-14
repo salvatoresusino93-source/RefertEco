@@ -903,95 +903,130 @@ function stampaPdf(pdfPath) {
   });
 }
 
+// Base URL del servizio firma: sandbox (gratis, per provare) o produzione (firma vera).
+// Si commuta dall'interruttore in Impostazioni → Firma Digitale.
+function firmaBaseUrl(cfg) {
+  return cfg.firmaTest
+    ? 'https://test.esignature.openapi.com'
+    : 'https://esignature.openapi.com';
+}
+
+// Log compatto delle risposte API (per rifinire i nomi dei campi durante i test in sandbox)
+function logFirma(tag, obj) {
+  try {
+    const s = typeof obj === 'string' ? obj : JSON.stringify(obj);
+    console.log('[firma] ' + tag + ': ' + s.slice(0, 1200));
+  } catch { console.log('[firma] ' + tag + ': <non serializzabile>'); }
+}
+
 app.get('/api/firma/config', (req, res) => {
   const cfg = config.load();
   res.json({
     namirialUsername: cfg.namirialUsername || '',
     hasKey:  !!cfg.openapiKey,
     hasPin:  !!cfg.namirialPin,
+    firmaTest: cfg.firmaTest !== false, // default: TEST (sandbox) finché non si passa in produzione
     configurato: !!(cfg.openapiKey && cfg.namirialUsername && cfg.namirialPin),
   });
 });
 
 app.post('/api/firma/config', (req, res) => {
-  const { openapiKey, namirialUsername, namirialPin } = req.body;
+  const { openapiKey, namirialUsername, namirialPin, firmaTest } = req.body;
   const cfg = config.load();
   if (openapiKey)       cfg.openapiKey       = openapiKey;
   if (namirialUsername) cfg.namirialUsername  = namirialUsername;
   if (namirialPin)      cfg.namirialPin       = namirialPin;
+  if (typeof firmaTest === 'boolean') cfg.firmaTest = firmaTest;
   config.save(cfg);
   res.json({ ok: true });
 });
 
+// Firma automatica (senza OTP) + stampa.
+// Flusso: HTML → PDF → POST /EU-QES_automatic → attende fine firma → scarica PDF firmato → salva → stampa.
 app.post('/api/firma-e-stampa', async (req, res) => {
-  const { html, otp, refertoId } = req.body;
-  if (!html || !otp) return res.status(400).json({ error: 'html e otp richiesti' });
+  const { html, refertoId } = req.body;
+  if (!html) return res.status(400).json({ error: 'html richiesto' });
 
   const cfg = config.load();
   if (!cfg.openapiKey || !cfg.namirialUsername || !cfg.namirialPin) {
     return res.status(400).json({ error: 'Credenziali firma non configurate. Vai in Impostazioni → Firma Digitale.' });
   }
 
+  const base = firmaBaseUrl(cfg);
+  const auth = { 'Authorization': `Bearer ${cfg.openapiKey}`, 'Content-Type': 'application/json' };
   const pdfPath = path.join(os.tmpdir(), 'referteco_unsigned_' + Date.now() + '.pdf');
   try {
     // 1. HTML → PDF con Chrome headless
     await htmlToPdf(html, pdfPath);
-
     const pdfBase64 = fs.readFileSync(pdfPath).toString('base64');
 
-    // 2. Chiama OpenAPI.com per firmare
-    // ⚠️ Verificare il body esatto dalla documentazione OpenAPI.com dopo aver creato l'account
-    const sigResp = await fetch('https://api.openapi.com/EU-QES_otp', {
+    // 2. Avvia la firma automatica (PAdES, nessun OTP)
+    // ⚠️ DA VERIFICARE in sandbox i nomi esatti dei campi (console/Postman OpenAPI.com).
+    const safeName = (refertoId || Date.now()).toString().replace(/[^a-zA-Z0-9_-]/g, '_');
+    const sigResp = await fetch(`${base}/EU-QES_automatic`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${cfg.openapiKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: auth,
       body: JSON.stringify({
-        inputDocument: [{ sourceType: 'base64', fileContent: pdfBase64 }],
+        inputDocument: [{ sourceType: 'base64', payload: pdfBase64 }],
         certificateUsername: cfg.namirialUsername,
         certificatePassword: cfg.namirialPin,
-        otp: otp,             // ⚠️ verificare nome campo: potrebbe essere "otpCode" o simile
         signatureType: 'pades',
+        title: 'Referto ' + safeName,
       }),
     });
+    const sigText = await sigResp.text();
+    logFirma('EU-QES_automatic ' + sigResp.status, sigText);
+    if (!sigResp.ok) throw new Error(`OpenAPI.com errore ${sigResp.status}: ${sigText.slice(0, 300)}`);
+    const sigData = JSON.parse(sigText);
+    const sigId = sigData?.data?.id || sigData?.id;
+    if (!sigId) throw new Error('Risposta firma senza id pratica. Controllare il log [firma].');
 
-    if (!sigResp.ok) {
-      const err = await sigResp.text().catch(() => sigResp.status.toString());
-      throw new Error(`OpenAPI.com errore ${sigResp.status}: ${err}`);
+    // 3. Attende il completamento (gestisce sia firma sincrona sia asincrona)
+    let signedB64 = sigData?.data?.signedDocument || sigData?.signedDocument || null;
+    if (!signedB64) {
+      const statiFatti = ['DONE', 'COMPLETED', 'SIGNED', 'done', 'completed', 'signed'];
+      for (let i = 0; i < 20 && !signedB64; i++) {
+        await new Promise(r => setTimeout(r, 1500));
+        // 3a. scarica direttamente il documento firmato
+        const dl = await fetch(`${base}/signatures/${sigId}/signedDocument`, { headers: auth });
+        if (dl.ok) {
+          const ct = dl.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const j = await dl.json();
+            signedB64 = j?.data?.signedDocument || j?.data?.payload || j?.signedDocument || null;
+          } else {
+            // risposta binaria = PDF firmato
+            const buf = Buffer.from(await dl.arrayBuffer());
+            if (buf.length > 500) { signedB64 = buf.toString('base64'); }
+          }
+          if (signedB64) break;
+        }
+        // 3b. altrimenti controlla lo stato della pratica e continua ad attendere
+        const st = await fetch(`${base}/signatures/${sigId}`, { headers: auth });
+        if (st.ok) {
+          const sd = await st.json();
+          const stato = sd?.data?.state || sd?.state || '';
+          logFirma('stato pratica', stato);
+          if (sd?.data?.error || /ERROR|FAIL/i.test(stato)) {
+            throw new Error('Firma fallita: ' + (sd?.data?.message || stato));
+          }
+        }
+      }
     }
-
-    const sigData = await sigResp.json();
-
-    // 3. Ottieni il PDF firmato dalla risposta
-    let signedBuffer;
-    // Caso A: PDF inline come base64 nella risposta
-    const inlineB64 = sigData?.data?.signedDocument || sigData?.signedDocument;
-    if (inlineB64) {
-      signedBuffer = Buffer.from(inlineB64, 'base64');
-    } else {
-      // Caso B: scarica tramite ID documento — ⚠️ verificare endpoint di download
-      const docId = sigData?.data?.document?.validatedDocument?.id || sigData?.data?.id;
-      if (!docId) throw new Error('Risposta OpenAPI.com non contiene il documento firmato. Controllare la documentazione.');
-      const dlResp = await fetch(`https://api.openapi.com/documents/${docId}/content`, {
-        headers: { 'Authorization': `Bearer ${cfg.openapiKey}` },
-      });
-      if (!dlResp.ok) throw new Error(`Download PDF firmato fallito (${dlResp.status})`);
-      signedBuffer = Buffer.from(await dlResp.arrayBuffer());
-    }
+    if (!signedB64) throw new Error('Timeout: PDF firmato non disponibile. Controllare il log [firma].');
 
     // 4. Salva PDF firmato
+    const signedBuffer = Buffer.from(signedB64, 'base64');
     const firmaDir = path.join(config.getDataDir(), 'firmati');
     fs.mkdirSync(firmaDir, { recursive: true });
     const today = new Date().toISOString().slice(0, 10);
-    const safeName = (refertoId || Date.now()).toString().replace(/[^a-zA-Z0-9_-]/g, '_');
     const signedPath = path.join(firmaDir, `referto_${safeName}_${today}_firmato.pdf`);
     fs.writeFileSync(signedPath, signedBuffer);
 
     // 5. Stampa automaticamente
     await stampaPdf(signedPath);
 
-    res.json({ ok: true, file: signedPath });
+    res.json({ ok: true, file: signedPath, test: !!cfg.firmaTest });
   } catch (e) {
     console.error('[firma-e-stampa]', e.message);
     res.status(500).json({ error: e.message });

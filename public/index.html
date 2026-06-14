@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#1a365d">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=20260614">
+<link rel="stylesheet" href="style.css?v=20260614d">
 </head>
 <body>
 <div class="app">
@@ -557,6 +557,15 @@
               <label>Namirial — PIN</label>
               <input type="password" id="firma-pin" placeholder="PIN del certificato Namirial" autocomplete="off">
             </div>
+            <div class="fg" style="margin-bottom:10px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="firma-test-toggle" style="width:auto">
+                <span>🧪 Modalità TEST (sandbox gratuita — per provare senza costi né valore legale)</span>
+              </label>
+              <p style="font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.5">
+                Tienila attiva finché non hai il certificato vero. Togli la spunta solo quando vuoi firme reali.
+              </p>
+            </div>
             <div id="firma-config-status" style="font-size:12px;margin-bottom:10px"></div>
             <button class="btn btn-primary btn-sm" onclick="salvaConfigFirma()">💾 Salva credenziali firma</button>
           </div>
@@ -702,19 +711,17 @@
   </div>
 </div>
 
-<!-- MODAL OTP FIRMA -->
+<!-- MODAL FIRMA (automatica, senza OTP) -->
 <div class="conf-ov" id="firma-ov" style="display:none">
-  <div class="conf-box" style="max-width:380px">
-    <div class="conf-title">✍ Firma Digitale Namirial</div>
+  <div class="conf-box" style="max-width:400px">
+    <div class="conf-title">✍ Firma e Stampa</div>
     <div class="conf-msg" style="text-align:left;line-height:1.6">
-      Apri l'app <strong>Namirial Sign</strong> sul telefono e inserisci il codice OTP mostrato.
+      Il referto verrà <strong>firmato digitalmente</strong> e poi <strong>stampato</strong> automaticamente.
     </div>
-    <div style="margin:14px 0 4px">
-      <input type="text" id="firma-otp-input" placeholder="Codice OTP (6 cifre)"
-        maxlength="8" inputmode="numeric" autocomplete="one-time-code"
-        style="width:100%;padding:10px 12px;font-size:18px;letter-spacing:4px;text-align:center;border:2px solid var(--border);border-radius:8px;font-family:'DM Mono',monospace">
+    <div id="firma-test-badge" style="display:none;margin:10px 0;padding:7px 10px;border-radius:6px;background:#fff3cd;color:#856404;font-size:12px;text-align:center">
+      🧪 MODALITÀ TEST — firma di prova, non valida legalmente (nessun costo)
     </div>
-    <div id="firma-stato" style="font-size:12px;color:var(--text-muted);min-height:18px;margin-bottom:8px;text-align:center"></div>
+    <div id="firma-stato" style="font-size:12px;color:var(--text-muted);min-height:18px;margin:8px 0;text-align:center"></div>
     <div class="conf-act">
       <button class="btn btn-secondary btn-sm" onclick="chiudiModalFirma()">Annulla</button>
       <button class="btn btn-success btn-sm" id="firma-btn-ok" onclick="confermaFirma()">✍ Firma e Stampa</button>
@@ -743,6 +750,6 @@
   </div>
 </div>
 
-<script src="app.js?v=20260614c"></script>
+<script src="app.js?v=20260614d"></script>
 </body>
 </html>

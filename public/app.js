@@ -136,7 +136,7 @@ function showView(n) {
   if (navBtn) navBtn.classList.add('active');
   document.getElementById('topbar-title').textContent = TITOLI[n] || n;
   if (n === 'archivio') { populateAnni(); renderArchivio(); }
-  if (n === 'impostazioni') { loadConfig(); loadTema(); }
+  if (n === 'impostazioni') { loadConfig(); loadTema(); caricaConfigFirma(); }
 }
 
 function _ripristinaViewerInNuovo() {
@@ -3263,11 +3263,11 @@ async function apriModalFirma(id) {
     return;
   }
   _firmaRefertoId = id;
-  document.getElementById('firma-otp-input').value = '';
   document.getElementById('firma-stato').textContent = '';
   document.getElementById('firma-btn-ok').disabled = false;
+  // Mostra l'avviso giallo se siamo in modalità test (sandbox)
+  document.getElementById('firma-test-badge').style.display = cfg.firmaTest ? 'block' : 'none';
   document.getElementById('firma-ov').style.display = 'flex';
-  setTimeout(() => document.getElementById('firma-otp-input').focus(), 100);
 }
 
 function chiudiModalFirma() {
@@ -3276,8 +3276,6 @@ function chiudiModalFirma() {
 }
 
 async function confermaFirma() {
-  const otp = document.getElementById('firma-otp-input').value.trim();
-  if (!otp) { document.getElementById('firma-stato').textContent = 'Inserisci il codice OTP.'; return; }
   if (!_firmaRefertoId) return;
 
   const btn = document.getElementById('firma-btn-ok');
@@ -3286,19 +3284,19 @@ async function confermaFirma() {
 
   try {
     const html = await generaHtmlFirma(_firmaRefertoId);
-    document.getElementById('firma-stato').textContent = 'Firma e stampa in corso…';
+    document.getElementById('firma-stato').textContent = 'Firma in corso (può richiedere qualche secondo)…';
 
     const resp = await fetch('/api/firma-e-stampa', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ html, otp, refertoId: _firmaRefertoId }),
+      body: JSON.stringify({ html, refertoId: _firmaRefertoId }),
     });
     const data = await resp.json();
 
     if (!resp.ok) throw new Error(data.error || 'Errore sconosciuto');
 
     chiudiModalFirma();
-    toast('✅ Referto firmato e inviato in stampa', 'ok');
+    toast(data.test ? '✅ Referto firmato (TEST) e inviato in stampa' : '✅ Referto firmato e inviato in stampa', 'ok');
   } catch (e) {
     document.getElementById('firma-stato').textContent = '❌ ' + e.message;
     btn.disabled = false;
@@ -3432,12 +3430,11 @@ async function salvaConfigFirma() {
   const key = document.getElementById('firma-api-key').value.trim();
   const usr = document.getElementById('firma-username').value.trim();
   const pin = document.getElementById('firma-pin').value.trim();
-  if (!key && !usr && !pin) { toast('Inserisci almeno un campo', 'err'); return; }
-
+  const test = document.getElementById('firma-test-toggle')?.checked;
   const resp = await fetch('/api/firma/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ openapiKey: key || undefined, namirialUsername: usr || undefined, namirialPin: pin || undefined }),
+    body: JSON.stringify({ openapiKey: key || undefined, namirialUsername: usr || undefined, namirialPin: pin || undefined, firmaTest: !!test }),
   });
   if (!resp.ok) { toast('Errore salvataggio', 'err'); return; }
 
@@ -3455,6 +3452,8 @@ async function caricaConfigFirma() {
     const cfg = await apiGet('/api/firma/config');
     const el = document.getElementById('firma-username');
     if (el && cfg.namirialUsername) el.value = cfg.namirialUsername;
+    const toggle = document.getElementById('firma-test-toggle');
+    if (toggle) toggle.checked = cfg.firmaTest !== false;
     const stato = document.getElementById('firma-config-status');
     if (stato) {
       if (cfg.configurato) {
