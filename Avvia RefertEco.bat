@@ -13,6 +13,12 @@ echo   RefertEco in avvio...
 echo   Attendi qualche secondo...
 echo.
 
+echo   Pulizia processi precedenti...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":3000 " ^| findstr "LISTENING"') do (
+  taskkill /PID %%a /F >nul 2>&1
+)
+timeout /t 1 /nobreak >nul
+
 set NODE_PATH=%INST%\node_modules
 cd /d "%SRC%"
 start /b "%INST%\node.exe" server.js > "%TEMP%\referteco.log" 2>&1

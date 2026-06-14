@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>RefertEco — Gestionale Referti</title>
-<link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=2">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=2">
-<link rel="apple-touch-icon" href="icon-192.png?v=2">
-<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1a365d">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css?v=20260614">
 </head>
 <body>
 <div class="app">
@@ -734,12 +734,15 @@
       <button class="orthanc-close-btn" onclick="chiudiPanelOrthanc()">✕</button>
     </div>
     <div class="orthanc-status" id="orthanc-status"></div>
+    <div class="orthanc-search-wrap" id="orthanc-search-wrap" style="display:none">
+      <input type="search" id="orthanc-search" placeholder="🔍 Cerca per nome paziente…" oninput="filtroOrthanc()" autocomplete="off">
+    </div>
     <div class="orthanc-list" id="orthanc-list">
       <div class="orthanc-loading">Caricamento studi…</div>
     </div>
   </div>
 </div>
 
-<script src="app.js?v=20260612a"></script>
+<script src="app.js?v=20260614c"></script>
 </body>
 </html>

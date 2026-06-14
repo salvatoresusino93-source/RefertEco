@@ -459,7 +459,20 @@ async function processaFilesViewer(files) {
 }
 
 async function ricaricaViewer(nuoviFile) {
-  const filenames = await apiGet('/api/referti/' + _tempRefertoId + '/immagini');
+  const resp = await fetch('/api/referti/' + _tempRefertoId + '/immagini');
+  let filenames = await resp.json();
+  if (!Array.isArray(filenames)) filenames = [];
+
+  // Ordine cronologico automatico se non c'è un ordine manuale salvato (drag&drop).
+  // Sistema anche i referti importati prima del fix, senza bisogno di re-importare.
+  const hasCustomOrder = resp.headers.get('X-Custom-Order') === 'true';
+  if (!hasCustomOrder && filenames.filter(f => /\.dcm$/i.test(f)).length > 1) {
+    const sorted = await _sortDicomByInstance(_tempRefertoId, filenames);
+    if (sorted.some((f, i) => f !== filenames[i])) {
+      apiPost('/api/referti/' + _tempRefertoId + '/immagini/ordine', { ordine: sorted }).catch(() => {});
+      filenames = sorted;
+    }
+  }
 
   // Genera displayUrl solo per i file nuovi, riusa oggetti già caricati
   const mapEsistenti = {};
@@ -1193,26 +1206,53 @@ function apriImmagine(url) {
   window.open(url, '_blank');
 }
 
-// Estrae Instance Number e Series Number da un DICOM via Range request (primi 8KB)
+// Estrae timestamp di acquisizione + Series/Instance Number da un DICOM via Range request.
+// untilTag ferma il parsing prima dei PixelData → affidabile anche leggendo solo l'inizio del file.
 async function _dicomSortKey(url) {
   try {
-    const resp = await fetch(url, { headers: { Range: 'bytes=0-8191' } });
+    const resp = await fetch(url, { headers: { Range: 'bytes=0-16383' } });
     const buf  = await resp.arrayBuffer();
-    const ds   = dicomParser.parseDicom(new Uint8Array(buf));
+    const ds   = dicomParser.parseDicom(new Uint8Array(buf), { untilTag: 'x7fe00010' });
     const series = parseInt(ds.string('x00200011') || '0') || 0;
     const inst   = parseInt(ds.string('x00200013') || '0') || 0;
-    return { series, inst };
-  } catch { return { series: 0, inst: 0 }; }
+    // Timestamp cronologico: AcquisitionDateTime, poi Content/Acquisition/InstanceCreation date+time
+    const digits = v => (v || '').replace(/\D/g, '');
+    const fmtTime = v => { const d = digits(v); return d ? (d.slice(0, 6).padEnd(6, '0') + d.slice(6).padEnd(6, '0')) : ''; };
+    let ts = '';
+    const acqDT = digits(ds.string('x0008002a')); // AcquisitionDateTime
+    if (acqDT.length >= 8) {
+      ts = (acqDT.slice(0, 8) + acqDT.slice(8).padEnd(12, '0')).slice(0, 20).padEnd(20, '0');
+    } else {
+      const date = digits(ds.string('x00080023')) || digits(ds.string('x00080022')) || digits(ds.string('x00080012'));
+      const time = fmtTime(ds.string('x00080033')) || fmtTime(ds.string('x00080032')) || fmtTime(ds.string('x00080013'));
+      if (time) ts = ((date.length === 8 ? date : '00000000') + time).padEnd(20, '0');
+    }
+    return { ts, series, inst };
+  } catch { return { ts: '', series: 0, inst: 0 }; }
 }
 
 async function _sortDicomByInstance(refertoId, files) {
   const withKey = await Promise.all(files.map(async (f, origIdx) => {
-    if (!/\.dcm$/i.test(f)) return { name: f, series: 999, inst: origIdx };
+    if (!/\.dcm$/i.test(f)) return { name: f, ts: '', series: 999, inst: origIdx, origIdx };
     const url = '/immagini/' + refertoId + '/' + encodeURIComponent(f);
     const key = await _dicomSortKey(url);
-    return { name: f, ...key };
+    // se InstanceNumber non è impostato (0), usa il numero nel nome file come fallback
+    const inst = key.inst || (() => {
+      const m = f.match(/_(\d+)\.(?:dcm)$/i);
+      return m ? parseInt(m[1], 10) : origIdx;
+    })();
+    return { name: f, ts: key.ts, series: key.series, inst, origIdx };
   }));
-  withKey.sort((a, b) => a.series !== b.series ? a.series - b.series : a.inst - b.inst);
+  withKey.sort((a, b) => {
+    // 1) ordine cronologico reale se disponibile
+    if (a.ts && b.ts && a.ts !== b.ts) return a.ts < b.ts ? -1 : 1;
+    if (a.ts && !b.ts) return -1;
+    if (!a.ts && b.ts) return 1;
+    // 2) fallback: serie + instance number, poi ordine originale
+    if (a.series !== b.series) return a.series - b.series;
+    if (a.inst !== b.inst) return a.inst - b.inst;
+    return a.origIdx - b.origIdx;
+  });
   return withKey.map(x => x.name);
 }
 
@@ -3084,14 +3124,55 @@ async function _importaStudioOrthanc(studyId) {
 
 // ── ORTHANC PANEL ─────────────────────────────────────────────
 
+let _orthancStudi = [];
+let _orthancMatchScore = () => 2;
+
+function _renderOrthanc(lista) {
+  const listEl = document.getElementById('orthanc-list');
+  if (!lista.length) {
+    listEl.innerHTML = '<div class="orthanc-empty">Nessun paziente trovato.</div>';
+    return;
+  }
+  listEl.innerHTML = lista.map(s => `
+    <div class="orthanc-card${_orthancMatchScore(s) === 0 ? ' orthanc-card-match' : ''}">
+      <div class="orthanc-card-name">${_orthancMatchScore(s) === 0 ? '⭐ ' : ''}${esc(s.patientName || '(paziente sconosciuto)')}</div>
+      <div class="orthanc-card-meta">
+        ${s.birthDate ? 'Nato/a: ' + esc(s.birthDate) + '<br>' : ''}
+        ${s.studyDate ? 'Esame: ' + esc(s.studyDate) + '<br>' : ''}
+        ${s.description ? esc(s.description) + '<br>' : ''}
+        ${s.modality ? 'Modalità: ' + esc(s.modality) : ''}
+      </div>
+      <div class="orthanc-card-foot">
+        <span class="orthanc-badge">${s.nInstances} immagini</span>
+        <button class="btn btn-primary orthanc-importa-btn" onclick="importaDaOrthanc('${s.id}')">
+          📥 Importa
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+function filtroOrthanc() {
+  const q = (document.getElementById('orthanc-search')?.value || '').trim().toUpperCase();
+  if (!q) { _renderOrthanc(_orthancStudi); return; }
+  const filtrati = _orthancStudi.filter(s => {
+    const n = (s.patientName || '').toUpperCase().replace(/\^/g, ' ');
+    return q.split(/\s+/).every(w => n.includes(w));
+  });
+  _renderOrthanc(filtrati);
+}
+
 async function apriPanelOrthanc() {
   const overlay = document.getElementById('orthanc-overlay');
   const statusEl = document.getElementById('orthanc-status');
   const listEl = document.getElementById('orthanc-list');
+  const searchWrap = document.getElementById('orthanc-search-wrap');
+  const searchEl = document.getElementById('orthanc-search');
   overlay.classList.add('open');
   statusEl.className = 'orthanc-status';
   statusEl.textContent = 'Connessione a Orthanc…';
   listEl.innerHTML = '<div class="orthanc-loading">Caricamento studi…</div>';
+  searchWrap.style.display = 'none';
+  if (searchEl) searchEl.value = '';
 
   const status = await apiGet('/api/orthanc/status');
   if (!status || !status.online) {
@@ -3108,22 +3189,26 @@ async function apriPanelOrthanc() {
     listEl.innerHTML = '<div class="orthanc-empty">Nessuno studio presente.<br>L\'ecografo deve inviare le immagini a questo PC<br>(IP: 192.168.1.17, porta: 4242, AET: ORTHANC)</div>';
     return;
   }
-  listEl.innerHTML = studi.map(s => `
-    <div class="orthanc-card">
-      <div class="orthanc-card-name">${esc(s.patientName || '(paziente sconosciuto)')}</div>
-      <div class="orthanc-card-meta">
-        ${s.birthDate ? 'Nato/a: ' + esc(s.birthDate) + '<br>' : ''}
-        ${s.studyDate ? 'Esame: ' + esc(s.studyDate) + '<br>' : ''}
-        ${s.description ? esc(s.description) + '<br>' : ''}
-        ${s.modality ? 'Modalità: ' + esc(s.modality) : ''}
-      </div>
-      <div class="orthanc-card-foot">
-        <span class="orthanc-badge">${s.nInstances} immagini</span>
-        <button class="btn btn-primary orthanc-importa-btn" onclick="importaDaOrthanc('${s.id}')">
-          📥 Importa
-        </button>
-      </div>
-    </div>`).join('');
+
+  // Mette in cima il paziente correntemente aperto nel form
+  const curCognome = (document.getElementById('f-cognome')?.value || '').trim().toUpperCase();
+  const curNome    = (document.getElementById('f-nome')?.value    || '').trim().toUpperCase();
+  _orthancMatchScore = s => {
+    const n = (s.patientName || '').toUpperCase().replace(/\^/g, ' ');
+    if (curCognome && curNome && n.includes(curCognome) && n.includes(curNome)) return 0;
+    if (curCognome && n.includes(curCognome)) return 1;
+    return 2;
+  };
+  studi.sort((a, b) => {
+    const sd = _orthancMatchScore(a) - _orthancMatchScore(b);
+    if (sd !== 0) return sd;
+    return (b.studyDate || '').localeCompare(a.studyDate || '');
+  });
+
+  _orthancStudi = studi;
+  searchWrap.style.display = '';
+  _renderOrthanc(studi);
+  searchEl?.focus();
 }
 
 function chiudiPanelOrthanc(e) {

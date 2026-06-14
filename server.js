@@ -52,12 +52,9 @@ app.get('/api/referti/:id/immagini', (req, res) => {
         return ia !== ib ? ia - ib : a.localeCompare(b, undefined, { numeric: true });
       });
     } else {
-      // Ordine cronologico: per data di modifica del file (= ordine di acquisizione)
-      files.sort((a, b) => {
-        const ma = fs.statSync(path.join(dir, a)).mtime;
-        const mb = fs.statSync(path.join(dir, b)).mtime;
-        return ma - mb;
-      });
+      // Natural sort: il numero nel nome file rispecchia l'ordine di acquisizione
+      // (es. _1.dcm, _2.dcm, ..., _10.dcm → ordine numerico corretto)
+      files.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     }
     res.setHeader('X-Custom-Order', hasCustomOrder ? 'true' : 'false');
     return res.json(files);
@@ -435,13 +432,12 @@ app.get('/api/orthanc/status', async (req, res) => {
 
 app.get('/api/orthanc/studi', async (req, res) => {
   try {
-    const r = await orthancFetch('/studies');
+    // Usa /studies?expand per ottenere tutti gli studi con i tag in una sola chiamata
+    const r = await orthancFetch('/studies?expand');
     if (!r.ok) return res.status(503).json({ error: 'Orthanc: ' + r.status });
-    const ids = await r.json();
-    const recent = ids.slice(-40).reverse();
-    const studi = (await Promise.all(recent.map(async id => {
+    const tutti = await r.json();
+    const studi = tutti.map(s => {
       try {
-        const s = await (await orthancFetch('/studies/' + id)).json();
         const pt = s.PatientMainDicomTags || {};
         const st = s.MainDicomTags || {};
         const rawName = (pt.PatientName || '').trim();
@@ -453,25 +449,64 @@ app.get('/api/orthanc/studi', async (req, res) => {
         const rawDate = (st.StudyDate || '').replace(/\D/g, '');
         const studyDate = rawDate.length === 8
           ? rawDate.slice(6) + '/' + rawDate.slice(4, 6) + '/' + rawDate.slice(0, 4) : '';
-        let nInstances = 0;
-        try {
-          const stat = await (await orthancFetch('/studies/' + id + '/statistics')).json();
-          nInstances = parseInt(stat.CountInstances || 0, 10);
-        } catch {}
+        const nInstances = parseInt(s.Statistics?.CountInstances || s.Instances?.length || 0, 10);
         return {
-          id, patientName, patientId: pt.PatientID || '', birthDate, studyDate,
+          id: s.ID, patientName, patientId: pt.PatientID || '', birthDate, studyDate,
           description: st.StudyDescription || st.RequestedProcedureDescription || '',
           modality: st.ModalitiesInStudy || '',
           nInstances,
           stabile: s.IsStable,
+          rawDate: rawDate || '00000000',
         };
       } catch { return null; }
-    }))).filter(Boolean);
+    }).filter(Boolean);
+    // Ordina per data esame, più recente prima
+    studi.sort((a, b) => b.rawDate.localeCompare(a.rawDate));
+    // Rimuove rawDate dall'output (era solo per ordinare)
+    studi.forEach(s => delete s.rawDate);
     res.json(studi);
   } catch (e) {
     res.status(503).json({ error: 'Orthanc non raggiungibile. Verificare che il servizio sia attivo.' });
   }
 });
+
+// Calcola una chiave cronologica (timestamp) confrontabile dai tag DICOM di un'istanza.
+// Usa, in ordine di preferenza: AcquisitionDateTime, ContentDate+Time, AcquisitionDate+Time,
+// InstanceCreationDate+Time. Restituisce stringa di 20 cifre (YYYYMMDD + HHMMSS + frazione) o ''.
+function _timestampDaTag(tags) {
+  const digits = v => (v || '').replace(/\D/g, '');
+  const fmtTime = v => { const d = digits(v); return d ? (d.slice(0, 6).padEnd(6, '0') + d.slice(6).padEnd(6, '0')) : ''; };
+  const acqDT = digits(tags.AcquisitionDateTime);
+  if (acqDT.length >= 8) return (acqDT.slice(0, 8) + acqDT.slice(8).padEnd(12, '0')).slice(0, 20).padEnd(20, '0');
+  const date = digits(tags.ContentDate) || digits(tags.AcquisitionDate) || digits(tags.InstanceCreationDate);
+  const time = fmtTime(tags.ContentTime) || fmtTime(tags.AcquisitionTime) || fmtTime(tags.InstanceCreationTime);
+  if (time) return ((date.length === 8 ? date : '00000000') + time).padEnd(20, '0');
+  return '';
+}
+
+// Ordina una lista di instanceId per ordine cronologico di acquisizione reale.
+// Interroga i tag completi di ogni istanza (su localhost è veloce). Fallback: SeriesNumber + InstanceNumber.
+async function _ordinaIstanzeCronologico(instanceIds) {
+  const conChiave = await Promise.all(instanceIds.map(async (id, origIdx) => {
+    let key = '', series = 0, inst = 0;
+    try {
+      const tags = await (await orthancFetch('/instances/' + id + '/tags?simplify')).json();
+      key = _timestampDaTag(tags);
+      series = parseInt(tags.SeriesNumber || '0', 10) || 0;
+      inst = parseInt(tags.InstanceNumber || '0', 10) || 0;
+    } catch {}
+    return { id, key, series, inst, origIdx };
+  }));
+  conChiave.sort((a, b) => {
+    if (a.key && b.key && a.key !== b.key) return a.key < b.key ? -1 : 1;
+    if (a.key && !b.key) return -1;
+    if (!a.key && b.key) return 1;
+    if (a.series !== b.series) return a.series - b.series;
+    if (a.inst !== b.inst) return a.inst - b.inst;
+    return a.origIdx - b.origIdx;
+  });
+  return conChiave.map(x => x.id);
+}
 
 app.post('/api/orthanc/importa/:studyId', async (req, res) => {
   const { refertoId } = req.body;
@@ -484,12 +519,16 @@ app.post('/api/orthanc/importa/:studyId', async (req, res) => {
     // Importa SOLO le immagini fisse: salta i video/cine (NumberOfFrames > 1).
     // I video restano su Orthanc e si consultano con MicroDicom.
     let videoSaltati = 0;
-    const instanceIds = (instArr || []).filter(inst => {
+    const instanceIdsFiltrati = (instArr || []).filter(inst => {
       const nf = parseInt((inst.MainDicomTags && inst.MainDicomTags.NumberOfFrames) || '1', 10);
       if (nf > 1) { videoSaltati++; return false; }
       return true;
     }).map(x => x.ID);
-    if (instanceIds.length === 0) return res.json({ importati: 0, files: [], paziente: {}, videoSaltati });
+    if (instanceIdsFiltrati.length === 0) return res.json({ importati: 0, files: [], paziente: {}, videoSaltati });
+
+    // Ordina cronologicamente PRIMA di salvare: così orthanc_0001.dcm = prima immagine acquisita.
+    // Tutto il resto (carosello, griglia, PDF) usa l'ordine dei file → ordine corretto ovunque.
+    const instanceIds = await _ordinaIstanzeCronologico(instanceIdsFiltrati);
 
     const dir = getImgDir(refertoId);
     fs.mkdirSync(dir, { recursive: true });
@@ -612,22 +651,23 @@ app.post('/api/worklist/crea', async (req, res) => {
     : '090000';
 
   try {
-    // Crea un'istanza DICOM minimale tramite Orthanc /tools/create-dicom
+    // RequestedProcedureDescription e ScheduledProcedureStepDescription
+    // vengono inviati vuoti per non triggerare nessun protocollo EzExam+
+    // sul Samsung V5 (il Samsung legge questi campi per attivare preset automatici).
     const tags = {
       PatientName:               patientName,
       PatientID:                 patientId,
       PatientBirthDate:          dob,
       AccessionNumber:           accession_number,
       RequestedProcedureID:      accession_number,
-      RequestedProcedureDescription: tipo_esame || 'Ecografia',
-      // Scheduled Procedure Step Sequence — è una sequence DICOM
+      RequestedProcedureDescription: '',
       ScheduledProcedureStepSequence: [{
         ScheduledStationAETitle:           'MEDISON',
         ScheduledProcedureStepStartDate:   startDate,
         ScheduledProcedureStepStartTime:   startTime,
         Modality:                          'US',
         ScheduledPerformingPhysicianName:  'SUSINO^SALVATORE',
-        ScheduledProcedureStepDescription: tipo_esame || 'Ecografia',
+        ScheduledProcedureStepDescription: '',
         ScheduledProcedureStepID:          accession_number,
       }],
     };
