@@ -3244,6 +3244,8 @@ async function apriModalFirma(id) {
     _firmaHtml = await generaHtmlFirma(id);
     iframe.srcdoc = _firmaHtml;
     iframe.onload = () => {
+      const h = iframe.contentDocument.documentElement.scrollHeight;
+      iframe.style.height = h + 'px';
       loading.style.display = 'none';
       iframe.style.display = 'block';
       document.getElementById('firma-btn-ok').disabled = false;
@@ -3368,6 +3370,7 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
 .sec::after{content:'';flex:1;height:1px;background:${T.line};}
 .body-text{font-size:12.5pt;line-height:1.6;color:#111;white-space:pre-wrap;text-align:justify;}
 .firma-wrap{margin-top:auto;padding-top:40px;display:flex;justify-content:flex-end;}
+.firma-wrap{break-inside:avoid;break-before:avoid;}
 .firma-digitale-box{text-align:left;padding-right:80px;}
 .firma-digitale-linea{border-top:1px solid #999;margin-bottom:10px;}
 .firma-digitale-chi{font-family:'Lora',serif;font-size:11.5pt;font-weight:600;color:#1c1c1c;}
