@@ -3361,10 +3361,10 @@ async function generaHtmlFirma(id) {
 <title>Referto — ${esc(r.cognome)} ${esc(r.nome)}</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@300;400;600&display=swap');
-@page{margin:0;}
+@page{margin:15mm 0;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;background:white;}
-.page{max-width:800px;margin:0 auto;padding:36px 48px 44px;box-sizing:border-box;}
+.page{max-width:800px;margin:0 auto;padding:0 48px;box-sizing:border-box;}
 .hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid ${T.accent};margin-bottom:0;}
 .hdr-nome{font-family:'Lora',serif;font-size:17pt;font-weight:600;color:${T.accent};letter-spacing:-0.01em;}
 .hdr-titolo{font-size:9.5pt;color:#555;margin-top:2px;font-weight:300;letter-spacing:0.01em;}
@@ -3389,8 +3389,8 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
 .firma-digitale-data{font-size:9pt;color:#333;margin-top:12px;}
 .firma-digitale-tipo{font-size:7.5pt;color:#777;margin-top:3px;}
 .doc-footer{margin-top:32px;padding-top:10px;border-top:1px solid #ddd;display:flex;justify-content:space-between;font-size:7.5pt;color:#999;}
-@media print{.page{padding:20px 30px;}body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
-.img-page{page-break-before:always;padding:14px 20px;height:100vh;box-sizing:border-box;display:flex;flex-direction:column;}
+@media print{.page{padding:0 30px;}body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+.img-page{page-break-before:always;padding:14px 20px;height:calc(100vh - 30mm);box-sizing:border-box;display:flex;flex-direction:column;}
 .img-hdr{font-size:8pt;color:#888;margin-bottom:8px;border-bottom:1px solid #ddd;padding-bottom:5px;flex-shrink:0;}
 .img-grid-print{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1;min-height:0;}
 .img-cell{border:1px solid #ddd;padding:4px;background:#fff;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;}
