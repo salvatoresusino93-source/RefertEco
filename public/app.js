@@ -3233,8 +3233,20 @@ async function confermaFirma() {
 
     if (!resp.ok) throw new Error(data.error || 'Errore sconosciuto');
 
+    // Scarica il PDF firmato nel browser
+    if (data.pdfBase64) {
+      const blob = new Blob([Uint8Array.from(atob(data.pdfBase64), c => c.charCodeAt(0))], { type: 'application/pdf' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      const r = referti.find(x => x.id === _firmaRefertoId);
+      const nome = r ? (r.cognome + '_' + r.nome).replace(/\s+/g, '_') : _firmaRefertoId;
+      a.download = `referto_${nome}_firmato.pdf`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
     chiudiModalFirma();
-    toast(data.test ? '✅ Referto firmato (TEST) e inviato in stampa' : '✅ Referto firmato e inviato in stampa', 'ok');
+    toast(data.test ? '✅ Referto firmato (TEST) — PDF scaricato' : '✅ Referto firmato e inviato in stampa — PDF scaricato', 'ok');
   } catch (e) {
     document.getElementById('firma-stato').textContent = '❌ ' + e.message;
     btn.disabled = false;

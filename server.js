@@ -969,10 +969,11 @@ app.post('/api/firma-e-stampa', async (req, res) => {
     const signedPath = path.join(firmaDir, `referto_${safeName}_${today}_firmato.pdf`);
     fs.writeFileSync(signedPath, signedBuffer);
 
-    // 5. Stampa automaticamente
-    await stampaPdf(signedPath);
+    // 5. Stampa automaticamente (best-effort, non blocca se il viewer non supporta Print verb)
+    stampaPdf(signedPath).catch(() => {});
 
-    res.json({ ok: true, file: signedPath, test: !!cfg.firmaTest });
+    // 6. Restituisce anche il PDF firmato come base64 per il download browser
+    res.json({ ok: true, file: signedPath, test: !!cfg.firmaTest, pdfBase64: signedB64 });
   } catch (e) {
     console.error('[firma-e-stampa]', e.message);
     res.status(500).json({ error: e.message });
