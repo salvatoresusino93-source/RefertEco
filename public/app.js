@@ -3349,7 +3349,7 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
 .sec::after{content:'';flex:1;height:1px;background:${T.line};}
 .body-text{font-size:12.5pt;line-height:1.6;color:#111;white-space:pre-wrap;text-align:justify;}
 .firma-wrap{margin-top:auto;padding-top:40px;display:flex;justify-content:flex-end;}
-.firma-digitale-box{text-align:right;padding-left:80px;}
+.firma-digitale-box{text-align:left;padding-right:80px;}
 .firma-digitale-linea{border-top:1px solid #999;margin-bottom:10px;}
 .firma-digitale-chi{font-family:'Lora',serif;font-size:11.5pt;font-weight:600;color:#1c1c1c;}
 .firma-digitale-ruolo{font-size:9.5pt;color:#444;margin-top:2px;}
@@ -3391,7 +3391,7 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
   <div class="esame-title">${esc(r.tipo)}</div>
   <div class="sec">Referto</div>
   <div class="body-text">${esc(r.referto || '—')}</div>
-  <div class="firma-wrap">
+  <div class="firma-wrap" style="justify-content:flex-start;">
     <div class="firma-digitale-box">
       <div class="firma-digitale-linea"></div>
       <div class="firma-digitale-chi">${esc(MEDICO.nome)}</div>
