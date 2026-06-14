@@ -3369,9 +3369,8 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
 .sec{font-size:8pt;text-transform:uppercase;letter-spacing:0.12em;color:${T.mid};font-weight:700;margin:18px 0 7px;display:flex;align-items:center;gap:8px;}
 .sec::after{content:'';flex:1;height:1px;background:${T.line};}
 .body-text{font-size:12.5pt;line-height:1.6;color:#111;white-space:pre-wrap;text-align:justify;}
-.firma-wrap{margin-top:auto;padding-top:40px;display:flex;justify-content:flex-end;}
-.firma-wrap{break-inside:avoid;break-before:avoid;}
-.firma-digitale-box{text-align:left;padding-right:80px;}
+.firma-wrap{margin-top:auto;padding-top:40px;display:flex;justify-content:flex-start;page-break-inside:avoid;break-inside:avoid;page-break-before:avoid;break-before:avoid;}
+.firma-digitale-box{text-align:left;padding-right:80px;page-break-inside:avoid;break-inside:avoid;}
 .firma-digitale-linea{border-top:1px solid #999;margin-bottom:10px;}
 .firma-digitale-chi{font-family:'Lora',serif;font-size:11.5pt;font-weight:600;color:#1c1c1c;}
 .firma-digitale-ruolo{font-size:9.5pt;color:#444;margin-top:2px;}
