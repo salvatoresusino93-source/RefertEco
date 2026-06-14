@@ -317,70 +317,16 @@ app.get('/api/config', (req, res) => {
     currentDir: config.getDataDir(),
     dbFile: db.DB_FILE,
     detectedGoogleDrive: config.detectGoogleDrive(),
-    hasApiKey: !!cfg.anthropicApiKey,
   });
 });
 
 app.post('/api/config', (req, res) => {
-  const { dataDir, anthropicApiKey } = req.body;
+  const { dataDir } = req.body;
   const existing = config.load();
   const toSave = { ...existing };
   if (dataDir !== undefined) toSave.dataDir = dataDir || null;
-  if (anthropicApiKey) toSave.anthropicApiKey = anthropicApiKey;
   config.save(toSave);
   res.json({ ok: true });
-});
-
-// ── AI CORREZIONE REFERTO ────────────────────────────────────
-
-const AI_SYSTEM = `Sei un assistente medico specializzato in refertazione ecografica italiana. Ricevi il testo grezzo di un referto dettato vocalmente e devi correggerlo e formattarlo.
-
-Regole:
-- Usa sempre la forma impersonale italiana: "si documenta", "si rileva", "si osserva", "non si evidenziano", "non si rilevano", "si apprezza", ecc.
-- Correggi artefatti vocali e incomprensioni del riconoscimento vocale mantenendo fedelmente il senso clinico
-- Non aggiungere né rimuovere contenuto clinico: correggi solo la forma, non la sostanza
-- Segnala parole ambigue o incomprensibili con [??]
-- Correggi punteggiatura, grammatica e terminologia medica italiana
-- Restituisci solo il testo corretto, senza spiegazioni, commenti o prefazioni aggiuntive`;
-
-app.post('/api/ai/correggi', async (req, res) => {
-  const { testo } = req.body;
-  if (!testo || !testo.trim()) return res.status(400).json({ error: 'Testo mancante' });
-  const cfg = config.load();
-  if (!cfg.anthropicApiKey) {
-    return res.status(400).json({ error: 'Chiave API Anthropic non configurata. Vai in Impostazioni e inserisci la tua chiave API.' });
-  }
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': cfg.anthropicApiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-opus-4-5',
-        max_tokens: 4096,
-        system: AI_SYSTEM,
-        messages: [{ role: 'user', content: testo.trim() }],
-      }),
-    });
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      const msg = errData?.error?.message || ('Errore ' + response.status);
-      console.error('Anthropic API error:', response.status, msg);
-      if (response.status === 401) return res.status(401).json({ error: 'Chiave API non valida. Controlla la chiave in Impostazioni.' });
-      if (response.status === 429) return res.status(429).json({ error: 'Limite richieste Anthropic raggiunto. Riprova tra qualche secondo.' });
-      return res.status(502).json({ error: 'Errore API Anthropic (' + response.status + '): ' + msg });
-    }
-    const data = await response.json();
-    const testoCorretto = data.content?.[0]?.text;
-    if (!testoCorretto) return res.status(502).json({ error: 'Risposta Anthropic non valida' });
-    res.json({ testo: testoCorretto });
-  } catch (e) {
-    console.error('AI correction error:', e);
-    res.status(500).json({ error: 'Errore di connessione al servizio AI' });
-  }
 });
 
 // ── INTEGRAZIONE AGENDA ──────────────────────────────────────

@@ -283,10 +283,6 @@ function resetForm() {
   document.getElementById('tipo-custom').style.display = 'none';
   stopAllDictation();
   svuotaViewer();
-  _testoOriginaleAI = null;
-  document.getElementById('ai-corr-btn').style.display = '';
-  document.getElementById('ai-annulla-btn').style.display = 'none';
-  document.getElementById('ai-spinner').style.display = 'none';
 }
 
 // ── VIEWER IMMAGINI (creazione referto) ──────────────────────
@@ -648,54 +644,6 @@ async function svuotaViewer() {
   _viewerIndex  = 0;
   _tempRefertoId = null;
   renderViewer();
-}
-
-// ── AI CORREZIONE REFERTO ─────────────────────────────────────
-let _testoOriginaleAI = null;
-
-async function correggiAI() {
-  const ta = document.getElementById('f-referto');
-  const testo = ta.value.trim();
-  if (!testo) { toast('Inserire il testo del referto prima di correggere', 'err'); return; }
-  _testoOriginaleAI = ta.value;
-  const btn = document.getElementById('ai-corr-btn');
-  const spinner = document.getElementById('ai-spinner');
-  const annullaBtn = document.getElementById('ai-annulla-btn');
-  btn.style.display = 'none';
-  spinner.style.display = 'flex';
-  try {
-    const res = await fetch('/api/ai/correggi', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ testo }),
-    });
-    const data = await res.json();
-    if (!res.ok || data.error) {
-      toast('Errore: ' + (data.error || 'Risposta non valida'), 'err');
-      btn.style.display = '';
-      spinner.style.display = 'none';
-      _testoOriginaleAI = null;
-      return;
-    }
-    ta.value = data.testo;
-    spinner.style.display = 'none';
-    annullaBtn.style.display = '';
-    toast('Referto corretto con AI', 'ok');
-  } catch (e) {
-    toast('Errore di connessione al servizio AI', 'err');
-    btn.style.display = '';
-    spinner.style.display = 'none';
-    _testoOriginaleAI = null;
-  }
-}
-
-function annullaCorrezioneAI() {
-  if (_testoOriginaleAI === null) return;
-  document.getElementById('f-referto').value = _testoOriginaleAI;
-  _testoOriginaleAI = null;
-  document.getElementById('ai-corr-btn').style.display = '';
-  document.getElementById('ai-annulla-btn').style.display = 'none';
-  toast('Testo originale ripristinato', 'ok');
 }
 
 // ── PREDEFINITI ───────────────────────────────────────────────
@@ -2485,11 +2433,6 @@ function renderConfig() {
     else if (detectedGoogleDrive && !pathInput.value) pathInput.value = detectedGoogleDrive;
   }
 
-  const keyStatus = document.getElementById('ai-key-status');
-  if (keyStatus) {
-    keyStatus.textContent = hasApiKey ? '✓ Chiave API Anthropic configurata' : 'Nessuna chiave inserita — funzione AI non disponibile';
-    keyStatus.style.color = hasApiKey ? 'var(--accent-mid)' : 'var(--text-muted)';
-  }
 }
 
 function onModalitaChange() {
@@ -2540,13 +2483,8 @@ async function salvaConfig() {
   }
 
   const body = { dataDir: dataDir || null };
-  const apiKeyEl = document.getElementById('anthropic-api-key');
-  if (apiKeyEl && apiKeyEl.value.trim()) body.anthropicApiKey = apiKeyEl.value.trim();
-
   const res = await apiPost('/api/config', body);
   if (res.error) { toast('Errore: ' + res.error, 'err'); return; }
-
-  if (apiKeyEl) apiKeyEl.value = '';
   document.getElementById('config-status').textContent = '✓ Salvato';
   toast('Impostazioni salvate', 'ok');
   _configData.dataDir = dataDir;

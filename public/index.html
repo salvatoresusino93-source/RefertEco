@@ -209,11 +209,6 @@
                 <div class="dict-dot"></div>
                 <span>Dettatura in corso — parla in italiano. Clicca 🎤 per fermare.</span>
               </div>
-              <div class="ai-bar">
-                <button class="ai-corr-btn" id="ai-corr-btn" onclick="correggiAI()">✨ Correggi e formatta con AI</button>
-                <span class="ai-spinner" id="ai-spinner" style="display:none"><span class="ai-spin-ico">⏳</span> Correzione in corso…</span>
-                <button class="btn btn-secondary btn-sm" id="ai-annulla-btn" style="display:none" onclick="annullaCorrezioneAI()">↩ Annulla correzione</button>
-              </div>
             </div>
           </div>
 
@@ -568,22 +563,6 @@
             </div>
             <div id="firma-config-status" style="font-size:12px;margin-bottom:10px"></div>
             <button class="btn btn-primary btn-sm" onclick="salvaConfigFirma()">💾 Salva credenziali firma</button>
-          </div>
-        </div>
-
-        <div class="form-card" style="max-width:660px;margin-top:18px">
-          <div class="form-section">
-            <div class="sec-lbl">AI — Correzione referto</div>
-            <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">
-              Inserisci la tua chiave API Anthropic per abilitare il pulsante <strong>✨ Correggi e formatta con AI</strong>.<br>
-              <span style="font-size:11px">Ottieni la chiave su <strong>console.anthropic.com</strong> → API Keys.</span>
-            </p>
-            <div class="fg" style="margin-bottom:10px">
-              <label>Chiave API Anthropic</label>
-              <input type="password" id="anthropic-api-key" placeholder="sk-ant-api03-…" autocomplete="off" style="font-family:'DM Mono',monospace;font-size:12px;">
-            </div>
-            <div id="ai-key-status" style="font-size:12px;margin-bottom:10px"></div>
-            <button class="btn btn-primary btn-sm" onclick="salvaConfig()">💾 Salva chiave API</button>
           </div>
         </div>
 
