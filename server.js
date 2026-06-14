@@ -929,11 +929,19 @@ app.post('/api/firma-e-stampa', async (req, res) => {
     const auth = { 'Authorization': `Bearer ${oauthToken}`, 'Content-Type': 'application/json' };
 
     // 2bis. HTML → PDF con Chrome headless
-    await htmlToPdf(html, pdfPath);
+    // Inietta footer "Firmato digitalmente..." prima della chiusura body
+    const now = new Date();
+    const dataFirma = now.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const oraFirma  = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const footerHtml = `
+<div style="margin-top:32px;padding-top:10px;border-top:1px solid #ccc;font-size:10px;color:#555;text-align:center;font-family:Arial,sans-serif;">
+  Firmato digitalmente da Dott. Salvatore Susino il ${dataFirma} alle ore ${oraFirma} &mdash; Firma Qualificata EU-QES (Namirial TSP)
+</div>`;
+    const htmlFirmato = html.replace(/<\/body>/i, footerHtml + '</body>');
+    await htmlToPdf(htmlFirmato, pdfPath);
     const pdfBase64 = fs.readFileSync(pdfPath).toString('base64');
 
-    // 3. Avvia la firma automatica (PAdES, nessun OTP)
-    // ⚠️ DA VERIFICARE in sandbox i nomi esatti dei campi (console/Postman OpenAPI.com).
+    // 3. Avvia la firma automatica (PAdES, nessun OTP) — firma grafica soppressa
     const safeName = (refertoId || Date.now()).toString().replace(/[^a-zA-Z0-9_-]/g, '_');
     const sigResp = await fetch(`${base}/EU-QES_automatic`, {
       method: 'POST',
@@ -944,6 +952,7 @@ app.post('/api/firma-e-stampa', async (req, res) => {
         certificatePassword: cfg.namirialPin,
         signatureType: 'pades',
         title: 'Referto ' + safeName,
+        options: { signerImage: { imageVisible: false } },
       }),
     });
     const sigText = await sigResp.text();
