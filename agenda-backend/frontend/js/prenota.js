@@ -702,9 +702,9 @@ function goStep4() {
             </div>
             <div style="margin-top:6px;font-size:13px;color:#475569;line-height:1.5">${T.payOnlineDesc1}<strong>€${fmtEuroCent(ST.config.importo_cent)}</strong>${T.payOnlineDesc2}<strong>${T.confirmedNow}</strong>.</div>
           </div>
-          <div onclick="setPaga(false)" style="cursor:pointer;border:2px solid ${!ST.pagaOnline?'#586570':'#e2e8f0'};background:${!ST.pagaOnline?'#f8fafc':'#fff'};border-radius:12px;padding:14px 16px">
+          <div onclick="setPaga(false)" style="cursor:pointer;border:2px solid ${!ST.pagaOnline?'#0e7c8b':'#e2e8f0'};background:${!ST.pagaOnline?'#f8fafc':'#fff'};border-radius:12px;padding:14px 16px">
             <div style="display:flex;align-items:center;gap:8px;font-size:15px;color:#1e293b;font-weight:700">
-              <span style="width:18px;height:18px;border-radius:50%;border:2px solid ${!ST.pagaOnline?'#586570':'#cbd5e1'};display:inline-block;position:relative;flex:none">${!ST.pagaOnline?'<span style=\'position:absolute;inset:3px;background:#586570;border-radius:50%\'></span>':''}</span>
+              <span style="width:18px;height:18px;border-radius:50%;border:2px solid ${!ST.pagaOnline?'#0e7c8b':'#cbd5e1'};display:inline-block;position:relative;flex:none">${!ST.pagaOnline?'<span style=\'position:absolute;inset:3px;background:#0e7c8b;border-radius:50%\'></span>':''}</span>
               ${T.payAtStudio}
             </div>
             <div style="margin-top:6px;font-size:13px;color:#475569;line-height:1.5">${T.payAtStudioDesc}</div>
