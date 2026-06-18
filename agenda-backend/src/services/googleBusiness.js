@@ -163,16 +163,16 @@ async function impostaOrariBase() {
   const token        = await refreshAccessToken();
   const locationName = await getLocationName(token);
 
+  const days = [
+    ['MONDAY', 'MONDAY'], ['TUESDAY', 'TUESDAY'], ['WEDNESDAY', 'WEDNESDAY'],
+    ['THURSDAY', 'THURSDAY'], ['FRIDAY', 'FRIDAY'],
+  ];
   const body = {
     regularHours: {
-      periods: [
-        // Martedì
-        { openDay: 'TUESDAY', openTime: { hours: 9  }, closeDay: 'TUESDAY', closeTime: { hours: 13 } },
-        { openDay: 'TUESDAY', openTime: { hours: 15 }, closeDay: 'TUESDAY', closeTime: { hours: 19 } },
-        // Venerdì
-        { openDay: 'FRIDAY',  openTime: { hours: 9  }, closeDay: 'FRIDAY',  closeTime: { hours: 13 } },
-        { openDay: 'FRIDAY',  openTime: { hours: 15 }, closeDay: 'FRIDAY',  closeTime: { hours: 19 } },
-      ],
+      periods: days.flatMap(([open, close]) => [
+        { openDay: open, openTime: { hours: 9  }, closeDay: close, closeTime: { hours: 13 } },
+        { openDay: open, openTime: { hours: 15 }, closeDay: close, closeTime: { hours: 19 } },
+      ]),
     },
   };
 
@@ -190,7 +190,7 @@ async function impostaOrariBase() {
     throw new Error(`GBP regularHours error: ${JSON.stringify(err)}`);
   }
 
-  console.log('[GBP] ✓ Orari settimanali base impostati (Martedì + Venerdì: 9-13 e 15-19)');
+  console.log('[GBP] ✓ Orari settimanali base impostati (Lunedì–Venerdì: 9-13 e 15-19)');
   return true;
 }
 
