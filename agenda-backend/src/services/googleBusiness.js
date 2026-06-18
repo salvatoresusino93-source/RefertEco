@@ -23,6 +23,14 @@ const SLOT_BASE = [
 ];
 const GIORNI_APERTI = new Set([1, 2, 3, 4, 5]); // 0=dom 1=lun 2=mar 3=mer 4=gio 5=ven 6=sab
 
+// Indisponibilità inserite dall'agenda (tabella `indisponibilita`).
+// Fasce in minuti dal mezzanotte — devono coprire interamente gli slot base.
+const FASCE_INDISPONIBILITA = {
+  mattina:    { inizio:  8 * 60, fine: 14 * 60 },
+  pomeriggio: { inizio: 14 * 60, fine: 20 * 60 },
+  giornata:   { inizio:  8 * 60, fine: 20 * 60 },
+};
+
 // Memorizza l'ultimo payload inviato a Google: se ricalcolando esce identico
 // evitiamo di riscrivere su Google (la funzione gira ogni 30 min).
 let _ultimoPayloadGBP = null;
@@ -277,12 +285,7 @@ async function aggiornaOreSettimana() {
       console.warn(`[GBP]   ${label} — GCal non disponibile: ${e.message}`);
     }
 
-    if (!eventiGCal.length) {
-      console.log(`[GBP]   ${label} — orari normali`);
-      continue; // nessuna eccezione, regularHours è già corretto
-    }
-
-    // ── Converti eventi in minuti dal mezzanotte (ora italiana) ───────────
+    // ── Converti eventi GCal in minuti dal mezzanotte (ora italiana) ───────
     const evMin = eventiGCal.map(ev => {
       if (ev.start?.date) return { inizio: 0, fine: 24 * 60 }; // tutto il giorno
       const si = new Date(new Date(ev.start.dateTime).toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
@@ -292,6 +295,23 @@ async function aggiornaOreSettimana() {
         fine:   fi.getHours() * 60 + fi.getMinutes(),
       };
     });
+
+    // ── Leggi indisponibilità inserite dall'agenda ────────────────────────
+    const dataStr = `${dateKey.year}-${String(dateKey.month).padStart(2,'0')}-${String(dateKey.day).padStart(2,'0')}`;
+    const { data: indisp } = await supabase
+      .from('indisponibilita')
+      .select('tipo, motivo')
+      .eq('data', dataStr);
+
+    for (const ind of (indisp || [])) {
+      const fascia = FASCE_INDISPONIBILITA[ind.tipo];
+      if (fascia) evMin.push({ inizio: fascia.inizio, fine: fascia.fine });
+    }
+
+    if (!evMin.length) {
+      console.log(`[GBP]   ${label} — orari normali`);
+      continue; // nessuna eccezione, regularHours è già corretto
+    }
 
     const residui = sottraiEventi(SLOT_BASE, evMin);
 
