@@ -128,7 +128,7 @@ router.get('/callback', async (req, res) => {
   <ol>
     <li>Aggiungi su Railway: <code>GOOGLE_OAUTH_REFRESH_TOKEN = &lt;valore copiato&gt;</code></li>
     <li>Aspetta il redeploy automatico (o fai Deploy manuale)</li>
-    <li>Chiama <code>POST /api/gbp/set-regular-hours</code> per impostare gli orari base (martedì + venerdì)</li>
+    <li>Chiama <code>POST /api/gbp/set-regular-hours</code> per impostare gli orari base (lunedì–venerdì)</li>
     <li>Il cron domenicale (20:00) aggiornerà gli orari ogni settimana</li>
   </ol>
 </body>
@@ -149,7 +149,7 @@ router.post('/set-regular-hours', requireAuth, async (req, res) => {
     res.json({
       ok:      true,
       message: 'Orari settimanali base impostati su Google Business Profile',
-      orari:   'Martedì: 9-13 e 15-19 | Venerdì: 9-13 e 15-19 | Altri giorni: chiuso',
+      orari:   'Lunedì–Venerdì: 9-13 e 15-19 | Sabato e Domenica: chiuso',
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
