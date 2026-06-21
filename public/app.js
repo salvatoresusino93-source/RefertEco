@@ -1300,13 +1300,25 @@ function setPrintPerPage(n) {
   document.querySelectorAll('.pp-btn').forEach(b => b.classList.toggle('active', +b.dataset.n === n));
 }
 
-// Calcola colonne/righe ottimali per N immagini REALI nella pagina, così da
-// usare il massimo spazio: 1 immagine → pagina intera (1×1); altrimenti 2 colonne
-// con il numero minimo di righe necessario (niente celle vuote che rimpiccioliscono).
+// Calcola colonne/righe per riempire al massimo una pagina A4 verticale con
+// immagini ecografiche panoramiche (landscape). Poche immagini → 1 colonna (più
+// grandi); da 4 in su → 2 colonne (è la disposizione che massimizza l'area).
 function _gridImmagini(n) {
   if (n <= 1) return { cols: 1, rows: 1 };
+  if (n <= 3) return { cols: 1, rows: n };
   const cols = 2;
   return { cols, rows: Math.ceil(n / cols) };
+}
+
+// Stile inline della griglia immagini: dimensiona le righe all'altezza IDEALE
+// (celle ~ proporzioni ecografiche landscape) e centra il blocco verticalmente,
+// così lo spazio residuo diventa un margine uniforme sopra/sotto invece di una
+// banda vuota in mezzo. max-height evita lo sforamento quando le immagini sono molte.
+function _gridStyle(cols, rows, pageWmm = 198, gapMm = 4, aspect = 1.33) {
+  const cellW = (pageWmm - (cols - 1) * gapMm) / cols;
+  const gridH = rows * (cellW / aspect) + (rows - 1) * gapMm;
+  return `grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);`
+       + `height:${gridH.toFixed(1)}mm`;
 }
 
 // Verifica se un dataset DICOM è una cine/video (multiframe): NumberOfFrames > 1
@@ -1342,11 +1354,15 @@ function _stampaImmaginiComune(srcList, perPage, headerText) {
   let pagesHtml = '';
   for (let p = 0; p * perPage < srcList.length; p++) {
     const batch = srcList.slice(p * perPage, (p + 1) * perPage);
-    const { cols, rows } = _gridImmagini(batch.length);
+    const { cols, rows } = _gridImmagini(perPage);
+    const padded = batch.concat(Array(cols * rows - batch.length).fill(null));
     const hdrHtml = headerText ? `<div class="pg-hdr">${headerText}</div>` : '';
-    pagesHtml += `<div class="pg">${hdrHtml}<div class="grid" style="grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr)">${
-      batch.map((src, i) => `<div class="cell"><img src="${src}"><span class="n">${p * perPage + i + 1}</span></div>`).join('')
-    }</div></div>`;
+    pagesHtml += `<div class="pg">${hdrHtml}<div class="grid-area"><div class="grid" style="${_gridStyle(cols, rows, 194)}">${
+      padded.map((src, i) => src !== null
+        ? `<div class="cell"><img src="${src}"><span class="n">${p * perPage + i + 1}</span></div>`
+        : `<div class="cell cell-empty"></div>`
+      ).join('')
+    }</div></div></div>`;
   }
   const win = window.open('', '_blank');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Stampa immagini</title>
@@ -1356,7 +1372,8 @@ function _stampaImmaginiComune(srcList, perPage, headerText) {
 html,body{width:194mm;background:#fff}
 .pg{width:194mm;height:281mm;display:flex;flex-direction:column;page-break-after:always;break-after:page;}
 .pg-hdr{font-size:7.5pt;color:#555;font-family:sans-serif;padding-bottom:3mm;border-bottom:1px solid #ccc;margin-bottom:3mm;flex-shrink:0;}
-.grid{display:grid;gap:4mm;flex:1;min-height:0;}
+.grid-area{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;}
+.grid{display:grid;gap:4mm;width:100%;max-height:100%;}
 .cell{border:1px solid #ccc;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;background:#fff;min-height:0;}
 .cell:not(:has(img)){background:#fff;border:none}
 .cell img{max-width:100%;max-height:100%;object-fit:contain;display:block;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
@@ -2325,7 +2342,7 @@ async function esportaPDF(id, conImmagini = true) {
           const buf = await (await fetch(url)).arrayBuffer();
           const ds  = dicomParser.parseDicom(new Uint8Array(buf));
           if (_isDicomCine(ds)) continue; // video: escluso dal PDF
-          const dataUrl = await dicomDsToDataUrl(ds, buf);
+          const dataUrl = await dicomDsToDataUrl(ds, buf, 'png'); // PNG lossless: massima qualità
           if (dataUrl) imgDataUrls.push(dataUrl);
         } catch {}
       } else {
@@ -2336,13 +2353,14 @@ async function esportaPDF(id, conImmagini = true) {
     const pdfPP = _printPerPage;
     for (let p = 0; p * pdfPP < imgDataUrls.length; p++) {
       const batch = imgDataUrls.slice(p * pdfPP, p * pdfPP + pdfPP);
-      const { cols, rows } = _gridImmagini(batch.length);
+      const { cols, rows } = _gridImmagini(pdfPP);
+      const padded = batch.concat(Array(cols * rows - batch.length).fill(null));
       paginaImmagini += `
       <div class="img-page">
         <div class="img-hdr">${esc(r.cognome)} ${esc(r.nome)} — ${esc(r.tipo)} — ${fmt(r.data)}</div>
-        <div class="img-grid-print" style="grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr)">
-          ${batch.map(src => `<div class="img-cell"><img src="${src}"></div>`).join('')}
-        </div>
+        <div class="img-area"><div class="img-grid-print" style="${_gridStyle(cols, rows)}">
+          ${padded.map(src => src !== null ? `<div class="img-cell"><img src="${src}"></div>` : `<div class="img-cell img-cell-empty"></div>`).join('')}
+        </div></div>
       </div>`;
     }
   }
@@ -2355,7 +2373,7 @@ async function esportaPDF(id, conImmagini = true) {
 <title>Referto — ${esc(r.cognome)} ${esc(r.nome)}</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@300;400;600&display=swap');
-@page{margin:0;}
+@page{size:A4;margin:0;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;background:white;}
 .page{max-width:800px;margin:0 auto;padding:36px 48px 44px;min-height:100vh;display:flex;flex-direction:column;box-sizing:border-box;}
@@ -2379,10 +2397,12 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
 .firma-lbl{font-size:10pt;color:#444;font-family:'Lora',serif;text-align:center;}
 .doc-footer{margin-top:32px;padding-top:10px;border-top:1px solid #ddd;display:flex;justify-content:space-between;font-size:7.5pt;color:#999;}
 @media print{.page{padding:20px 30px;}body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
-.img-page{page-break-before:always;padding:14px 20px;height:100vh;box-sizing:border-box;display:flex;flex-direction:column;}
-.img-hdr{font-size:8pt;color:#888;margin-bottom:8px;border-bottom:1px solid #ddd;padding-bottom:5px;flex-shrink:0;}
-.img-grid-print{display:grid;gap:8px;flex:1;min-height:0;}
-.img-cell{border:1px solid #ddd;padding:4px;background:#fff;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;}
+.img-page{page-break-before:always;padding:6mm;height:296mm;overflow:hidden;box-sizing:border-box;display:flex;flex-direction:column;}
+.img-hdr{font-size:8pt;color:#aaa;margin-bottom:4mm;flex-shrink:0;text-align:center;letter-spacing:0.04em;text-transform:uppercase;}
+.img-area{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;}
+.img-grid-print{display:grid;gap:4mm;width:100%;max-height:100%;}
+.img-cell{display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;}
+.img-cell-empty{visibility:hidden;}
 .img-cell img{width:100%;height:100%;object-fit:contain;display:block;image-rendering:-webkit-optimize-contrast;image-rendering:high-quality;}
 </style></head><body>
 <div class="page">
@@ -3396,13 +3416,14 @@ async function generaHtmlFirma(id) {
   let paginaImmagini = '';
   for (let p = 0; p * pdfPP < imgDataUrls.length; p++) {
     const batch = imgDataUrls.slice(p * pdfPP, p * pdfPP + pdfPP);
-    const { cols, rows } = _gridImmagini(batch.length);
+    const { cols, rows } = _gridImmagini(pdfPP);
+    const padded = batch.concat(Array(cols * rows - batch.length).fill(null));
     paginaImmagini += `
     <div class="img-page">
       <div class="img-hdr">${esc(r.cognome)} ${esc(r.nome)} — ${esc(r.tipo)} — ${fmt(r.data)}</div>
-      <div class="img-grid-print" style="grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr)">
-        ${batch.map(src => `<div class="img-cell"><img src="${src}"></div>`).join('')}
-      </div>
+      <div class="img-area"><div class="img-grid-print" style="${_gridStyle(cols, rows)}">
+        ${padded.map(src => src !== null ? `<div class="img-cell"><img src="${src}"></div>` : `<div class="img-cell img-cell-empty"></div>`).join('')}
+      </div></div>
     </div>`;
   }
 
@@ -3417,7 +3438,7 @@ async function generaHtmlFirma(id) {
 <title>Referto — ${esc(r.cognome)} ${esc(r.nome)}</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@300;400;600&display=swap');
-@page{margin:0;}
+@page{size:A4;margin:0;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;background:white;}
 .page{max-width:800px;margin:0 auto;padding:36px 48px 72px;min-height:100vh;display:flex;flex-direction:column;box-sizing:border-box;}
@@ -3439,16 +3460,18 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
 .body-text{font-size:12.5pt;line-height:1.6;color:#111;white-space:pre-wrap;text-align:justify;}
 .doc-footer{margin-top:32px;padding-top:10px;border-top:1px solid #ddd;display:flex;justify-content:space-between;font-size:7.5pt;color:#999;}
 /* Firma fissa in fondo a ogni pagina del referto */
-.firma-footer{position:fixed;bottom:0;left:0;right:0;background:white;padding:7px 48px 10px;text-align:center;border-top:1px solid #bbb;z-index:1;}
-.firma-footer .fp-chi{font-family:'Lora',serif;font-size:10pt;font-weight:600;color:#1c1c1c;}
-.firma-footer .fp-sub{font-size:7.5pt;color:#777;margin-top:3px;font-style:italic;line-height:1.4;}
+.firma-footer{position:fixed;bottom:0;left:0;right:0;height:16mm;background:white;padding:4px 48px 6px;text-align:center;border-top:1px solid #bbb;z-index:1;overflow:hidden;}
+.firma-footer .fp-chi{font-family:'Lora',serif;font-size:9.5pt;font-weight:600;color:#1c1c1c;}
+.firma-footer .fp-sub{font-size:7pt;color:#777;margin-top:2px;font-style:italic;line-height:1.3;}
 @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
 /* Pagine immagine: layout massimizzato, firma coperta da overlay bianco */
-.img-page{position:relative;page-break-before:always;padding:10px 10px 74px;height:100vh;box-sizing:border-box;display:flex;flex-direction:column;}
-.img-page::after{content:'';position:absolute;bottom:0;left:0;right:0;height:72px;background:white;z-index:10;}
-.img-hdr{font-size:6.5pt;color:#ccc;margin-bottom:6px;flex-shrink:0;text-align:center;letter-spacing:0.04em;text-transform:uppercase;}
-.img-grid-print{display:grid;gap:5px;flex:1;min-height:0;}
-.img-cell{background:#000;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;border-radius:1px;}
+.img-page{position:relative;page-break-before:always;padding:6mm 6mm 17mm;height:296mm;overflow:hidden;box-sizing:border-box;display:flex;flex-direction:column;}
+.img-page::after{content:'';position:absolute;bottom:0;left:0;right:0;height:17mm;background:white;z-index:10;}
+.img-hdr{font-size:8pt;color:#aaa;margin-bottom:4mm;flex-shrink:0;text-align:center;letter-spacing:0.04em;text-transform:uppercase;}
+.img-area{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;}
+.img-grid-print{display:grid;gap:4mm;width:100%;max-height:100%;}
+.img-cell{display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;}
+.img-cell-empty{visibility:hidden;}
 .img-cell img{width:100%;height:100%;object-fit:contain;display:block;image-rendering:-webkit-optimize-contrast;image-rendering:high-quality;}
 </style></head><body>
 <div class="firma-footer">
