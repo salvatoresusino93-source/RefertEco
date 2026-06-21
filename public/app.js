@@ -53,7 +53,9 @@ function processaVoce(testo) {
     .replace(/\bpunto interrogativo\b/gi, '?')
     .replace(/\bpunto\b/gi, '.')
     .replace(/\bvirgola\b/gi, ',')
-    .replace(/ +([.,!?:;])/g, '$1');
+    .replace(/ +([.,!?:;])/g, '$1')
+    // "12 per 8" → "12 × 8" (solo tra due numeri: dimensioni ecografiche)
+    .replace(/(\d+(?:[.,]\d+)?)\s+per\s+(\d+(?:[.,]\d+)?)/gi, '$1 × $2');
   // capitalizza la lettera subito dopo un punto/!/? (stesso chunk)
   r = r.replace(/([.!?]\s+)(\w)/g, (_, p, l) => p + l.toUpperCase());
   // capitalizza la lettera subito dopo un a capo (stesso chunk)
@@ -831,57 +833,99 @@ async function toggleDictation(taId, btnId, barId) {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
     toast('Dettatura non supportata: usa Chrome', 'err'); return;
   }
-  if (recognitions[taId]) { recognitions[taId].stop(); return; }
+  if (recognitions[taId]) { stopDictation(taId, btnId, barId); return; }
   const ok = await richiediPermessoMic();
   if (!ok) return;
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const r = new SR();
-  r.lang = 'it-IT'; r.continuous = true; r.interimResults = true;
-  recognitions[taId] = r;
-  const ta = document.getElementById(taId);
+  const ta  = document.getElementById(taId);
   const btn = document.getElementById(btnId);
   const bar = document.getElementById(barId);
   btn.classList.add('rec');
   bar.classList.add('show');
+
+  // Stato della sessione di dettatura per questa textarea.
+  // `manual` distingue lo stop volontario (toggle/cambio vista) dall'arresto
+  // automatico del motore dopo una pausa: così le pause di riflessione del medico
+  // NON interrompono la dettatura (il motore viene riavviato in `onend`).
+  // `base`/`after` mantengono il punto di inserimento e il testo accumulato
+  // attraverso i riavvii, evitando perdite di testo.
   const cursorStart = ta.selectionStart;
   const cursorEnd   = ta.selectionEnd;
-  let baseText = ta.value.substring(0, cursorStart);
-  const afterCursor = ta.value.substring(cursorEnd);
-  if (baseText && !baseText.endsWith(' ') && !baseText.endsWith('\n')) baseText += ' ';
-  r.onresult = e => {
-    let interim = '', final = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) final += e.results[i][0].transcript;
-      else interim += e.results[i][0].transcript;
-    }
-    if (final) {
-      let elaborato = processaVoce(final.trim());
-      // rimuovi spazio prima di punteggiatura
-      if (baseText.endsWith(' ') && /^[.,!?:;]/.test(elaborato)) {
-        baseText = baseText.trimEnd();
+  const sess = {
+    rec: null,
+    manual: false,
+    fails: 0,                                  // riavvii consecutivi a vuoto (guardia anti-loop)
+    base: ta.value.substring(0, cursorStart),
+    after: ta.value.substring(cursorEnd),
+  };
+  if (sess.base && !sess.base.endsWith(' ') && !sess.base.endsWith('\n')) sess.base += ' ';
+  recognitions[taId] = sess;
+
+  function finalizza() {
+    delete recognitions[taId];
+    if (btn) btn.classList.remove('rec');
+    if (bar) bar.classList.remove('show');
+  }
+
+  function avvia() {
+    const r = new SR();
+    r.lang = 'it-IT'; r.continuous = true; r.interimResults = true;
+    sess.rec = r;
+    r.onresult = e => {
+      sess.fails = 0; // arriva audio → la sessione è viva
+      let interim = '', final = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
       }
-      // capitalizza primo carattere se: inizio testo, o preceduto da . ! ? \n
-      if (elaborato) {
-        const prec = baseText.trimEnd();
-        if (prec === '' || /[.!?\n]$/.test(prec)) {
-          elaborato = elaborato.charAt(0).toUpperCase() + elaborato.slice(1);
+      if (final) {
+        let elaborato = processaVoce(final.trim());
+        // rimuovi spazio prima di punteggiatura
+        if (sess.base.endsWith(' ') && /^[.,!?:;]/.test(elaborato)) {
+          sess.base = sess.base.trimEnd();
         }
+        // capitalizza primo carattere se: inizio testo, o preceduto da . ! ? \n
+        if (elaborato) {
+          const prec = sess.base.trimEnd();
+          if (prec === '' || /[.!?\n]$/.test(prec)) {
+            elaborato = elaborato.charAt(0).toUpperCase() + elaborato.slice(1);
+          }
+        }
+        sess.base += elaborato;
+        if (!sess.base.endsWith('\n')) sess.base += ' ';
       }
-      baseText += elaborato;
-      if (!baseText.endsWith('\n')) baseText += ' ';
-    }
-    ta.value = baseText + interim + afterCursor;
-  };
-  r.onerror = e => {
-    stopDictation(taId, btnId, barId);
-    if (e.error === 'not-allowed') { micPermesso = false; toast('Microfono non autorizzato', 'err'); }
-  };
-  r.onend = () => { stopDictation(taId, btnId, barId); };
-  r.start();
+      ta.value = sess.base + interim + sess.after;
+    };
+    r.onerror = e => {
+      // not-allowed/service-not-allowed: permesso negato → stop definitivo
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        micPermesso = false; sess.manual = true;
+        toast('Microfono non autorizzato', 'err');
+      }
+      // no-speech / network / aborted: lascia gestire il riavvio a onend
+    };
+    r.onend = () => {
+      if (sess.manual) { finalizza(); return; }
+      // Arresto automatico (pausa/timeout del motore): riavvia per continuare.
+      // Guardia: se riparte a vuoto troppe volte di fila, interrompi.
+      if (++sess.fails > 30) { toast('Dettatura interrotta', 'err'); finalizza(); return; }
+      setTimeout(() => { if (recognitions[taId] === sess && !sess.manual) {
+        try { avvia(); } catch(_) { finalizza(); }
+      } }, 250);
+    };
+    try { r.start(); } catch(_) { /* start può lanciare se già attivo: ignora */ }
+  }
+
+  avvia();
 }
 
 function stopDictation(taId, btnId, barId) {
-  if (recognitions[taId]) { try { recognitions[taId].stop(); } catch(e) {} delete recognitions[taId]; }
+  const sess = recognitions[taId];
+  if (sess) {
+    sess.manual = true;                       // impedisce l'auto-riavvio in onend
+    try { sess.rec && sess.rec.stop(); } catch(e) {}
+    delete recognitions[taId];
+  }
   const btn = document.getElementById(btnId);
   const bar = document.getElementById(barId);
   if (btn) btn.classList.remove('rec');
@@ -889,7 +933,11 @@ function stopDictation(taId, btnId, barId) {
 }
 
 function stopAllDictation() {
-  Object.keys(recognitions).forEach(k => { try { recognitions[k].stop(); } catch(e) {} delete recognitions[k]; });
+  Object.keys(recognitions).forEach(k => {
+    const sess = recognitions[k];
+    if (sess) { sess.manual = true; try { sess.rec && sess.rec.stop(); } catch(e) {} }
+    delete recognitions[k];
+  });
   document.querySelectorAll('.mic-btn').forEach(b => b.classList.remove('rec'));
   document.querySelectorAll('.dict-bar').forEach(b => b.classList.remove('show'));
 }
