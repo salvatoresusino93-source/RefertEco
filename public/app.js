@@ -1300,6 +1300,15 @@ function setPrintPerPage(n) {
   document.querySelectorAll('.pp-btn').forEach(b => b.classList.toggle('active', +b.dataset.n === n));
 }
 
+// Calcola colonne/righe ottimali per N immagini REALI nella pagina, così da
+// usare il massimo spazio: 1 immagine → pagina intera (1×1); altrimenti 2 colonne
+// con il numero minimo di righe necessario (niente celle vuote che rimpiccioliscono).
+function _gridImmagini(n) {
+  if (n <= 1) return { cols: 1, rows: 1 };
+  const cols = 2;
+  return { cols, rows: Math.ceil(n / cols) };
+}
+
 // Verifica se un dataset DICOM è una cine/video (multiframe): NumberOfFrames > 1
 // Le cine vanno escluse dalla stampa (altrimenti stamperebbe centinaia di fotogrammi)
 function _isDicomCine(ds) {
@@ -1330,16 +1339,13 @@ function _dicomPatientInfo(ds) {
 
 // Funzione comune per la stampa immagini — usata sia dal viewer che dall'archivio
 function _stampaImmaginiComune(srcList, perPage, headerText) {
-  const rows = perPage / 2; // sempre 2 colonne: 4→2 righe, 6→3, 8→4
   let pagesHtml = '';
   for (let p = 0; p * perPage < srcList.length; p++) {
     const batch = srcList.slice(p * perPage, (p + 1) * perPage);
-    while (batch.length < perPage) batch.push(null);
+    const { cols, rows } = _gridImmagini(batch.length);
     const hdrHtml = headerText ? `<div class="pg-hdr">${headerText}</div>` : '';
-    pagesHtml += `<div class="pg">${hdrHtml}<div class="grid">${
-      batch.map((src, i) => `<div class="cell">${
-        src ? `<img src="${src}"><span class="n">${p * perPage + i + 1}</span>` : ''
-      }</div>`).join('')
+    pagesHtml += `<div class="pg">${hdrHtml}<div class="grid" style="grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr)">${
+      batch.map((src, i) => `<div class="cell"><img src="${src}"><span class="n">${p * perPage + i + 1}</span></div>`).join('')
     }</div></div>`;
   }
   const win = window.open('', '_blank');
@@ -1350,7 +1356,7 @@ function _stampaImmaginiComune(srcList, perPage, headerText) {
 html,body{width:194mm;background:#fff}
 .pg{width:194mm;height:281mm;display:flex;flex-direction:column;page-break-after:always;break-after:page;}
 .pg-hdr{font-size:7.5pt;color:#555;font-family:sans-serif;padding-bottom:3mm;border-bottom:1px solid #ccc;margin-bottom:3mm;flex-shrink:0;}
-.grid{display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(${rows},1fr);gap:4mm;flex:1;min-height:0;}
+.grid{display:grid;gap:4mm;flex:1;min-height:0;}
 .cell{border:1px solid #ccc;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;background:#fff;min-height:0;}
 .cell:not(:has(img)){background:#fff;border:none}
 .cell img{max-width:100%;max-height:100%;object-fit:contain;display:block;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
@@ -2330,10 +2336,11 @@ async function esportaPDF(id, conImmagini = true) {
     const pdfPP = _printPerPage;
     for (let p = 0; p * pdfPP < imgDataUrls.length; p++) {
       const batch = imgDataUrls.slice(p * pdfPP, p * pdfPP + pdfPP);
+      const { cols, rows } = _gridImmagini(batch.length);
       paginaImmagini += `
       <div class="img-page">
         <div class="img-hdr">${esc(r.cognome)} ${esc(r.nome)} — ${esc(r.tipo)} — ${fmt(r.data)}</div>
-        <div class="img-grid-print" style="grid-template-rows:repeat(${pdfPP/2},1fr)">
+        <div class="img-grid-print" style="grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr)">
           ${batch.map(src => `<div class="img-cell"><img src="${src}"></div>`).join('')}
         </div>
       </div>`;
@@ -2374,9 +2381,9 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
 @media print{.page{padding:20px 30px;}body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
 .img-page{page-break-before:always;padding:14px 20px;height:100vh;box-sizing:border-box;display:flex;flex-direction:column;}
 .img-hdr{font-size:8pt;color:#888;margin-bottom:8px;border-bottom:1px solid #ddd;padding-bottom:5px;flex-shrink:0;}
-.img-grid-print{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1;min-height:0;}
+.img-grid-print{display:grid;gap:8px;flex:1;min-height:0;}
 .img-cell{border:1px solid #ddd;padding:4px;background:#fff;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;}
-.img-cell img{width:100%;height:100%;object-fit:contain;display:block;}
+.img-cell img{width:100%;height:100%;object-fit:contain;display:block;image-rendering:-webkit-optimize-contrast;image-rendering:high-quality;}
 </style></head><body>
 <div class="page">
   <div class="hdr">
@@ -3376,7 +3383,7 @@ async function generaHtmlFirma(id) {
         const buf = await (await fetch(url)).arrayBuffer();
         const ds  = dicomParser.parseDicom(new Uint8Array(buf));
         if (_isDicomCine(ds)) continue;
-        const dataUrl = await dicomDsToDataUrl(ds, buf);
+        const dataUrl = await dicomDsToDataUrl(ds, buf, 'png');
         if (dataUrl) imgDataUrls.push(dataUrl);
       } catch {}
     } else {
@@ -3389,10 +3396,11 @@ async function generaHtmlFirma(id) {
   let paginaImmagini = '';
   for (let p = 0; p * pdfPP < imgDataUrls.length; p++) {
     const batch = imgDataUrls.slice(p * pdfPP, p * pdfPP + pdfPP);
+    const { cols, rows } = _gridImmagini(batch.length);
     paginaImmagini += `
     <div class="img-page">
       <div class="img-hdr">${esc(r.cognome)} ${esc(r.nome)} — ${esc(r.tipo)} — ${fmt(r.data)}</div>
-      <div class="img-grid-print" style="grid-template-rows:repeat(${pdfPP/2},1fr)">
+      <div class="img-grid-print" style="grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr)">
         ${batch.map(src => `<div class="img-cell"><img src="${src}"></div>`).join('')}
       </div>
     </div>`;
@@ -3409,10 +3417,10 @@ async function generaHtmlFirma(id) {
 <title>Referto — ${esc(r.cognome)} ${esc(r.nome)}</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@300;400;600&display=swap');
-@page{margin:15mm 0;}
+@page{margin:0;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;background:white;}
-.page{max-width:800px;margin:0 auto;padding:0 48px;min-height:calc(100vh - 30mm);display:flex;flex-direction:column;box-sizing:border-box;}
+.page{max-width:800px;margin:0 auto;padding:36px 48px 72px;min-height:100vh;display:flex;flex-direction:column;box-sizing:border-box;}
 .hdr{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;border-bottom:3px solid ${T.accent};margin-bottom:0;}
 .hdr-nome{font-family:'Lora',serif;font-size:17pt;font-weight:600;color:${T.accent};letter-spacing:-0.01em;}
 .hdr-titolo{font-size:9.5pt;color:#555;margin-top:2px;font-weight:300;letter-spacing:0.01em;}
@@ -3429,21 +3437,24 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
 .sec{font-size:8pt;text-transform:uppercase;letter-spacing:0.12em;color:${T.mid};font-weight:700;margin:18px 0 7px;display:flex;align-items:center;gap:8px;}
 .sec::after{content:'';flex:1;height:1px;background:${T.line};}
 .body-text{font-size:12.5pt;line-height:1.6;color:#111;white-space:pre-wrap;text-align:justify;}
-.firma-wrap{margin-top:auto;padding-top:40px;display:flex;justify-content:flex-start;page-break-inside:avoid;break-inside:avoid;page-break-before:avoid;break-before:avoid;}
-.firma-digitale-box{text-align:left;padding-right:80px;page-break-inside:avoid;break-inside:avoid;}
-.firma-digitale-linea{border-top:1px solid #999;margin-bottom:10px;}
-.firma-digitale-chi{font-family:'Lora',serif;font-size:11.5pt;font-weight:600;color:#1c1c1c;}
-.firma-digitale-ruolo{font-size:9.5pt;color:#444;margin-top:2px;}
-.firma-digitale-data{font-size:9pt;color:#333;margin-top:12px;}
-.firma-digitale-tipo{font-size:7.5pt;color:#777;margin-top:3px;}
 .doc-footer{margin-top:32px;padding-top:10px;border-top:1px solid #ddd;display:flex;justify-content:space-between;font-size:7.5pt;color:#999;}
-@media print{.page{padding:0 30px;}body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
-.img-page{page-break-before:always;padding:14px 20px;height:calc(100vh - 30mm);box-sizing:border-box;display:flex;flex-direction:column;}
-.img-hdr{font-size:8pt;color:#888;margin-bottom:8px;border-bottom:1px solid #ddd;padding-bottom:5px;flex-shrink:0;}
-.img-grid-print{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1;min-height:0;}
-.img-cell{border:1px solid #ddd;padding:4px;background:#fff;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;}
-.img-cell img{width:100%;height:100%;object-fit:contain;display:block;}
+/* Firma fissa in fondo a ogni pagina del referto */
+.firma-footer{position:fixed;bottom:0;left:0;right:0;background:white;padding:7px 48px 10px;text-align:center;border-top:1px solid #bbb;z-index:1;}
+.firma-footer .fp-chi{font-family:'Lora',serif;font-size:10pt;font-weight:600;color:#1c1c1c;}
+.firma-footer .fp-sub{font-size:7.5pt;color:#777;margin-top:3px;font-style:italic;line-height:1.4;}
+@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+/* Pagine immagine: layout massimizzato, firma coperta da overlay bianco */
+.img-page{position:relative;page-break-before:always;padding:10px 10px 74px;height:100vh;box-sizing:border-box;display:flex;flex-direction:column;}
+.img-page::after{content:'';position:absolute;bottom:0;left:0;right:0;height:72px;background:white;z-index:10;}
+.img-hdr{font-size:6.5pt;color:#ccc;margin-bottom:6px;flex-shrink:0;text-align:center;letter-spacing:0.04em;text-transform:uppercase;}
+.img-grid-print{display:grid;gap:5px;flex:1;min-height:0;}
+.img-cell{background:#000;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;border-radius:1px;}
+.img-cell img{width:100%;height:100%;object-fit:contain;display:block;image-rendering:-webkit-optimize-contrast;image-rendering:high-quality;}
 </style></head><body>
+<div class="firma-footer">
+  <div class="fp-chi">Firmato digitalmente da ${esc(MEDICO.nome)} il ${dataStampa} alle ore ${oraStampa}</div>
+  <div class="fp-sub">Documento informatico sottoscritto con Firma Elettronica Qualificata (FEQ) ai sensi del D.Lgs. 82/2005 e s.m.i. — Namirial S.p.A. / AgID. Copia conforme all'originale firmato, con pieno valore legale.</div>
+</div>
 <div class="page">
   <div class="hdr">
     <div>
@@ -3472,19 +3483,6 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
   <div class="esame-title">${esc(r.tipo)}</div>
   <div class="sec">Referto</div>
   <div class="body-text">${esc(r.referto || '—')}</div>
-  <div class="firma-wrap" style="justify-content:flex-start;">
-    <div class="firma-digitale-box">
-      <div class="firma-digitale-linea"></div>
-      <div class="firma-digitale-chi">${esc(MEDICO.nome)}</div>
-      <div class="firma-digitale-ruolo">${esc(MEDICO.titolo)}</div>
-      <div class="firma-digitale-data">Firmato digitalmente il ${dataStampa} alle ore ${oraStampa}</div>
-      <div class="firma-digitale-tipo">Firma Elettronica Qualificata (FEQ) ai sensi del D.Lgs. 82/2005 e s.m.i. — Namirial S.p.A. / AgID</div>
-    </div>
-  </div>
-  <div class="doc-footer">
-    <span>${esc(MEDICO.studio)} — ${esc(MEDICO.indirizzo)}</span>
-    <span>Documento generato il ${dataStampa}</span>
-  </div>
 </div>
 ${paginaImmagini}
 </body></html>`;

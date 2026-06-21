@@ -830,6 +830,7 @@ async function htmlToPdf(htmlContent, outputPath) {
     const htmlUrl = 'file:///' + tmpHtml.replace(/\\/g, '/');
     const proc = spawn(chromePath, [
       '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-extensions',
+      '--force-device-scale-factor=2',
       `--print-to-pdf=${outputPath}`, '--no-pdf-header-footer', htmlUrl,
     ]);
     const timer = setTimeout(() => { proc.kill(); reject(new Error('Chrome timeout')); }, 30000);
