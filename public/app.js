@@ -1339,15 +1339,13 @@ function _gridImmagini(n) {
   return { cols, rows: Math.ceil(n / cols) };
 }
 
-// Stile inline della griglia immagini: dimensiona le righe all'altezza IDEALE
-// (celle ~ proporzioni ecografiche landscape) e centra il blocco verticalmente,
-// così lo spazio residuo diventa un margine uniforme sopra/sotto invece di una
-// banda vuota in mezzo. max-height evita lo sforamento quando le immagini sono molte.
+// Stile inline della griglia immagini: righe di PARI altezza che riempiono tutta
+// l'altezza utile della pagina. Così le immagini coprono lo spazio in modo
+// uniforme invece di restare schiacciate al centro con grandi bande bianche
+// sopra/sotto. object-fit:contain sulle immagini mantiene sempre le proporzioni
+// (niente deformazioni né ritagli), distribuendo lo spazio residuo in modo armonioso.
 function _gridStyle(cols, rows, pageWmm = 198, gapMm = 4, aspect = 1.33) {
-  const cellW = (pageWmm - (cols - 1) * gapMm) / cols;
-  const gridH = rows * (cellW / aspect) + (rows - 1) * gapMm;
-  return `grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);`
-       + `height:${gridH.toFixed(1)}mm`;
+  return `grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);height:100%;`;
 }
 
 // Verifica se un dataset DICOM è una cine/video (multiframe): NumberOfFrames > 1
@@ -1401,7 +1399,7 @@ function _stampaImmaginiComune(srcList, perPage, headerText) {
 html,body{width:194mm;background:#fff}
 .pg{width:194mm;height:281mm;display:flex;flex-direction:column;page-break-after:always;break-after:page;}
 .pg-hdr{font-size:7.5pt;color:#555;font-family:sans-serif;padding-bottom:3mm;border-bottom:1px solid #ccc;margin-bottom:3mm;flex-shrink:0;}
-.grid-area{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;}
+.grid-area{flex:1;min-height:0;display:flex;align-items:stretch;justify-content:center;}
 .grid{display:grid;gap:4mm;width:100%;max-height:100%;}
 .cell{border:1px solid #ccc;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;background:#fff;min-height:0;}
 .cell:not(:has(img)){background:#fff;border:none}
@@ -2429,7 +2427,7 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
 @media print{.page{padding:20px 30px;}body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
 .img-page{page-break-before:always;padding:6mm;height:296mm;overflow:hidden;box-sizing:border-box;display:flex;flex-direction:column;}
 .img-hdr{font-size:8pt;color:#aaa;margin-bottom:4mm;flex-shrink:0;text-align:center;letter-spacing:0.04em;text-transform:uppercase;}
-.img-area{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;}
+.img-area{flex:1;min-height:0;display:flex;align-items:stretch;justify-content:center;}
 .img-grid-print{display:grid;gap:4mm;width:100%;max-height:100%;}
 .img-cell{display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;}
 .img-cell-empty{visibility:hidden;}
@@ -3498,7 +3496,7 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
 .img-page{position:relative;page-break-before:always;padding:6mm 6mm 17mm;height:296mm;overflow:hidden;box-sizing:border-box;display:flex;flex-direction:column;}
 .img-page::after{content:'';position:absolute;bottom:0;left:0;right:0;height:17mm;background:white;z-index:10;}
 .img-hdr{font-size:8pt;color:#aaa;margin-bottom:4mm;flex-shrink:0;text-align:center;letter-spacing:0.04em;text-transform:uppercase;}
-.img-area{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;}
+.img-area{flex:1;min-height:0;display:flex;align-items:stretch;justify-content:center;}
 .img-grid-print{display:grid;gap:4mm;width:100%;max-height:100%;}
 .img-cell{display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;}
 .img-cell-empty{visibility:hidden;}
