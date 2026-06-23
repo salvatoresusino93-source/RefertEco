@@ -86,17 +86,40 @@ function initTopbar() {
 }
 
 // ── API ───────────────────────────────────────────────────────
+// Mostra/nasconde un avviso fisso a tutto schermo quando il disco dati (K:) non è collegato.
+function mostraBannerDisco(messaggio) {
+  let b = document.getElementById('banner-disco');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'banner-disco';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b00020;color:#fff;'
+      + 'padding:14px 20px;font-size:15px;font-weight:600;text-align:center;white-space:pre-line;'
+      + 'box-shadow:0 2px 10px rgba(0,0,0,.3);font-family:sans-serif;';
+    document.body.appendChild(b);
+  }
+  b.textContent = messaggio || '⚠️ Disco dati non collegato.';
+  b.style.display = 'block';
+}
+function nascondiBannerDisco() {
+  const b = document.getElementById('banner-disco');
+  if (b) b.style.display = 'none';
+}
+
 async function apiGet(url) {
   try {
     const r = await fetch(url);
     if (!r.ok) {
       const errBody = await r.text().catch(() => '');
       console.error('[apiGet] HTTP ' + r.status + ' su ' + url + ' → ' + errBody);
+      if (r.status === 503) {
+        try { const j = JSON.parse(errBody); if (j && j.storageDown) mostraBannerDisco(j.error); } catch(_) {}
+      }
       const err = new Error('HTTP ' + r.status);
       err.status = r.status;
       err.body = errBody;
       throw err;
     }
+    nascondiBannerDisco();
     return await r.json();
   } catch(e) {
     console.error('[apiGet] errore fetch ' + url, e);
@@ -105,10 +128,16 @@ async function apiGet(url) {
 }
 async function apiPost(url, body) {
   const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
-  return r.json();
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 503 && data && data.storageDown) mostraBannerDisco(data.error);
+  else if (r.ok) nascondiBannerDisco();
+  return data;
 }
 async function apiDelete(url) {
-  const r = await fetch(url, { method:'DELETE' }); return r.json();
+  const r = await fetch(url, { method:'DELETE' });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 503 && data && data.storageDown) mostraBannerDisco(data.error);
+  return data;
 }
 
 // ── CARICA REFERTI ────────────────────────────────────────────
@@ -1643,7 +1672,7 @@ function _jpegIsBaseline(d) {
   return true;
 }
 
-function _renderJpegLossless(d, rows, cols, bpp, spp, photometric) {
+function _renderJpegLossless(d, rows, cols, bpp, spp, photometric, fmt) {
   try {
     console.log('[DICOM] _renderJpegLossless: rows=' + rows + ' cols=' + cols + ' bpp=' + bpp + ' spp=' + spp + ' photometric=' + photometric + ' dataLen=' + d.byteLength);
     console.log('[DICOM] jpeg global:', typeof jpeg, typeof jpeg !== 'undefined' ? Object.keys(jpeg) : 'N/A');
@@ -1681,7 +1710,8 @@ function _renderJpegLossless(d, rows, cols, bpp, spp, photometric) {
     }
     ctx.putImageData(imgData, 0, 0);
     console.log('[DICOM] _renderJpegLossless: OK');
-    return cv.toDataURL('image/jpeg', 0.85);
+    // Stampa/PDF: PNG senza perdita (massima nitidezza). Viewer a schermo: JPEG 0.85 (più leggero).
+    return fmt === 'png' ? cv.toDataURL('image/png') : cv.toDataURL('image/jpeg', 0.85);
   } catch(e) { console.error('[DICOM] _renderJpegLossless ERRORE:', e); return null; }
 }
 
@@ -1731,7 +1761,7 @@ async function dicomDsToDataUrl(ds, buf, fmt) {
           const jpegLibOk = typeof jpeg !== 'undefined' && jpeg && jpeg.lossless;
           console.log('[DICOM] JPEG Lossless: lib disponibile=' + jpegLibOk + ', rows=' + rows + ', cols=' + cols);
           if (rows && cols && jpegLibOk) {
-            const url = _renderJpegLossless(d, rows, cols, bpp, spp, photometric);
+            const url = _renderJpegLossless(d, rows, cols, bpp, spp, photometric, fmt);
             if (url) return url;
             console.warn('[DICOM] _renderJpegLossless ha restituito null per item ' + idx);
           } else {
@@ -1774,7 +1804,7 @@ async function dicomDsToDataUrl(ds, buf, fmt) {
                 return await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
               }
               if (rows && cols && typeof jpeg !== 'undefined' && jpeg.lossless) {
-                const url = _renderJpegLossless(d, rows, cols, bpp, spp, photometric);
+                const url = _renderJpegLossless(d, rows, cols, bpp, spp, photometric, fmt);
                 if (url) return url;
               }
             }
@@ -1803,7 +1833,7 @@ async function dicomDsToDataUrl(ds, buf, fmt) {
         return await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.readAsDataURL(blob); });
       }
       if (rows && cols && typeof jpeg !== 'undefined' && jpeg.lossless) {
-        const url = _renderJpegLossless(d, rows, cols, bpp, spp, photometric);
+        const url = _renderJpegLossless(d, rows, cols, bpp, spp, photometric, fmt);
         if (url) return url;
       }
     }

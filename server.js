@@ -17,6 +17,24 @@ const PUBLIC_DIR = process.pkg
 
 app.use(express.static(PUBLIC_DIR));
 
+// ── GUARDIA DISCO DATI ───────────────────────────────────────
+// Blocca le operazioni sui referti se il disco dati (es. K:) non è collegato,
+// con un messaggio chiaro. Impedisce salvataggi nascosti in posti sbagliati.
+app.use('/api/referti', (req, res, next) => {
+  try {
+    config.getDataDir();
+    next();
+  } catch (e) {
+    if (e && e.code === 'DATADIR_UNAVAILABLE') {
+      return res.status(503).json({
+        storageDown: true,
+        error: '⚠️ Il disco dei dati pazienti ("' + e.dir + '") non risulta collegato.\n\nCollega il disco e poi ricarica la pagina. Nessun dato è stato salvato altrove.',
+      });
+    }
+    return res.status(500).json({ error: 'Errore cartella dati: ' + (e && e.message) });
+  }
+});
+
 // ── IMMAGINI ─────────────────────────────────────────────────
 
 function getImgDir(refertoId) {
@@ -312,10 +330,13 @@ app.delete('/api/predefiniti/:id', (req, res) => {
 
 app.get('/api/config', (req, res) => {
   const cfg = config.load();
+  const st = config.dataDirStatus();
   res.json({
     dataDir: cfg.dataDir || null,
-    currentDir: config.getDataDir(),
-    dbFile: db.DB_FILE,
+    currentDir: st.dir,
+    dbFile: st.ok ? path.join(st.dir, 'referteco_data.json') : null,
+    storageOk: st.ok,
+    storageError: st.ok ? null : st.error,
     detectedGoogleDrive: config.detectGoogleDrive(),
   });
 });
@@ -1044,6 +1065,17 @@ app.listen(PORT, () => {
   console.log('  ╚══════════════════════════════════╝');
   console.log('');
   console.log(`  → http://localhost:${PORT}`);
+  console.log('');
+  const st = config.dataDirStatus();
+  if (st.ok) {
+    console.log('  Dati pazienti salvati in: ' + st.dir);
+  } else {
+    console.log('  ********************************************************');
+    console.log('  ⚠  ATTENZIONE: il disco dati "' + st.dir + '" NON è collegato!');
+    console.log('  ⚠  Collega il disco e RIAVVIA, altrimenti non potrai');
+    console.log('  ⚠  salvare referti. (Nessun dato verrà salvato altrove.)');
+    console.log('  ********************************************************');
+  }
   console.log('');
   console.log('  Tieni questa finestra aperta mentre usi il programma.');
   console.log('  Per uscire: chiudi questa finestra.');

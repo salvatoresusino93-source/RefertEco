@@ -2,7 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 
-const DB_FILE = path.join(config.getDataDir(), 'referteco_data.json');
+// Percorso del database calcolato OGNI VOLTA (non fisso all'avvio): così segue
+// sempre il disco dati corrente e lancia un errore chiaro se K: non è collegato.
+function dbFile() { return path.join(config.getDataDir(), 'referteco_data.json'); }
 
 const PREDEF_DEFAULT = [
   // ── GENERICI ───────────────────────────────────────────────────
@@ -93,6 +95,11 @@ function makeDefault() {
 let _data = null;
 
 function init() {
+  let DB_FILE;
+  // Se il disco dati (K:) non è collegato, NON crea nulla altrove: rimane in attesa.
+  // I dati verranno caricati appena il disco torna disponibile (vedi get()).
+  try { DB_FILE = dbFile(); }
+  catch(e) { _data = null; return; }
   if (fs.existsSync(DB_FILE)) {
     try {
       _data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
@@ -119,9 +126,16 @@ function init() {
   }
 }
 
-function get() { return _data; }
+function get() {
+  // Auto-recupero: se l'archivio non era caricato (es. K: era scollegato),
+  // riprova ora che potrebbe essere tornato disponibile.
+  if (_data === null) init();
+  return _data;
+}
 
 function persist() {
+  if (_data === null) return; // niente in memoria da salvare
+  const DB_FILE = dbFile();   // lancia un errore chiaro se K: non è collegato → niente salvataggi nel posto sbagliato
   const content = JSON.stringify(_data, null, 2);
   const tmp = DB_FILE + '.tmp';
   fs.writeFileSync(tmp, content, 'utf8');
@@ -136,4 +150,4 @@ function persist() {
 
 init();
 
-module.exports = { get, persist, DB_FILE };
+module.exports = { get, persist, dbFile };
