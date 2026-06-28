@@ -85,19 +85,22 @@ router.post('/', async (req, res) => {
   }
 
   // Verifica blocchi agenda (festività, impegni, manuali)
-  const { data: blocchi } = await supabase
-    .from('blocchi_agenda')
-    .select('id, motivo, tipo')
-    .lt('data_ora_inizio', data_ora_fine)
-    .gt('data_ora_fine',   data_ora_inizio);
+  // Il medico autenticato può sempre prenotare, anche su giorni bloccati (es. sabato/domenica eccezionali)
+  if (req.user?.ruolo !== 'medico') {
+    const { data: blocchi } = await supabase
+      .from('blocchi_agenda')
+      .select('id, motivo, tipo')
+      .lt('data_ora_inizio', data_ora_fine)
+      .gt('data_ora_fine',   data_ora_inizio);
 
-  if (blocchi && blocchi.length > 0) {
-    const b = blocchi[0];
-    return res.status(409).json({
-      error: `Impossibile prenotare: "${b.motivo}" — il centro è chiuso`,
-      tipo: 'blocco',
-      motivo: b.motivo,
-    });
+    if (blocchi && blocchi.length > 0) {
+      const b = blocchi[0];
+      return res.status(409).json({
+        error: `Impossibile prenotare: "${b.motivo}" — il centro è chiuso`,
+        tipo: 'blocco',
+        motivo: b.motivo,
+      });
+    }
   }
 
   // Verifica indisponibilità per fascia (mattina/pomeriggio/giornata)

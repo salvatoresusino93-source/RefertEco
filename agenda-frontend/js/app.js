@@ -164,11 +164,12 @@ function renderCalendar() {
     const d       = addDays(_viewStart, i);
     const dateStr = toDateStr(d);
     const bloccoGiorno = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
-    const cls = (isToday(d) ? ' today' : '') + (bloccoGiorno ? ' festivo' : '');
+    const isWeekend = (i === 5 || i === 6);
+    const cls = (isToday(d) ? ' today' : '') + (bloccoGiorno ? ' festivo' : (isWeekend ? ' weekend' : ''));
     hdr += `<div class="cal-th-day${cls}">
       <span class="cal-th-dayname">${GIORNI[i]}</span>
       <span class="cal-th-daynum">${d.getDate()}</span>
-      ${bloccoGiorno ? `<span class="cal-th-festivo" title="${esc(bloccoGiorno.motivo)}">🔴</span>` : ''}
+      ${bloccoGiorno ? `<span class="cal-th-festivo" title="${esc(bloccoGiorno.motivo)}">🔴</span>` : (isWeekend ? `<span class="cal-th-festivo">🔴</span>` : '')}
     </div>`;
   }
   hdr += `</div>`;
@@ -182,7 +183,8 @@ function renderCalendar() {
 
     // Blocco tutto il giorno per questa data?
     const bloccoGiorno = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
-    const festivoCls   = bloccoGiorno ? ' festivo' : '';
+    const isWeekend = (i === 5 || i === 6);
+    const festivoCls   = bloccoGiorno ? ' festivo' : (isWeekend ? ' weekend' : '');
 
     // Blocchi a orario specifico (impegni personali GCal non tutto-il-giorno)
     const dayMs   = new Date(dateStr + 'T00:00:00').getTime();
@@ -211,10 +213,10 @@ function renderCalendar() {
         const bEm = minFromMidnight(b.data_ora_fine);
         return bSm < absMin + SLOT_MIN && bEm > absMin;
       });
-      if (bloccoGiorno) {
+      if (bloccoGiorno && !isWeekend) {
         slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
           onclick="onSlotBlockedClick('${esc(bloccoGiorno.motivo)}')"></div>`;
-      } else if (bloccoSlot) {
+      } else if (bloccoSlot && !isWeekend) {
         slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
           onclick="onSlotBlockedClick('${esc(bloccoSlot.motivo || 'Impegno personale')}')"></div>`;
       } else {

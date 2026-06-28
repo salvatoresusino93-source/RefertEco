@@ -3,10 +3,9 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-  --pri:      #0e7c8b;
-  --pri-dark: #0a606c;
-  --pri-bg:   #e2f1f3;
-  --gradient: linear-gradient(135deg, #0e7c8b 0%, #1aa3a8 100%);
+  --pri:      #2563eb;
+  --pri-dark: #1d4ed8;
+  --pri-bg:   #eff6ff;
   --surface:  #ffffff;
   --bg:       #f1f5f9;
   --border:   #e2e8f0;
@@ -22,18 +21,15 @@
 }
 
 *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
-html { height: 100%; height: -webkit-fill-available; height: 100dvh; }
 body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  font-size:14px; color:var(--text); background:var(--bg);
-  height:100%; height:-webkit-fill-available; height:100dvh; overflow:hidden; }
+  font-size:14px; color:var(--text); background:var(--bg); height:100vh; overflow:hidden; }
 .hidden { display:none !important; }
 button { font-family:inherit; }
 
 /* ─── Buttons ─────────────────────────────────────────────────────────── */
-.btn-pri   { background:var(--gradient); color:#fff; border:none; padding:8px 18px;
-             border-radius:var(--radius); cursor:pointer; font-size:14px; font-weight:600;
-             box-shadow:0 6px 16px -8px rgba(14,124,139,.6); transition:transform .15s ease, box-shadow .2s ease; }
-.btn-pri:hover { background:var(--gradient); transform:translateY(-1px); box-shadow:0 10px 22px -8px rgba(14,124,139,.7); }
+.btn-pri   { background:var(--pri); color:#fff; border:none; padding:8px 18px;
+             border-radius:var(--radius); cursor:pointer; font-size:14px; font-weight:500; }
+.btn-pri:hover { background:var(--pri-dark); }
 .btn-sec   { background:var(--surface); color:var(--text); border:1px solid var(--border);
              padding:8px 16px; border-radius:var(--radius); cursor:pointer; font-size:14px; }
 .btn-sec:hover { background:var(--bg); }
@@ -57,36 +53,20 @@ button { font-family:inherit; }
 /* ─── Fields ─────────────────────────────────────────────────────────── */
 .field { display:flex; flex-direction:column; gap:4px; flex:1; }
 .chk-label { display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; padding:6px 0; user-select:none; }
-.chk-label input[type=checkbox] { width:16px; height:16px; cursor:pointer; accent-color:var(--pri); }
+.chk-label input[type=checkbox] { width:16px; height:16px; cursor:pointer; accent-color:#4a7c2a; }
 .field label { font-size:11px; font-weight:700; color:var(--muted);
                text-transform:uppercase; letter-spacing:.04em; }
 .field input, .field select, .field textarea {
   border:1px solid var(--border); border-radius:var(--radius);
   padding:8px 10px; font-size:14px; color:var(--text); background:var(--surface); width:100%; }
 .field input:focus, .field select:focus, .field textarea:focus {
-  outline:none; border-color:var(--pri); box-shadow:0 0 0 3px rgba(14,124,139,.12); }
+  outline:none; border-color:var(--pri); box-shadow:0 0 0 3px rgba(37,99,235,.1); }
 .field textarea { resize:vertical; }
 .field-row { display:flex; gap:12px; }
 
-/* ─── TELEFONO CON PREFISSO INTERNAZIONALE ───────────────────────────── */
-.phone-wrap { display:flex; gap:0; }
-.phone-prefix {
-  border:1px solid var(--border); border-radius:var(--radius) 0 0 var(--radius);
-  border-right:none; padding:8px 6px; font-size:14px; background:var(--surface);
-  color:var(--text); width:auto; min-width:90px; cursor:pointer; flex-shrink:0;
-}
-.phone-prefix:focus {
-  outline:none; border-color:var(--pri); box-shadow:0 0 0 3px rgba(14,124,139,.12);
-  z-index:1; position:relative;
-}
-.phone-wrap input[type=tel] {
-  border-radius:0 var(--radius) var(--radius) 0 !important;
-  flex:1;
-}
-
 /* ─── LOGIN ───────────────────────────────────────────────────────────── */
 .login-screen { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-  background:linear-gradient(135deg,#0a4a54 0%,#1aa3a8 100%); }
+  background:linear-gradient(135deg,#1e3a8a 0%,#0891b2 100%); }
 .login-card { background:var(--surface); border-radius:16px; padding:40px;
   width:100%; max-width:380px; box-shadow:var(--shadow-lg); text-align:center; }
 .login-logo { font-size:52px; margin-bottom:8px; }
@@ -97,19 +77,12 @@ button { font-family:inherit; }
   border:1px solid #fca5a5; border-radius:var(--radius); padding:8px 12px; font-size:13px; }
 
 /* ─── APP SHELL ───────────────────────────────────────────────────────── */
-/* Shell ancorata al viewport: position:fixed in alto + height dinamica (dvh).
-   Evita che, su iOS Safari, header e barra date "scorrano via" quando la
-   barra indirizzi si mostra/nasconde. */
-.app { position:fixed; top:0; left:0; right:0;
-  height:100vh; height:-webkit-fill-available; height:100dvh;
-  display:flex; flex-direction:column; overflow:hidden; }
+.app { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
 
-/* Header — semplice flex item in cima alla shell (niente sticky: su iOS
-   dentro un flex non scrollabile lo sticky si "stacca"). */
+/* Header */
 .app-header { height:var(--header-h); background:var(--surface);
   border-bottom:1px solid var(--border); display:flex; align-items:center;
-  padding:0 14px; gap:10px; box-shadow:var(--shadow);
-  position:relative; z-index:20; flex-shrink:0; }
+  padding:0 14px; gap:10px; box-shadow:var(--shadow); z-index:10; flex-shrink:0; }
 .hdr-left  { display:flex; align-items:center; gap:8px; }
 .app-title { font-size:16px; font-weight:700; white-space:nowrap; }
 .hdr-nav   { display:flex; align-items:center; gap:6px; flex:1; justify-content:center; }
@@ -140,16 +113,12 @@ button { font-family:inherit; }
 .app-main { flex:1; overflow:auto; }
 
 /* ─── CALENDAR ────────────────────────────────────────────────────────── */
-.cal-wrap { min-width:0; }   /* larghezza impostata via JS */
+.cal-wrap { min-width:680px; }
 
-.cal-header { display:grid; /* grid-template-columns impostato via JS */
+.cal-header { display:grid; grid-template-columns:52px repeat(7,1fr);
   background:var(--surface); border-bottom:2px solid var(--border);
   position:sticky; top:0; z-index:5; }
-/* Angolo ore sticky a sinistra su desktop e mobile */
-.cal-th-time {
-  position:-webkit-sticky; position:sticky;
-  left:0; z-index:7; background:var(--surface);
-}
+.cal-th-time { /* empty corner */ }
 .cal-th-day  { padding:8px 4px; text-align:center; border-left:1px solid var(--border); }
 .cal-th-dayname { display:block; font-size:10px; font-weight:700;
   text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
@@ -158,13 +127,9 @@ button { font-family:inherit; }
   margin-top:2px; }
 .cal-th-day.today .cal-th-daynum { background:var(--pri); color:#fff; }
 
-.cal-body { display:grid; /* grid-template-columns impostato via JS */ }
+.cal-body { display:grid; grid-template-columns:52px repeat(7,1fr); }
 
-/* Colonna ore sticky a sinistra su desktop e mobile */
-.cal-time-col {
-  position:-webkit-sticky; position:sticky;
-  left:0; z-index:3; background:var(--surface);
-}
+.cal-time-col { position:relative; }
 .cal-lbl { position:absolute; right:6px; font-size:10px; color:var(--muted);
   transform:translateY(-7px); white-space:nowrap; }
 
@@ -175,7 +140,7 @@ button { font-family:inherit; }
 .cal-hline.major { border-top-color:#cbd5e1; }
 
 .cal-slot { position:absolute; left:0; right:0; cursor:pointer; }
-.cal-slot:hover { background:rgba(14,124,139,.07); }
+.cal-slot:hover { background:rgba(37,99,235,.06); }
 
 /* ─── BLOCCHI AGENDA (festività, impegni) ──────────────────────────────── */
 .cal-day.festivo { background:repeating-linear-gradient(
@@ -197,7 +162,10 @@ button { font-family:inherit; }
 
 /* Header festivo */
 .cal-th-day.festivo { background:#fef2f2; color:#b91c1c; }
+.cal-th-day.weekend { background:#fff8f0; color:#c2410c; }
 .cal-th-festivo { display:block; font-size:9px; line-height:1; }
+.cal-day.weekend { background:#fffaf5; }
+.cal-day.weekend .cal-slot:hover { background:rgba(234,88,12,.06); }
 
 /* Appointment blocks */
 .cal-app { position:absolute; left:2px; right:2px; border-radius:6px;
@@ -257,17 +225,6 @@ button { font-family:inherit; }
 .paz-selezionato { background:var(--pri-bg); border:1px solid #bfdbfe;
   border-radius:var(--radius); padding:8px 12px; display:flex;
   align-items:center; justify-content:space-between; font-weight:600; }
-
-
-/* Pannello read-only dati paziente selezionato */
-.paz-info-panel {
-  background:#f8fafc; border:1px solid var(--border);
-  border-radius:var(--radius); padding:8px 12px; margin-top:4px;
-  display:flex; flex-direction:column; gap:3px;
-}
-.paz-info-row { display:flex; gap:8px; font-size:12px; align-items:baseline; }
-.paz-info-lbl { color:var(--muted); min-width:90px; font-size:11px; }
-.paz-info-edit { margin-top:6px; font-size:12px; }
 
 .nuovo-paz-form { background:var(--bg); border:1px solid var(--border);
   border-radius:var(--radius); padding:14px; display:flex; flex-direction:column; gap:10px; }
@@ -396,11 +353,6 @@ button { font-family:inherit; }
 .mbb-icon { font-size:22px; line-height:1; }
 .mbb-lbl  { font-size:11px; font-weight:600; }
 
-/* ─── GIORNI FERIALI (prenotabili) — sfondo neutro bianco ───────────── */
-.cal-th-day.ecografia { background: #fff; }
-.cal-day.ecografia { background: #fff; }
-.cal-day.ecografia.today { background: #fffbeb; }
-
 /* ─── BLOCCO INDISPONIBILITÀ ─────────────────────────────────────────── */
 .cal-blocco {
   position: absolute; left: 0; right: 0; z-index: 1;
@@ -426,23 +378,6 @@ button { font-family:inherit; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 90%; padding: 0 4px; }
 
-/* Impegno personale da Google Calendar — blocco grosso "non prenotabile" */
-.cal-blocco-gcal {
-  z-index: 3;
-  background: repeating-linear-gradient(-45deg,
-    rgba(120,53,15,.16), rgba(120,53,15,.16) 10px,
-    rgba(120,53,15,.07) 10px, rgba(120,53,15,.07) 20px);
-  border-left: 4px solid rgba(180,83,9,.85);
-  border-top: 1px solid rgba(180,83,9,.45);
-}
-.cal-blocco-gcal:hover {
-  background: repeating-linear-gradient(-45deg,
-    rgba(120,53,15,.26), rgba(120,53,15,.26) 10px,
-    rgba(120,53,15,.13) 10px, rgba(120,53,15,.13) 20px);
-}
-.cal-blocco-gcal .cal-blocco-label  { color: rgba(124,45,18,.95); }
-.cal-blocco-gcal .cal-blocco-motivo { color: rgba(124,45,18,.7); }
-
 /* Tipo selector nel modal blocco */
 .blocco-tipo-btns { display: flex; gap: 8px; }
 .blocco-tipo-btn {
@@ -464,6 +399,7 @@ button { font-family:inherit; }
   .mobile-bottom-bar { display:flex !important; }
 
   /* Header semplificato */
+  .hdr-nav    { display:none; }
   .hdr-period { display:none; }
   #btn-stampa { display:none; }
   .app-title  { font-size:15px; }
@@ -481,8 +417,10 @@ button { font-family:inherit; }
     padding-bottom:calc(62px + env(safe-area-inset-bottom, 0px));
   }
 
-  /* Calendario: larghezza e grid-template-columns impostati via JS (multi-settimana) */
-  .cal-wrap   { min-width:0; }
+  /* Calendario: 7 colonne da 68px + colonna ore 44px = 520px scrollabile */
+  .cal-wrap   { width:calc(44px + 7 * 68px); min-width:0; }
+  .cal-header { grid-template-columns:44px repeat(7,68px); }
+  .cal-body   { grid-template-columns:44px repeat(7,68px); }
 
   /* Colonna ore sticky a sinistra (con prefisso webkit per iOS) */
   .cal-time-col {
@@ -508,17 +446,7 @@ button { font-family:inherit; }
   .cal-app-esame { display:none; }
 
   /* Dropdown non tagliato fuori schermo */
-  /* Su mobile: menu fisso in basso sopra la bottom bar */
-  .menu-dropdown {
-    position: fixed !important;
-    left: 0 !important; right: 0 !important;
-    bottom: calc(62px + env(safe-area-inset-bottom, 0px)) !important;
-    top: auto !important;
-    width: 100% !important; min-width: 0 !important;
-    border-radius: 16px 16px 0 0 !important;
-    z-index: 10000 !important;
-    box-shadow: 0 -4px 24px rgba(0,0,0,.15) !important;
-  }
+  .menu-dropdown { left:0; right:auto; min-width:220px; }
 
   /* Modal: sale dal basso a schermo pieno */
   .modal-overlay { padding:0 !important; align-items:flex-end !important; }
@@ -534,21 +462,3 @@ button { font-family:inherit; }
   .modal-overlay[data-vv] .modal      { max-height:98% !important; }
   .modal-overlay[data-vv] .modal-body { max-height:calc(100% - 140px) !important; }
 }
-
-/* ─── SISTEMA TS / 730 ───────────────────────────────────────────────── */
-.ts-table { width:100%; border-collapse:collapse; font-size:13px; }
-.ts-table th {
-  background:var(--surface2,#f8f9fa); padding:8px 10px; text-align:left;
-  font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase;
-  letter-spacing:.04em; border-bottom:2px solid var(--border); position:sticky; top:0;
-}
-.ts-table td { padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
-.ts-table tr:hover td { background:var(--accent-soft,#f0f4ff); }
-.ts-table tr.ts-inviata td { opacity:.6; }
-.ts-importo-input {
-  width:80px; border:1px solid var(--border); border-radius:6px;
-  padding:4px 6px; font-size:13px; text-align:right;
-}
-.ts-badge-inviato { background:#dcfce7; color:#166534; border-radius:20px; padding:2px 8px; font-size:11px; font-weight:600; }
-.ts-badge-errore  { background:#fee2e2; color:#991b1b; border-radius:20px; padding:2px 8px; font-size:11px; font-weight:600; }
-.ts-badge-attesa  { background:#f1f5f9; color:#64748b; border-radius:20px; padding:2px 8px; font-size:11px; font-weight:600; }

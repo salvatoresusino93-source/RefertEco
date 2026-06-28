@@ -18,43 +18,16 @@ const STATI = {
 };
 const GIORNI = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
 
-const BLOCCO_TIPI = {
-  mattina:    { label: 'Mattina bloccata',    startH: 8,  endH: 14 },
-  pomeriggio: { label: 'Pomeriggio bloccato', startH: 14, endH: 20 },
-  giornata:   { label: 'Giornata bloccata',   startH: 8,  endH: 20 },
-};
-
-// ── Calendario continuo (mobile + desktop) ───────────────────────────────
-const CAL_WEEKS_MOB   = 5;    // settimane renderizzate (2 prima + corrente + 2 dopo)
-const CAL_SHIFT_DAYS  = 14;   // giorni di shift al re-center (2 settimane)
-const COL_W_MOB       = 68;   // larghezza colonna giorno mobile (px)
-const TIME_W_MOB      = 44;   // larghezza colonna ore mobile (px)
-const COL_W_DESK      = 148;  // larghezza colonna giorno desktop (px) — ~7 colonne visibili
-const TIME_W_DESK     = 52;   // larghezza colonna ore desktop (px)
-// Larghezza corrente (usata dal listener scroll)
-function getColW()  { return isMobile() ? COL_W_MOB  : COL_W_DESK;  }
-function getTimeW() { return isMobile() ? TIME_W_MOB : TIME_W_DESK; }
-// Nomi giorni indicizzati per d.getDay() (0=Dom…6=Sab)
-const GIORNI_IT = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
-
 // ─── Stato ────────────────────────────────────────────────────────────────
 let _user         = null;
 let _viewStart    = null;   // lunedì della settimana visualizzata
-let _calStart     = null;   // inizio range renderizzato su mobile (CAL_WEEKS_MOB settimane)
 let _mobileDay    = null;   // giorno corrente in vista mobile
 let _appointments = [];
 let _prestazioni  = [];
-let _blocchi          = [];     // blocchi agenda (festività, impegni)
-let _indisponibilita  = [];     // blocchi fascia oraria (mattina/pomeriggio/giornata)
-let _editId           = null;   // id appuntamento in modifica
-let _pazienteId       = null;   // paziente selezionato nel modal
-let _searchTimer      = null;
-let _bloccoTipo       = null;   // tipo selezionato nel modal blocco fascia
-let _pazCache         = {};     // cache pazienti: id → oggetto completo
-let _scrollShift      = null;   // px da sommare allo scrollLeft corrente dopo re-render
-let _firstRender      = true;   // primo render mobile: posiziona su settimana corrente
-let _scrollDebounce   = null;
-let _extendingRange   = false;  // lock: evita doppio fetch contemporaneo
+let _blocchi      = [];     // blocchi agenda (festività, impegni)
+let _editId       = null;   // id appuntamento in modifica
+let _pazienteId   = null;   // paziente selezionato nel modal
+let _searchTimer  = null;
 
 function isMobile() { return window.innerWidth <= 768; }
 
@@ -123,15 +96,13 @@ async function onLoginOk(user) {
   $('user-badge').textContent = user.nome_display || user.username;
   try { _prestazioni = await api.prestazioni(); } catch { _prestazioni = []; }
   fillPrestazioni();
-  _viewStart  = getMon(new Date());
-  _calStart   = addDays(_viewStart, -CAL_SHIFT_DAYS); // 2 settimane prima (buffer 5 sett.)
+  _viewStart = getMon(new Date());
   await refreshWeek();
   await refreshSidebar();
   initSocket();
   bindEvents();
   initSwipe();
-  initScrollListener();
-  window.addEventListener('resize', () => { _firstRender = true; renderCalendar(); renderPeriod(); });
+  window.addEventListener('resize', () => { renderCalendar(); renderPeriod(); });
 }
 
 // ─── Socket.io ────────────────────────────────────────────────────────────
@@ -142,23 +113,15 @@ function initSocket() {
     s.on('appuntamento:nuovo',      refresh);
     s.on('appuntamento:aggiornato', refresh);
     s.on('appuntamento:annullato',  refresh);
-    s.on('indisponibilita:creata',  () => refreshWeek());
-    s.on('indisponibilita:rimossa', () => refreshWeek());
   } catch {}
 }
 
 // ─── Calendar load & render ───────────────────────────────────────────────
 async function refreshWeek() {
-  if (!_calStart) _calStart = addDays(getMon(_viewStart), -CAL_SHIFT_DAYS);
-  const fromDate = _calStart;
-  const toDate   = addDays(_calStart, CAL_WEEKS_MOB * 7);
-  const from     = toISO(fromDate);
-  const to       = toISO(toDate);
-  try { _appointments    = await api.appuntamenti(from, to); }   catch { _appointments = []; }
-  try { _blocchi         = await api.blocchi(from, to); }         catch { _blocchi = []; }
-  try { _indisponibilita = await api.indisponibilita(
-    toDateStr(fromDate), toDateStr(addDays(toDate, -1))
-  ); }                                                            catch { _indisponibilita = []; }
+  const from = toISO(_viewStart);
+  const to   = toISO(addDays(_viewStart, 7));
+  try { _appointments = await api.appuntamenti(from, to); } catch { _appointments = []; }
+  try { _blocchi      = await api.blocchi(from, to);      } catch { _blocchi = []; }
   renderCalendar();
   renderPeriod();
 }
@@ -171,97 +134,124 @@ function renderPeriod() {
 }
 
 function renderCalendar() {
-  const numDays   = CAL_WEEKS_MOB * 7;
-  const colW      = getColW();
-  const timeW     = getTimeW();
-  const startDate = _calStart || _viewStart;
-  const gridCols  = `${timeW}px repeat(${numDays},${colW}px)`;
-
-  // Salva scroll corrente prima di ricostruire il DOM
-  const mainEl      = document.querySelector('.app-main');
-  const savedScroll = mainEl ? mainEl.scrollLeft : 0;
-
   const totalMin = (CAL_END - CAL_START) * 60;
   const totalPx  = totalMin * PX_PER_MIN;
 
-  // ── Header (con badge festività / ecografia)
-  let hdr = `<div class="cal-header" style="grid-template-columns:${gridCols}"><div class="cal-th-time"></div>`;
-  for (let i = 0; i < numDays; i++) {
-    const d          = addDays(startDate, i);
-    const dateStr    = toDateStr(d);
-    const bloccoGiorno = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
-    const isDomenica   = d.getDay() === 0;
-    const isEcografia  = d.getDay() >= 1 && d.getDay() <= 5;
-    const isChiuso     = bloccoGiorno || isDomenica;
-    const motivoCh     = isDomenica ? 'Domenica — giorno di chiusura' : (bloccoGiorno?.motivo || '');
-    const giorno       = GIORNI_IT[d.getDay()];
-    const cls = (isToday(d) ? ' today' : '') +
-                (isChiuso ? ' festivo' : '') +
-                (isEcografia && !isChiuso ? ' ecografia' : '');
+  // ── Header
+  let hdr = `<div class="cal-header"><div class="cal-th-time"></div>`;
+  for (let i=0; i<7; i++) {
+    const d = addDays(_viewStart, i);
+    const cls = isToday(d) ? ' today' : '';
     hdr += `<div class="cal-th-day${cls}">
-      <span class="cal-th-dayname">${giorno}</span>
+      <span class="cal-th-dayname">${GIORNI[i]}</span>
       <span class="cal-th-daynum">${d.getDate()}</span>
-      ${isChiuso ? `<span class="cal-th-festivo" title="${esc(motivoCh)}">🔴</span>` : ''}
     </div>`;
   }
   hdr += `</div>`;
 
-  // ── Colonna ore (sticky a sinistra)
+  // ── Time labels
   let timeLbls = `<div class="cal-time-col" style="height:${totalPx}px">`;
-  for (let m = 0; m <= totalMin; m += 60) {
-    const h = CAL_START + m / 60;
+  for (let m=0; m<=totalMin; m+=60) {
+    const h = CAL_START + m/60;
     timeLbls += `<div class="cal-lbl" style="top:${m*PX_PER_MIN}px">${String(h).padStart(2,'0')}:00</div>`;
   }
   timeLbls += `</div>`;
 
-  // ── Colonne giorno
-  let days = '';
-  for (let i = 0; i < numDays; i++) {
-    const d          = addDays(startDate, i);
-    const dateStr    = toDateStr(d);
-    const todayCls   = isToday(d) ? ' today' : '';
+  // ── Header con indicatore festività
+  // Ricostruiamo l'header aggiungendo il badge festivo
+  hdr = `<div class="cal-header"><div class="cal-th-time"></div>`;
+  for (let i=0; i<7; i++) {
+    const d       = addDays(_viewStart, i);
+    const dateStr = toDateStr(d);
     const bloccoGiorno = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
-    const isDomenica   = d.getDay() === 0;
-    const isEcografia  = d.getDay() >= 1 && d.getDay() <= 5;
-    const isChiuso     = bloccoGiorno || isDomenica;
-    const motivoCh     = isDomenica ? 'Domenica — giorno di chiusura' : (bloccoGiorno?.motivo || '');
-    const festivoCls   = isChiuso ? ' festivo' : (isEcografia ? ' ecografia' : '');
+    const isWeekend = (i === 5 || i === 6);
+    const cls = (isToday(d) ? ' today' : '') + (bloccoGiorno ? ' festivo' : (isWeekend ? ' weekend' : ''));
+    hdr += `<div class="cal-th-day${cls}">
+      <span class="cal-th-dayname">${GIORNI[i]}</span>
+      <span class="cal-th-daynum">${d.getDate()}</span>
+      ${bloccoGiorno ? `<span class="cal-th-festivo" title="${esc(bloccoGiorno.motivo)}">🔴</span>` : (isWeekend ? `<span class="cal-th-festivo">🔴</span>` : '')}
+    </div>`;
+  }
+  hdr += `</div>`;
 
+  // ── Day columns
+  let days = '';
+  for (let i=0; i<7; i++) {
+    const d       = addDays(_viewStart, i);
+    const dateStr = toDateStr(d);
+    const todayCls = isToday(d) ? ' today' : '';
+
+    // Blocco tutto il giorno per questa data?
+    const bloccoGiorno = _blocchi.find(b => b.tutto_il_giorno && b.data_ora_inizio.startsWith(dateStr));
+    const isWeekend = (i === 5 || i === 6);
+    const festivoCls   = bloccoGiorno ? ' festivo' : (isWeekend ? ' weekend' : '');
+
+    // Blocchi a orario specifico (impegni personali GCal non tutto-il-giorno)
+    const dayMs   = new Date(dateStr + 'T00:00:00').getTime();
+    const nextMs  = dayMs + 86400000;
+    const blocchiTimed = _blocchi.filter(b => {
+      if (b.tutto_il_giorno) return false;
+      const bS = new Date(b.data_ora_inizio).getTime();
+      const bE = new Date(b.data_ora_fine).getTime();
+      return bS < nextMs && bE > dayMs;
+    });
+
+    // Hour lines
     let lines = '';
-    for (let m = 0; m <= totalMin; m += 30)
+    for (let m=0; m<=totalMin; m+=20) {
       lines += `<div class="cal-hline${m%60===0?' major':''}" style="top:${m*PX_PER_MIN}px"></div>`;
+    }
 
-    const dayMs2  = new Date(dateStr + 'T00:00:00').getTime();
-    const nextMs2 = dayMs2 + 86400000;
-    const blocchiGcalTimed = _blocchi.filter(b =>
-      !b.tutto_il_giorno && b.tipo === 'google_calendar' &&
-      new Date(b.data_ora_inizio).getTime() < nextMs2 &&
-      new Date(b.data_ora_fine).getTime()   > dayMs2
-    );
-
+    // Click slots (bloccati se giorno festivo o coperto da impegno personale)
     let slots = '';
-    for (let m = 0; m < totalMin; m += SLOT_MIN) {
-      const absMin = CAL_START * 60 + m;
+    for (let m=0; m<totalMin; m+=SLOT_MIN) {
+      const absMin = CAL_START*60 + m;
       const hh = String(Math.floor(absMin/60)).padStart(2,'0');
       const mm = String(absMin%60).padStart(2,'0');
-      const gcalSlot = !isChiuso && blocchiGcalTimed.find(b => {
+      const bloccoSlot = !bloccoGiorno && blocchiTimed.find(b => {
         const bSm = minFromMidnight(b.data_ora_inizio);
         const bEm = minFromMidnight(b.data_ora_fine);
         return bSm < absMin + SLOT_MIN && bEm > absMin;
       });
-      slots += isChiuso
-        ? `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
-            onclick="onSlotBlockedClick('${esc(motivoCh)}')"></div>`
-        : gcalSlot
-          ? `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
-              onclick="onSlotBlockedClick('Impegno personale')"></div>`
-          : `<div class="cal-slot" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
-              onclick="onSlotClick('${dateStr}','${hh}:${mm}')"></div>`;
+      if (bloccoGiorno && !isWeekend) {
+        slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
+          onclick="onSlotBlockedClick('${esc(bloccoGiorno.motivo)}')"></div>`;
+      } else if (bloccoSlot && !isWeekend) {
+        slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
+          onclick="onSlotBlockedClick('${esc(bloccoSlot.motivo || 'Impegno personale')}')"></div>`;
+      } else {
+        slots += `<div class="cal-slot" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
+          onclick="onSlotClick('${dateStr}','${hh}:${mm}')"></div>`;
+      }
     }
 
-    const bloccoOverlay = isChiuso
-      ? `<div class="cal-blocco-overlay" title="${esc(motivoCh)}"><span class="cal-blocco-label">${esc(motivoCh)}</span></div>` : '';
+    // Overlay blocco giorno intero
+    const bloccoOverlay = bloccoGiorno
+      ? `<div class="cal-blocco-overlay" title="${esc(bloccoGiorno.motivo)}">
+           <span class="cal-blocco-label">${esc(bloccoGiorno.motivo)}</span>
+         </div>`
+      : '';
 
+    // Overlay blocchi a orario (impegni personali GCal)
+    let blocchiTimedHtml = '';
+    if (!bloccoGiorno) {
+      for (const b of blocchiTimed) {
+        const startM = minFromMidnight(b.data_ora_inizio);
+        const endM   = minFromMidnight(b.data_ora_fine);
+        const top    = (startM - CAL_START*60) * PX_PER_MIN;
+        const height = Math.max((endM - startM) * PX_PER_MIN, 22);
+        if (top < 0 || top >= totalPx) continue;
+        const motivo = esc(b.motivo || 'Impegno personale');
+        blocchiTimedHtml += `<div class="cal-blocco"
+          style="top:${top}px;height:${height}px"
+          onclick="onSlotBlockedClick('${motivo}')">
+          <span class="cal-blocco-icon">🔒</span>
+          ${height >= 36 ? `<span class="cal-blocco-motivo">${motivo}</span>` : ''}
+        </div>`;
+      }
+    }
+
+    // Appointments
     let appHtml = '';
     for (const a of _appointments.filter(x => x.data_ora_inizio.startsWith(dateStr))) {
       const startM = minFromMidnight(a.data_ora_inizio);
@@ -269,154 +259,75 @@ function renderCalendar() {
       const top    = (startM - CAL_START*60) * PX_PER_MIN;
       const height = Math.max((endM - startM) * PX_PER_MIN, 22);
       if (top < 0 || top >= totalPx) continue;
+
       const stato   = a.stato || 'prenotato';
       const pazNome = a.pazienti ? `${esc(a.pazienti.cognome)} ${esc(a.pazienti.nome)}` : '—';
       const esame   = esc(a.tipi_prestazione?.nome || '');
-      const conf    = a.conferma_paziente === 'confermato' ? ' ✅' : '';
-      const confTitle = a.conferma_paziente === 'confermato' ? ' — presenza confermata' : '';
-      appHtml += `<div class="cal-app stato-${stato}" style="top:${top}px;height:${height}px"
-        onclick="onAppClick('${a.id}',event)" title="${pazNome} — ${esame}${confTitle}">
+
+      appHtml += `<div class="cal-app stato-${stato}"
+        style="top:${top}px;height:${height}px"
+        onclick="onAppClick('${a.id}',event)"
+        title="${pazNome} — ${esame}">
         <div class="cal-app-time">${fmtTime(a.data_ora_inizio)}</div>
-        <div class="cal-app-nome">${pazNome}${conf}</div>
+        <div class="cal-app-nome">${pazNome}</div>
         ${height>=50?`<div class="cal-app-esame">${esame}</div>`:''}
       </div>`;
     }
 
-    let fasceBlocchi = '';
-    for (const b of _indisponibilita.filter(x => x.data === dateStr)) {
-      const bt = BLOCCO_TIPI[b.tipo];
-      if (!bt) continue;
-      const top    = (bt.startH - CAL_START) * 60 * PX_PER_MIN;
-      const height = (bt.endH - bt.startH) * 60 * PX_PER_MIN;
-      const motivo  = b.motivo ? esc(b.motivo) : '';
-      const tooltip = `${bt.label}${motivo ? ' — ' + motivo : ''}\n\nClicca per rimuovere il blocco`;
-      fasceBlocchi += `<div class="cal-blocco" style="top:${top}px;height:${height}px"
-        onclick="onBloccoClick('${b.id}',event)" title="${tooltip}">
-        <span class="cal-blocco-icon">🔒</span>
-        <span class="cal-blocco-label">${bt.label}</span>
-        ${motivo ? `<span class="cal-blocco-motivo">${motivo}</span>` : ''}
-      </div>`;
-    }
-
-    // ── Impegni personali da Google Calendar (blocchi a orario, non rimovibili)
-    // Mostra un blocco grosso "Non prenotabile" sullo slot occupato, senza
-    // svelare i dettagli privati dell'impegno (etichetta generica).
-    let impegniGcal = '';
-    for (const b of _blocchi.filter(x => !x.tutto_il_giorno && x.tipo === 'google_calendar' && x.data_ora_inizio.startsWith(dateStr))) {
-      const startM = minFromMidnight(b.data_ora_inizio);
-      const endM   = minFromMidnight(b.data_ora_fine);
-      const top    = (startM - CAL_START*60) * PX_PER_MIN;
-      const height = Math.max((endM - startM) * PX_PER_MIN, 30);
-      if (top < 0 || top >= totalPx) continue;
-      const oraTxt = `${fmtTime(b.data_ora_inizio)}–${fmtTime(b.data_ora_fine)}`;
-      impegniGcal += `<div class="cal-blocco cal-blocco-gcal" style="top:${top}px;height:${height}px"
-        onclick="onImpegnoClick(event)" title="Impegno personale ${oraTxt} — slot non prenotabile">
-        <span class="cal-blocco-icon">🚫</span>
-        <span class="cal-blocco-label">Non prenotabile</span>
-        ${height>=44?`<span class="cal-blocco-motivo">Impegno personale</span>`:''}
-      </div>`;
-    }
-
-    days += `<div class="cal-day${todayCls}${festivoCls}" style="height:${totalPx}px">${lines}${slots}${bloccoOverlay}${fasceBlocchi}${impegniGcal}${appHtml}</div>`;
+    days += `<div class="cal-day${todayCls}${festivoCls}" style="height:${totalPx}px">${lines}${slots}${bloccoOverlay}${blocchiTimedHtml}${appHtml}</div>`;
   }
 
-  // ── Applica larghezza al wrapper (colonne pixel fissi, scrollabile)
-  const calWrap = $('cal-wrap');
-  calWrap.style.width    = `${timeW + numDays * colW}px`;
-  calWrap.style.minWidth = '0';
+  $('cal-wrap').innerHTML = `${hdr}
+    <div class="cal-body">${timeLbls}${days}</div>`;
 
-  calWrap.innerHTML = `${hdr}<div class="cal-body" style="grid-template-columns:${gridCols}">${timeLbls}${days}</div>`;
-
-  // ── Gestione scroll (uguale su mobile e desktop)
-  if (mainEl) {
-    if (_scrollShift !== null) {
-      // Edge re-center: shift applicato allo scroll ATTUALE (l'utente ha continuato a scorrere durante il fetch)
-      mainEl.scrollLeft = Math.max(0, savedScroll + _scrollShift);
-      _scrollShift  = null;
-      _firstRender  = false;
-    } else if (!_firstRender) {
-      // Re-render normale: mantieni posizione corrente
-      mainEl.scrollLeft = savedScroll;
-    } else {
-      // Primo render: posiziona sulla settimana corrente (_viewStart)
-      const dayIdx = Math.max(0, Math.round((getMon(_viewStart) - startDate) / 86400000));
-      mainEl.scrollLeft = dayIdx * colW;
-      _firstRender = false;
-    }
+  // Su mobile: scrolla in modo che la colonna di oggi sia visibile
+  if (isMobile()) {
+    requestAnimationFrame(() => {
+      const todayCol = $('cal-wrap').querySelector('.cal-day.today');
+      if (todayCol) todayCol.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'center' });
+    });
   }
 }
 
 // ─── Navigazione settimana (mobile: frecce, desktop: frecce + swipe) ─────
 function navMobileWeek(n) {
-  const el = document.querySelector('.app-main');
-  if (el) el.scrollBy({ left: n * 7 * getColW(), behavior: 'smooth' });
-}
-
-function goToToday() {
-  _viewStart      = getMon(new Date());
-  _calStart       = addDays(_viewStart, -CAL_SHIFT_DAYS);
-  _firstRender    = true;
-  _extendingRange = false;
+  _viewStart = addDays(_viewStart, n * 7);
   refreshWeek();
 }
 
-// ─── Tasto freccia (desktop) ──────────────────────────────────────────────
+function goToToday() {
+  _viewStart = getMon(new Date());
+  refreshWeek();
+}
+
+// ─── Swipe gesture (mobile) + tasto freccia (desktop) ────────────────────
 function initSwipe() {
+  let x0 = 0, y0 = 0, t0 = 0;
+  const el = document.querySelector('.app-main') || document.body;
+
+  el.addEventListener('touchstart', e => {
+    x0 = e.touches[0].clientX;
+    y0 = e.touches[0].clientY;
+    t0 = Date.now();
+  }, { passive: true });
+
+  el.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - x0;
+    const dy = e.changedTouches[0].clientY - y0;
+    const dt = Date.now() - t0;
+    // Swipe veloce e orizzontale: cambia settimana
+    if (dt < 400 && Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy) * 2) {
+      if (dx < 0) { _viewStart = addDays(_viewStart,  7); refreshWeek(); }
+      else        { _viewStart = addDays(_viewStart, -7); refreshWeek(); }
+    }
+  }, { passive: true });
+
+  // Frecce tastiera (desktop)
   document.addEventListener('keydown', e => {
     if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
-    const el = document.querySelector('.app-main');
-    if (e.key === 'ArrowRight') { e.preventDefault(); if(el) el.scrollBy({left: 7*getColW(), behavior:'smooth'}); }
-    if (e.key === 'ArrowLeft')  { e.preventDefault(); if(el) el.scrollBy({left:-7*getColW(), behavior:'smooth'}); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); isMobile() ? navMobileDay(1)  : (() => { _viewStart=addDays(_viewStart, 7); refreshWeek(); })(); }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); isMobile() ? navMobileDay(-1) : (() => { _viewStart=addDays(_viewStart,-7); refreshWeek(); })(); }
   });
-}
-
-// ─── Scroll continuo multi-settimana (mobile) ─────────────────────────────
-function initScrollListener() {
-  const mainEl = document.querySelector('.app-main');
-  if (!mainEl) return;
-  mainEl.addEventListener('scroll', onCalMainScroll, { passive: true });
-}
-
-function onCalMainScroll() {
-  if (!_calStart) return;
-  const el = document.querySelector('.app-main');
-  if (!el) return;
-
-  // Aggiorna etichetta periodo in tempo reale
-  const colW   = getColW();
-  const dayIdx = Math.max(0, Math.floor(el.scrollLeft / colW));
-  const visMon = getMon(addDays(_calStart, dayIdx));
-  if (toDateStr(visMon) !== toDateStr(_viewStart)) {
-    _viewStart = visMon;
-    renderPeriod();
-  }
-
-  // Prefetch anticipato: trigger a 1 settimana dal bordo
-  if (_extendingRange) return;
-
-  clearTimeout(_scrollDebounce);
-  _scrollDebounce = setTimeout(async () => {
-    if (!_calStart || _extendingRange) return;
-    const el2 = document.querySelector('.app-main');
-    if (!el2) return;
-    const cw        = getColW();
-    const maxScroll = el2.scrollWidth - el2.clientWidth;
-    const triggerPx = 3 * cw;   // 3 giorni dal bordo (7 causava oscillazione: nuova posizione ricadeva nel trigger opposto)
-
-    if (el2.scrollLeft < triggerPx) {
-      _extendingRange = true;
-      _calStart       = addDays(_calStart, -CAL_SHIFT_DAYS);
-      _scrollShift    = CAL_SHIFT_DAYS * cw;
-      await refreshWeek();
-      _extendingRange = false;
-    } else if (el2.scrollLeft > maxScroll - triggerPx) {
-      _extendingRange = true;
-      _calStart       = addDays(_calStart, CAL_SHIFT_DAYS);
-      _scrollShift    = -(CAL_SHIFT_DAYS * cw);
-      await refreshWeek();
-      _extendingRange = false;
-    }
-  }, 150);
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────
@@ -439,8 +350,8 @@ async function refreshSidebar() {
 
 // ─── Nav events ───────────────────────────────────────────────────────────
 function bindEvents() {
-  $('btn-prev').onclick  = () => { const el=document.querySelector('.app-main'); if(el) el.scrollBy({left:-7*getColW(),behavior:'smooth'}); };
-  $('btn-next').onclick  = () => { const el=document.querySelector('.app-main'); if(el) el.scrollBy({left: 7*getColW(),behavior:'smooth'}); };
+  $('btn-prev').onclick  = () => { _viewStart = addDays(_viewStart,-7); refreshWeek(); };
+  $('btn-next').onclick  = () => { _viewStart = addDays(_viewStart, 7); refreshWeek(); };
   $('btn-oggi').onclick  = () => goToToday();
   $('btn-nuovo').onclick = () => openModal();
   $('btn-stampa').onclick = stampaDiario;
@@ -523,7 +434,6 @@ function openModal(opts={}) {
   $('app-invia-sms').checked = true; // default: invia promemoria
   $('prep-reminder').classList.add('hidden');
   $('field-stato').style.display = 'none';
-  $('field-fattura').classList.add('hidden');
   $('btn-annulla-app').classList.add('hidden');
   $('nuovo-paz-form').classList.add('hidden');
   $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
@@ -549,9 +459,7 @@ async function loadAppInModal(id) {
     const a = await api.appuntamento(id);
     if (a.pazienti) {
       _pazienteId = a.paziente_id;
-      _pazCache[a.paziente_id] = a.pazienti;
       showPazSelezionato(`${a.pazienti.cognome} ${a.pazienti.nome}`);
-      showPazInfo(a.pazienti);   // dati in sola lettura + link "Modifica"
     }
     $('app-tipo').value = a.tipo_id || '';
     checkPreparazione();
@@ -563,60 +471,7 @@ async function loadAppInModal(id) {
     $('app-invia-sms').checked = a.invia_sms_promemoria !== false; // default true
     $('field-stato').style.display = '';
     renderStatoBtns(a.stato);
-    renderConfermaPaziente(a);
-    renderFatturaBox(a);
   } catch { alert('Errore nel caricamento'); closeModal(); }
-}
-
-// ─── Fattura elettronica ──────────────────────────────────────────────────
-function renderFatturaBox(a) {
-  const box  = $('field-fattura');
-  const info = $('fattura-info');
-  const statiConFattura = ['prenotato','arrivato','refertato'];
-
-  if (!statiConFattura.includes(a.stato)) {
-    box.classList.add('hidden'); return;
-  }
-  box.classList.remove('hidden');
-
-  info.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-      <input type="text" id="input-numero-fattura"
-        value="${a.numero_fattura || ''}"
-        placeholder="es. 5/2026"
-        style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;
-               font-size:13px;width:120px;">
-      <button onclick="salvaNumeroFattura('${a.id}')"
-        style="background:#0ea5e9;color:#fff;border:none;border-radius:6px;
-               padding:6px 12px;cursor:pointer;font-size:13px;font-weight:600;">
-        💾 Salva
-      </button>
-      ${a.numero_fattura ? `<span style="font-size:12px;color:#16a34a;">✅ ${a.numero_fattura}</span>` : ''}
-    </div>
-    <small style="color:#6b7280;font-size:11px;margin-top:4px;display:block;">
-      Numero della ricevuta/fattura consegnata al paziente (es. 5/2026).
-      È il numero che verrà inviato al Sistema TS.
-    </small>`;
-}
-
-async function salvaNumeroFattura(appId) {
-  const val = $('input-numero-fattura').value.trim();
-  if (!val) { alert('Inserisci un numero fattura'); return; }
-  try {
-    await api._req('PATCH', `/appuntamenti/${appId}`, { numero_fattura: val });
-    $('fattura-info').querySelector('span') && ($('fattura-info').querySelector('span').textContent = '✅ ' + val);
-    // aggiorna inline senza chiudere il modal
-    const saved = $('fattura-info').querySelector('span');
-    if (saved) { saved.textContent = '✅ ' + val; saved.style.color = '#16a34a'; }
-    else {
-      const sp = document.createElement('span');
-      sp.style = 'font-size:12px;color:#16a34a;';
-      sp.textContent = '✅ ' + val;
-      $('fattura-info').querySelector('div').appendChild(sp);
-    }
-  } catch(e) {
-    alert('Errore salvataggio: ' + e.message);
-  }
 }
 
 function renderStatoBtns(attuale) {
@@ -628,24 +483,10 @@ function renderStatoBtns(attuale) {
          Clicca <strong>Prenotato</strong> per confermare manualmente.
        </div>`
     : '';
-  $('stato-btns').innerHTML = banner + ['prenotato','arrivato','refertato'].map(s =>
+  $('stato-btns').innerHTML = banner + ['prenotato','arrivato','in_corso','refertato'].map(s =>
     `<button class="stato-btn stato-${s}${s===attuale?' active':''}"
       data-stato="${s}" onclick="clickStato(this,'${s}')">${STATI[s]}</button>`
   ).join('');
-}
-
-function renderConfermaPaziente(a) {
-  // Mostra un banner se il paziente ha confermato la presenza via SMS
-  const esistente = document.getElementById('banner-conferma-paz');
-  if (esistente) esistente.remove();
-  if (a.conferma_paziente !== 'confermato') return;
-
-  const div = document.createElement('div');
-  div.id = 'banner-conferma-paz';
-  div.style.cssText = 'background:#dcfce7;border:1px solid #86efac;border-radius:6px;' +
-    'padding:8px 10px;margin-bottom:8px;font-size:12px;color:#166534;font-weight:600;';
-  div.innerHTML = '✅ Presenza confermata dal paziente';
-  $('stato-btns').insertAdjacentElement('beforebegin', div);
 }
 
 function clickStato(btn, stato) {
@@ -709,57 +550,14 @@ function resetPaziente() {
   $('paz-results').classList.add('hidden');
   $('paz-selezionato').classList.add('hidden');
   $('btn-nuovo-paz-toggle').style.display = '';
-  $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
-  // Nascondi pannello info e form paziente
-  $('paz-info-panel').classList.add('hidden');
-  $('nuovo-paz-form').classList.add('hidden');
-  ['np-cognome','np-nome','np-nascita','np-cf','np-telefono','np-email','np-indirizzo','np-civico','np-cap','np-comune'].forEach(id => $(id).value = '');
-  $('np-sesso').value = '';
-  $('btn-salva-nuovo-paz').textContent = '✓ Salva paziente';
 }
 
 function showPazSelezionato(nome) {
   $('paz-nome-display').textContent = nome;
   $('paz-selezionato').classList.remove('hidden');
   $('paziente-search').style.display = 'none';
-  $('btn-nuovo-paz-toggle').style.display = 'none';  // nascosto: form sempre visibile
+  $('btn-nuovo-paz-toggle').style.display = 'none';
   $('paz-results').classList.add('hidden');
-}
-
-// Mostra i dati del paziente in sola lettura con link "Modifica"
-function showPazInfo(p) {
-  if (!p) return;
-  const nasc = p.data_nascita
-    ? new Date(p.data_nascita + 'T12:00:00').toLocaleDateString('it-IT') : '—';
-  const sesso = p.sesso === 'M' ? 'Maschio' : p.sesso === 'F' ? 'Femmina' : '—';
-  $('paz-info-nascita').textContent = nasc;
-  $('paz-info-sesso').textContent   = sesso;
-  $('paz-info-tel').textContent     = p.telefono || '—';
-  $('paz-info-cf').textContent      = (p.codice_fiscale || '—').toUpperCase();
-  $('paz-info-panel').classList.remove('hidden');
-  $('btn-modifica-paz').style.display = '';   // mostra link modifica
-  $('nuovo-paz-form').classList.add('hidden'); // form nascosto (sola lettura)
-}
-
-// Quando l'utente clicca "Modifica dati paziente": mostra il form editabile
-function abilitaModificaPaz() {
-  const p = _pazCache[_pazienteId];
-  if (!p) return;
-  $('np-cognome').value  = p.cognome || '';
-  $('np-nome').value     = p.nome    || '';
-  $('np-nascita').value  = p.data_nascita ? p.data_nascita.split('T')[0] : '';
-  $('np-sesso').value    = p.sesso   || '';
-  $('np-cf').value       = (p.codice_fiscale || '').toUpperCase();
-  $('np-telefono').value = p.telefono || '';
-  $('np-email').value    = p.email    || '';
-  $('np-indirizzo').value = p.indirizzo || '';
-  $('np-civico').value    = p.civico   || '';
-  $('np-cap').value       = p.cap      || '';
-  $('np-comune').value    = p.comune   || '';
-  $('nuovo-paz-form').classList.remove('hidden');
-  $('btn-modifica-paz').style.display = 'none'; // nasconde il link mentre il form è aperto
-  $('btn-salva-nuovo-paz').textContent = '✓ Aggiorna paziente';
-  $('np-cognome').focus();
 }
 
 async function onPazSearch() {
@@ -775,131 +573,108 @@ async function onPazSearch() {
 }
 
 function renderPazResults(list) {
-  // Metti in cache tutti i pazienti trovati (id → oggetto)
-  list.forEach(p => { _pazCache[p.id] = p; });
   const el = $('paz-results');
   if (!list.length) {
     el.innerHTML = '<div class="paz-item"><em>Nessun risultato</em></div>';
   } else {
     el.innerHTML = list.map(p => {
       const nasc = p.data_nascita ? new Date(p.data_nascita).toLocaleDateString('it-IT') : '';
-      const tel  = p.telefono ? ' · ' + p.telefono : '';
-      return `<div class="paz-item" onclick="selezionaPaz('${p.id}')">
+      return `<div class="paz-item" onclick="selezionaPaz('${p.id}','${esc(p.cognome)} ${esc(p.nome)}')">
         <div class="paz-nome">${esc(p.cognome)} ${esc(p.nome)}</div>
-        <div class="paz-info">${nasc ? '📅 ' + nasc : ''}${tel}</div>
+        <div class="paz-info">${nasc?'Nato: '+nasc:''} ${p.codice_fiscale||''}</div>
       </div>`;
     }).join('');
   }
   el.classList.remove('hidden');
 }
 
-async function selezionaPaz(id) {
+function selezionaPaz(id, nome) {
   _pazienteId = id;
-  let p = _pazCache[id];
-  if (!p) {
-    try { p = await api.paziente(id); _pazCache[id] = p; } catch {}
-  }
-  const nome = p ? `${p.cognome} ${p.nome}` : id;
   showPazSelezionato(nome);
-  showPazInfo(p);  // dati in sola lettura + link "Modifica"
 }
 
 async function salvaNuovoPaz() {
-  const cognome  = $('np-cognome').value.trim();
-  const nome     = $('np-nome').value.trim();
-  const telefono = $('np-telefono').value.trim();
-  if (!cognome || !nome)      { alert('Cognome e nome obbligatori'); return; }
+  const cognome   = $('np-cognome').value.trim();
+  const nome      = $('np-nome').value.trim();
+  const telefono  = $('np-telefono').value.trim();
+  if (!cognome || !nome)    { alert('Cognome e nome obbligatori'); return; }
   if (!$('np-nascita').value) { alert('La data di nascita è obbligatoria'); $('np-nascita').focus(); return; }
-  if (!telefono)              { alert('Il numero di telefono è obbligatorio'); $('np-telefono').focus(); return; }
-
-  const btn  = $('btn-salva-nuovo-paz');
-  const dati = {
-    cognome, nome,
-    data_nascita:   $('np-nascita').value || null,
-    sesso:          $('np-sesso').value   || null,
-    codice_fiscale: $('np-cf').value.trim().toUpperCase() || null,
-    telefono,
-    email:          $('np-email').value.trim() || null,
-    indirizzo:      $('np-indirizzo').value.trim() || null,
-    civico:         $('np-civico').value.trim()   || null,
-    cap:            $('np-cap').value.trim()       || null,
-    comune:         $('np-comune').value.trim()    || null,
-  };
-
+  if (!telefono)            { alert('Il numero di telefono è obbligatorio'); $('np-telefono').focus(); return; }
+  const btn = $('btn-salva-nuovo-paz');
   btn.textContent = 'Salvataggio…'; btn.disabled = true;
-
-  // ── MODALITÀ AGGIORNA (paziente già selezionato) ──────────────────────
-  if (_pazienteId) {
-    try {
-      const p = await api.aggiornaPaziente(_pazienteId, dati);
-      _pazCache[_pazienteId] = { ...dati, id: _pazienteId, ...p };
-      $('paz-nome-display').textContent = `${cognome} ${nome}`;
-      btn.textContent = '✓ Aggiornato!';
-      setTimeout(() => { btn.textContent = '✓ Aggiorna paziente'; btn.disabled = false; }, 1500);
-    } catch(ex) {
-      alert('Errore aggiornamento: ' + ex.message);
-      btn.textContent = '✓ Aggiorna paziente'; btn.disabled = false;
-    }
-    return;
-  }
-
-  // ── MODALITÀ CREA (nuovo paziente) ────────────────────────────────────
   try {
-    const p = await api.creaPaziente(dati);
-    // Paziente creato: selezionalo e mostra il form in modalità modifica
-    _pazienteId = p.id;
-    _pazCache[p.id] = p;
-    showPazSelezionato(`${p.cognome} ${p.nome}`);
-    fillPazForm(p);
-    btn.textContent = '✓ Salvato!';
-    setTimeout(() => { btn.textContent = '✓ Aggiorna paziente'; btn.disabled = false; }, 1500);
+    const p = await api.creaPaziente({
+      cognome, nome,
+      data_nascita:   $('np-nascita').value || null,
+      sesso:          $('np-sesso').value   || null,
+      codice_fiscale: $('np-cf').value.trim() || null,
+      telefono,
+      email:          $('np-email').value.trim() || null,
+    });
+    selezionaPaz(p.id, `${p.cognome} ${p.nome}`);
+    $('nuovo-paz-form').classList.add('hidden');
+    $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
+    ['np-cognome','np-nome','np-nascita','np-cf','np-telefono','np-email'].forEach(id => $(id).value='');
+    $('np-sesso').value = '';
   } catch(ex) {
     if (ex.status === 409 && ex.paziente) {
-      const p   = ex.paziente;
-      const nasc = p.data_nascita
-        ? new Date(p.data_nascita + 'T12:00:00').toLocaleDateString('it-IT') : 'non inserita';
+      const p = ex.paziente;
+      const nascita = p.data_nascita
+        ? new Date(p.data_nascita + 'T12:00:00').toLocaleDateString('it-IT')
+        : 'non inserita';
 
       if (ex.motivo === 'telefono') {
-        alert(`⚠️ Il numero ${p.telefono} è già associato a:\n${p.cognome} ${p.nome} (nato/a il ${nasc})\n\nIl nuovo paziente verrà salvato ugualmente.`);
+        // Solo avviso — salva comunque il nuovo paziente
+        alert(
+          `⚠️ Attenzione: il numero ${p.telefono} è già associato al paziente:\n\n` +
+          `${p.cognome} ${p.nome} (nato/a il ${nascita})\n\n` +
+          `Il nuovo paziente verrà salvato ugualmente.`
+        );
         try {
-          const p2 = await api.creaPaziente({ ...dati, forza_creazione: true });
-          _pazienteId = p2.id; _pazCache[p2.id] = p2;
-          showPazSelezionato(`${p2.cognome} ${p2.nome}`);
-          fillPazForm(p2);
-          btn.textContent = '✓ Aggiorna paziente'; btn.disabled = false;
-        } catch(ex2) { alert('Errore: ' + ex2.message); btn.textContent = '✓ Salva paziente'; btn.disabled = false; }
-      } else {
-        const msg = `⚠️ Paziente già presente:\n\n${p.cognome} ${p.nome}\nNato/a il: ${nasc}\nTel: ${p.telefono||'—'}\n\nOK = usa il paziente esistente\nAnnulla = torna al form`;
-        if (confirm(msg)) {
-          await selezionaPaz(p.id);   // carica e mostra il paziente esistente
+          const p2 = await api.creaPaziente({
+            cognome, nome,
+            data_nascita:   $('np-nascita').value || null,
+            sesso:          $('np-sesso').value   || null,
+            codice_fiscale: $('np-cf').value.trim() || null,
+            telefono,
+            email:          $('np-email').value.trim() || null,
+            forza_creazione: true
+          });
+          selezionaPaz(p2.id, `${p2.cognome} ${p2.nome}`);
+          $('nuovo-paz-form').classList.add('hidden');
+          $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
+          ['np-cognome','np-nome','np-nascita','np-cf','np-telefono','np-email'].forEach(id => $(id).value='');
+          $('np-sesso').value = '';
+        } catch(ex2) {
+          alert('Errore: ' + ex2.message);
         }
-        btn.textContent = '✓ Salva paziente'; btn.disabled = false;
+      } else {
+        // Nome+nascita: chiedi conferma uso paziente esistente
+        const msg = `⚠️ Attenzione — paziente già presente\n\nEsiste già un paziente con stesso nome e data di nascita:\n\n` +
+          `Nome: ${p.cognome} ${p.nome}\n` +
+          `Nato/a il: ${nascita}\n` +
+          `Tel: ${p.telefono || '—'}` +
+          `\n\nPremi OK per usare il paziente esistente, oppure Annulla per tornare al form.`;
+        if (confirm(msg)) {
+          selezionaPaz(p.id, `${p.cognome} ${p.nome}`);
+          $('nuovo-paz-form').classList.add('hidden');
+          $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
+          ['np-cognome','np-nome','np-nascita','np-cf','np-telefono','np-email'].forEach(id => $(id).value='');
+          $('np-sesso').value = '';
+        }
       }
     } else {
       alert('Errore: ' + ex.message);
-      btn.textContent = '✓ Salva paziente'; btn.disabled = false;
     }
+  } finally {
+    btn.textContent = '✓ Salva paziente'; btn.disabled = false;
   }
 }
 
 // ─── Slot / App click ─────────────────────────────────────────────────────
-function onSlotClick(date, time) {
-  // Blocco se lo slot cade in una fascia indisponibile
-  const [hh, mm] = time.split(':').map(Number);
-  const slotMin  = hh * 60 + mm;
-  for (const b of _indisponibilita.filter(x => x.data === date)) {
-    const bt = BLOCCO_TIPI[b.tipo];
-    if (!bt) continue;
-    if (slotMin >= bt.startH * 60 && slotMin < bt.endH * 60) return;
-  }
-  openModal({ date, time });
-}
+function onSlotClick(date, time) { openModal({ date, time }); }
 function onSlotBlockedClick(motivo) {
   alert(`⛔ Giorno non disponibile: ${motivo}\n\nIl centro è chiuso in questa data.`);
-}
-function onImpegnoClick(e) {
-  if (e) e.stopPropagation();
-  alert('🚫 Slot non prenotabile\n\nQui hai un impegno personale segnato sul tuo Google Calendar.\nLo slot è bloccato per le prenotazioni online.\n\nPer liberarlo, rimuovi o sposta l\'impegno dal Google Calendar.');
 }
 function onAppClick(id, e) { if(e) e.stopPropagation(); openModal({ id }); }
 
@@ -938,8 +713,7 @@ td{padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:13px}
 }
 
 // ─── Menu hamburger ────────────────────────────────────────────────────────
-function chiudiMenu()  { $('menu-dropdown').classList.add('hidden'); }
-function toggleMenu()  { $('menu-dropdown').classList.toggle('hidden'); }
+function chiudiMenu() { $('menu-dropdown').classList.add('hidden'); }
 
 function menuNuovoApp() {
   chiudiMenu();
@@ -958,149 +732,9 @@ function menuLogout() {
   showLogin();
 }
 
-function menuBlocco() {
-  chiudiMenu();
-  openModalBlocco(toDateStr(new Date()));
-}
-
-function menuCredenziali() {
-  chiudiMenu();
-  $('cred-pass-attuale').value  = '';
-  $('cred-nuovo-username').value = '';
-  $('cred-nuova-pass').value    = '';
-  $('cred-conferma-pass').value = '';
-  $('cred-err').classList.add('hidden');
-  $('cred-overlay').onclick = e => { if (e.target === e.currentTarget) chiudiCredenziali(); };
-  $('cred-overlay').classList.remove('hidden');
-  setTimeout(() => $('cred-pass-attuale').focus(), 80);
-}
-
 function menuArchivio() {
   chiudiMenu();
   apriArchivio();
-}
-
-// ─── Sistema TS / 730 ─────────────────────────────────────────────────────
-let _tsRighe = []; // cache righe caricate
-
-function menuSistemaTS() {
-  chiudiMenu();
-  // Preseleziona anno corrente
-  const anno = new Date().getFullYear();
-  const sel = $('ts-anno');
-  // Popola anni disponibili (anno corrente + 3 precedenti)
-  sel.innerHTML = '';
-  for (let a = anno; a >= anno - 3; a--) {
-    const opt = document.createElement('option');
-    opt.value = a; opt.textContent = a;
-    sel.appendChild(opt);
-  }
-  $('ts-overlay').classList.remove('hidden');
-  caricaTS();
-}
-
-function chiudiSistemaTS() {
-  $('ts-overlay').classList.add('hidden');
-}
-
-async function caricaTS() {
-  const anno   = $('ts-anno').value;
-  const filtro = $('ts-filtro-stato').value;
-  $('ts-tbody').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">Caricamento…</td></tr>';
-
-  try {
-    const res = await api._req('GET', `/sistema-ts/prestazioni?anno=${anno}`);
-    let righe = res || [];
-
-    // Filtra per stato se richiesto
-    if (filtro === 'si') righe = righe.filter(r => r.invia_sistema_ts);
-    if (filtro === 'no') righe = righe.filter(r => !r.invia_sistema_ts);
-
-    _tsRighe = righe;
-    renderTS(righe);
-  } catch(e) {
-    $('ts-tbody').innerHTML = `<tr><td colspan="8" style="text-align:center;color:#dc2626;padding:24px">Errore: ${esc(e.message)}</td></tr>`;
-  }
-}
-
-function renderTS(righe) {
-  $('ts-contatore').textContent = `${righe.length} prestazioni`;
-  if (!righe.length) {
-    $('ts-tbody').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">Nessuna prestazione trovata</td></tr>';
-    return;
-  }
-
-  $('ts-tbody').innerHTML = righe.map((r, i) => {
-    const paz    = r.pazienti ? `${r.pazienti.cognome} ${r.pazienti.nome}` : '—';
-    const cf     = r.pazienti?.codice_fiscale || '—';
-    const esame  = r.tipi_prestazione?.nome || '—';
-    const data   = new Date(r.data_ora_inizio).toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'});
-    const imp    = r.importo_pagato_cent != null ? r.importo_pagato_cent : 8000;
-    const impEur = (imp / 100).toFixed(2);
-    const pag    = r.pagamento_stato === 'pagato' ? 'Tracciato' : 'Contanti';
-    const inviato = r.invia_sistema_ts;
-    const badge  = inviato
-      ? '<span class="ts-badge-inviato">✅ Inviato</span>'
-      : '<span class="ts-badge-attesa">⬜ Da inviare</span>';
-    const checked = (!inviato) ? 'checked' : '';
-    const disabled = inviato ? 'disabled' : '';
-    return `<tr class="${inviato ? 'ts-inviata' : ''}" data-id="${r.id}">
-      <td><input type="checkbox" class="ts-check" data-idx="${i}" ${checked} ${disabled}></td>
-      <td>${data}</td>
-      <td>${esc(paz)}</td>
-      <td style="font-family:monospace;font-size:12px">${esc(cf)}</td>
-      <td>${esc(esame)}</td>
-      <td><input type="number" class="ts-importo-input" value="${impEur}" min="0" step="0.01"
-          data-idx="${i}" ${disabled} onchange="tsAggiornaCifra(${i}, this.value)"> €</td>
-      <td>${pag}</td>
-      <td>${badge}</td>
-    </tr>`;
-  }).join('');
-}
-
-function tsToggleAll(checked) {
-  document.querySelectorAll('.ts-check:not(:disabled)').forEach(cb => cb.checked = checked);
-}
-
-function tsAggiornaCifra(idx, val) {
-  const cent = Math.round(parseFloat(val) * 100);
-  if (!isNaN(cent) && cent >= 0) _tsRighe[idx]._importoOverride = cent;
-}
-
-async function inviaSistemaTS() {
-  const checks = [...document.querySelectorAll('.ts-check:not(:disabled):checked')];
-  if (!checks.length) { alert('Nessuna prestazione selezionata.'); return; }
-
-  const selezionate = checks.map(cb => {
-    const idx = parseInt(cb.dataset.idx);
-    const r   = _tsRighe[idx];
-    const imp = r._importoOverride != null
-      ? r._importoOverride
-      : (r.importo_pagato_cent != null ? r.importo_pagato_cent : 8000);
-    return { id: r.id, importo_pagato_cent: imp };
-  });
-
-  const ids = selezionate.map(s => s.id);
-
-  // Salva importi aggiornati prima dell'invio
-  await Promise.all(selezionate.map(s =>
-    api._req('PATCH', `/sistema-ts/prestazioni/${s.id}`, { importo_pagato_cent: s.importo_pagato_cent }).catch(() => {})
-  ));
-
-  const btn = $('btn-invia-ts');
-  btn.disabled = true;
-  btn.textContent = '⏳ Invio in corso…';
-
-  try {
-    const res = await api._req('POST', '/sistema-ts/invia', { ids, simulazione: false });
-    alert(`✅ Invio completato!\n\nInviate: ${res.inviate}\nProtocollo: ${res.protocollo || 'N/A'}\nEsito: ${res.descrizione || res.esito}`);
-    caricaTS();
-  } catch(e) {
-    alert(`❌ Errore invio: ${e.message}`);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '📤 Invia selezionati al Sistema TS';
-  }
 }
 
 // ─── Archivio Pazienti ─────────────────────────────────────────────────────
@@ -1272,25 +906,19 @@ async function eliminaPaziente() {
 
 function nuovoAppDaPaziente() {
   if (!_pdId) return;
+  // Salva i valori PRIMA di chiudere il modal (chiudiDettaglioPaziente azzera _pdId)
   const idPaz   = _pdId;
   const cognome = $('pd-cognome').value.trim();
   const nome    = $('pd-nome').value.trim();
   chiudiDettaglioPaziente();
   openModal({});
-  // Pre-seleziona il paziente con i dati anagrafici
+  // Pre-seleziona il paziente nel modal appuntamento
   _pazienteId = idPaz;
   $('paziente-search').style.display = 'none';
   $('paz-results').classList.add('hidden');
   $('paz-nome-display').textContent = `${cognome} ${nome}`;
   $('paz-selezionato').classList.remove('hidden');
   $('btn-nuovo-paz-toggle').style.display = 'none';
-  // Form editabile pre-compilato
-  const cached = _pazCache[idPaz];
-  if (cached) {
-    fillPazForm(cached);
-  } else {
-    api.paziente(idPaz).then(p => { _pazCache[idPaz] = p; fillPazForm(p); }).catch(() => {});
-  }
 }
 
 // ─── Reminder preparazione ────────────────────────────────────────────────
@@ -1307,108 +935,6 @@ function checkPreparazione() {
     ? PREPARAZIONE_ESAMI.richiedePreparazione(nome)
     : false;
   reminder.classList.toggle('hidden', !richiede);
-}
-
-// ─── Cambio credenziali ───────────────────────────────────────────────────
-
-function chiudiCredenziali() {
-  $('cred-overlay').classList.add('hidden');
-}
-
-async function salvaCredenziali() {
-  const passAttuale    = $('cred-pass-attuale').value;
-  const nuovoUsername  = $('cred-nuovo-username').value.trim();
-  const nuovaPass      = $('cred-nuova-pass').value;
-  const confermaPass   = $('cred-conferma-pass').value;
-  const errEl          = $('cred-err');
-
-  errEl.classList.add('hidden');
-
-  if (!passAttuale) { errEl.textContent = 'Inserisci la password attuale'; errEl.classList.remove('hidden'); return; }
-  if (!nuovoUsername && !nuovaPass) { errEl.textContent = 'Inserisci almeno un nuovo username o una nuova password'; errEl.classList.remove('hidden'); return; }
-  if (nuovaPass && nuovaPass !== confermaPass) { errEl.textContent = 'Le due password non coincidono'; errEl.classList.remove('hidden'); return; }
-  if (nuovaPass && nuovaPass.length < 6) { errEl.textContent = 'La nuova password deve essere di almeno 6 caratteri'; errEl.classList.remove('hidden'); return; }
-
-  const btn = $('btn-salva-cred');
-  btn.textContent = 'Salvataggio…'; btn.disabled = true;
-  try {
-    await api.cambiaCredenziali({
-      password_attuale: passAttuale,
-      nuovo_username:   nuovoUsername || undefined,
-      nuova_password:   nuovaPass     || undefined,
-    });
-    chiudiCredenziali();
-    alert('✅ Credenziali aggiornate. Effettua di nuovo il login.');
-    // Forza logout
-    api.setToken(null);
-    _user = null;
-    showLogin();
-  } catch(ex) {
-    errEl.textContent = ex.message;
-    errEl.classList.remove('hidden');
-  } finally {
-    btn.textContent = '💾 Salva'; btn.disabled = false;
-  }
-}
-
-// ─── Blocco fascia oraria ─────────────────────────────────────────────────
-
-function openModalBlocco(dateStr) {
-  _bloccoTipo = null;
-  $('blocco-data').value   = dateStr || toDateStr(new Date());
-  $('blocco-motivo').value = '';
-  document.querySelectorAll('.blocco-tipo-btn').forEach(b => b.classList.remove('active'));
-  $('blocco-overlay').onclick = e => { if (e.target === e.currentTarget) chiudiBlocco(); };
-  $('blocco-overlay').classList.remove('hidden');
-}
-
-function chiudiBlocco() {
-  $('blocco-overlay').classList.add('hidden');
-  _bloccoTipo = null;
-}
-
-function selezionaTipoBlocco(tipo, btn) {
-  _bloccoTipo = tipo;
-  document.querySelectorAll('.blocco-tipo-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-}
-
-async function salvaBlocco() {
-  const dataVal = $('blocco-data').value;
-  if (!dataVal)     { alert('Seleziona una data'); return; }
-  if (!_bloccoTipo) { alert('Seleziona la fascia oraria'); return; }
-
-  const btn = $('btn-salva-blocco');
-  btn.textContent = 'Salvataggio…'; btn.disabled = true;
-  try {
-    await api.creaIndisponibilita({
-      data:   dataVal,
-      tipo:   _bloccoTipo,
-      motivo: $('blocco-motivo').value.trim() || null
-    });
-    chiudiBlocco();
-    await refreshWeek();
-  } catch(ex) {
-    alert((ex.status === 409 ? '⚠️ ' : '❌ Errore: ') + ex.message);
-  } finally {
-    btn.textContent = '🔒 Blocca'; btn.disabled = false;
-  }
-}
-
-async function onBloccoClick(id, e) {
-  e.stopPropagation();
-  const b  = _indisponibilita.find(x => x.id === id);
-  if (!b) return;
-  const bt = BLOCCO_TIPI[b.tipo];
-  const label = bt?.label || b.tipo;
-  const dataFmt = new Date(b.data + 'T12:00:00').toLocaleDateString('it-IT',
-    { weekday: 'long', day: '2-digit', month: 'long' });
-  const msg = `Rimuovere il blocco?\n\n📅 ${dataFmt}\n🔒 ${label}${b.motivo ? '\n📝 ' + b.motivo : ''}`;
-  if (!confirm(msg)) return;
-  try {
-    await api.eliminaIndisponibilita(id);
-    await refreshWeek();
-  } catch(ex) { alert('Errore: ' + ex.message); }
 }
 
 // ─── Shortcut ─────────────────────────────────────────────────────────────

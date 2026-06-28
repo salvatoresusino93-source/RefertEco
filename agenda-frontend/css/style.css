@@ -162,7 +162,10 @@ button { font-family:inherit; }
 
 /* Header festivo */
 .cal-th-day.festivo { background:#fef2f2; color:#b91c1c; }
+.cal-th-day.weekend { background:#fff8f0; color:#c2410c; }
 .cal-th-festivo { display:block; font-size:9px; line-height:1; }
+.cal-day.weekend { background:#fffaf5; }
+.cal-day.weekend .cal-slot:hover { background:rgba(234,88,12,.06); }
 
 /* Appointment blocks */
 .cal-app { position:absolute; left:2px; right:2px; border-radius:6px;
