@@ -5,9 +5,91 @@
 const express  = require('express');
 const supabase = require('../services/supabase');
 const { requireAuth } = require('../middleware/auth');
+const { leggiEventiPersonali, getCreds } = require('../services/googleCalendar');
+const { leggiImpegniIcal, icalConfigurato } = require('../services/icalCalendar');
 
 const router = express.Router();
 router.use(requireAuth);
+
+// ─── Helper fuso orario Roma (copiato da public.js) ───────────────────────
+function getRomeOffsetMs(dateStr) {
+  const [yyyy, mm, dd] = dateStr.split('-').map(Number);
+  const probe = new Date(Date.UTC(yyyy, mm - 1, dd, 12, 0, 0));
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Rome',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false
+  }).formatToParts(probe);
+  const get = t => { const p = parts.find(x => x.type === t); return p ? parseInt(p.value) : 0; };
+  let h = get('hour'); if (h === 24) h = 0;
+  const romeAsUtc = Date.UTC(get('year'), get('month') - 1, get('day'), h, get('minute'), get('second'));
+  return romeAsUtc - probe.getTime();
+}
+
+function makeRomeDateTime(dateStr, totalMinutes) {
+  const [yyyy, mm, dd] = dateStr.split('-').map(Number);
+  const hours = Math.floor(totalMinutes / 60);
+  const mins  = totalMinutes % 60;
+  const offsetMs = getRomeOffsetMs(dateStr);
+  return new Date(Date.UTC(yyyy, mm - 1, dd, hours, mins, 0) - offsetMs);
+}
+
+// ─── Leggi impegni personali GCal → formato blocchi_agenda ───────────────
+async function impegniGoogleCalendar(from, to) {
+  if (getCreds()) {
+    try {
+      const eventi = await leggiEventiPersonali(from, to) || [];
+      return eventi
+        .filter(ev => ev.transparency !== 'transparent' && ev.status !== 'cancelled')
+        .map(ev => {
+          if (ev.start?.dateTime && ev.end?.dateTime) {
+            return {
+              id:              `gcal_${ev.id}`,
+              data_ora_inizio: ev.start.dateTime,
+              data_ora_fine:   ev.end.dateTime,
+              motivo:          ev.summary || 'Impegno personale',
+              tipo:            'gcal',
+              tutto_il_giorno: false,
+            };
+          } else if (ev.start?.date && ev.end?.date) {
+            return {
+              id:              `gcal_${ev.id}`,
+              data_ora_inizio: makeRomeDateTime(ev.start.date, 0).toISOString(),
+              data_ora_fine:   makeRomeDateTime(ev.end.date,   0).toISOString(),
+              motivo:          ev.summary || 'Impegno personale',
+              tipo:            'gcal',
+              tutto_il_giorno: true,
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
+    } catch (e) {
+      console.error('[blocchi] GCal lettura fallita:', e.message);
+      return [];
+    }
+  }
+
+  if (icalConfigurato()) {
+    try {
+      const intervalli = await leggiImpegniIcal(from, to) || [];
+      return intervalli.map(b => ({
+        id:              `ical_${b.data_ora_inizio}`,
+        data_ora_inizio: b.data_ora_inizio,
+        data_ora_fine:   b.data_ora_fine,
+        motivo:          'Impegno personale',
+        tipo:            'gcal',
+        tutto_il_giorno: false,
+      }));
+    } catch (e) {
+      console.error('[blocchi] iCal lettura fallita:', e.message);
+      return [];
+    }
+  }
+
+  return [];
+}
 
 // ─── GET /api/blocchi?from=ISO&to=ISO ─────────────────────────────────────
 router.get('/', async (req, res) => {
@@ -23,7 +105,11 @@ router.get('/', async (req, res) => {
 
   const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
-  res.json(data || []);
+
+  // Merge con impegni personali del medico da Google Calendar / iCal
+  const gcal = from && to ? await impegniGoogleCalendar(from, to) : [];
+
+  res.json([...(data || []), ...gcal]);
 });
 
 // ─── POST /api/blocchi — crea blocco manuale ──────────────────────────────
