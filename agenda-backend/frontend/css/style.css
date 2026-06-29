@@ -378,6 +378,22 @@ button { font-family:inherit; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 90%; padding: 0 4px; }
 
+/* Fascia oraria bloccata (indisponibilità: mattina / pomeriggio / giornata) */
+.cal-blocco.cal-indisp {
+  background: repeating-linear-gradient(-45deg,
+    rgba(234,88,12,.08), rgba(234,88,12,.08) 10px,
+    rgba(234,88,12,.02) 10px, rgba(234,88,12,.02) 20px);
+  border-left-color: rgba(234,88,12,.6);
+  border-top-color:  rgba(234,88,12,.4);
+}
+.cal-blocco.cal-indisp:hover {
+  background: repeating-linear-gradient(-45deg,
+    rgba(234,88,12,.18), rgba(234,88,12,.18) 10px,
+    rgba(234,88,12,.07) 10px, rgba(234,88,12,.07) 20px);
+}
+.cal-blocco.cal-indisp .cal-blocco-label  { color: rgba(154,52,18,.85); }
+.cal-blocco.cal-indisp .cal-blocco-motivo { color: rgba(154,52,18,.6); }
+
 /* Tipo selector nel modal blocco */
 .blocco-tipo-btns { display: flex; gap: 8px; }
 .blocco-tipo-btn {
