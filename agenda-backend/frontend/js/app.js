@@ -123,11 +123,22 @@ async function refreshWeek() {
   const to      = toISO(addDays(_viewStart, 7));
   const fromStr = toDateStr(_viewStart);
   const toStr   = toDateStr(addDays(_viewStart, 6));
-  try { _appointments    = await api.appuntamenti(from, to);         } catch { _appointments = []; }
-  try { _blocchi         = await api.blocchi(from, to);              } catch { _blocchi = []; }
-  try { _indisponibilita = await api.indisponibilita(fromStr, toStr);} catch { _indisponibilita = []; }
+
+  // Render immediato con dati vuoti per risposta visiva istantanea
+  _appointments = []; _blocchi = []; _indisponibilita = [];
   renderCalendar();
   renderPeriod();
+
+  // Fetch paralleli
+  const [apps, blocchi, indisp] = await Promise.allSettled([
+    api.appuntamenti(from, to),
+    api.blocchi(from, to),
+    api.indisponibilita(fromStr, toStr),
+  ]);
+  _appointments    = apps.status    === 'fulfilled' ? apps.value    : [];
+  _blocchi         = blocchi.status === 'fulfilled' ? blocchi.value : [];
+  _indisponibilita = indisp.status  === 'fulfilled' ? indisp.value  : [];
+  renderCalendar();
 }
 
 function renderPeriod() {
