@@ -26,6 +26,7 @@ let _appointments   = [];
 let _prestazioni    = [];
 let _blocchi        = [];     // blocchi agenda (festività, impegni)
 let _indisponibilita = [];    // fasce orarie bloccate (mattina/pomeriggio/giornata)
+let _navDir         = 0;      // verso navigazione settimana: +1 avanti, -1 indietro, 0 nessuno
 let _editId         = null;   // id appuntamento in modifica
 let _pazienteId     = null;   // paziente selezionato nel modal
 let _searchTimer    = null;
@@ -129,7 +130,8 @@ async function refreshWeek() {
 
   // Render immediato della griglia (svuota i dati) per risposta visiva istantanea
   _appointments = []; _blocchi = []; _indisponibilita = [];
-  renderCalendar();
+  renderCalendar();        // questo render porta l'animazione di scorrimento
+  _navDir = 0;             // consuma la direzione: il render coi dati non ri-anima
   renderPeriod();
 
   // Fetch paralleli
@@ -320,6 +322,12 @@ function renderCalendar() {
   $('cal-wrap').innerHTML = `${hdr}
     <div class="cal-body">${timeLbls}${days}</div>`;
 
+  // Animazione direzionale di scorrimento tra settimane (page-turn)
+  if (_navDir !== 0) {
+    const body = $('cal-wrap').querySelector('.cal-body');
+    if (body) body.classList.add(_navDir > 0 ? 'slide-next' : 'slide-prev');
+  }
+
   // Su mobile: scrolla in modo che la colonna di oggi sia visibile
   if (isMobile()) {
     requestAnimationFrame(() => {
@@ -330,13 +338,21 @@ function renderCalendar() {
 }
 
 // ─── Navigazione settimana (mobile: frecce, desktop: frecce + swipe) ─────
-function navMobileWeek(n) {
+// n = numero di settimane (±1). Imposta la direzione per l'animazione di scorrimento.
+function goWeek(n) {
+  _navDir = n > 0 ? 1 : (n < 0 ? -1 : 0);
   _viewStart = addDays(_viewStart, n * 7);
   refreshWeek();
 }
 
+function navMobileWeek(n) {
+  goWeek(n);
+}
+
 function goToToday() {
-  _viewStart = getMon(new Date());
+  const target = getMon(new Date());
+  _navDir = target > _viewStart ? 1 : (target < _viewStart ? -1 : 0);
+  _viewStart = target;
   refreshWeek();
 }
 
@@ -357,16 +373,15 @@ function initSwipe() {
     const dt = Date.now() - t0;
     // Swipe veloce e orizzontale: cambia settimana
     if (dt < 400 && Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy) * 2) {
-      if (dx < 0) { _viewStart = addDays(_viewStart,  7); refreshWeek(); }
-      else        { _viewStart = addDays(_viewStart, -7); refreshWeek(); }
+      goWeek(dx < 0 ? 1 : -1);
     }
   }, { passive: true });
 
   // Frecce tastiera (desktop)
   document.addEventListener('keydown', e => {
     if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
-    if (e.key === 'ArrowRight') { e.preventDefault(); isMobile() ? navMobileDay(1)  : (() => { _viewStart=addDays(_viewStart, 7); refreshWeek(); })(); }
-    if (e.key === 'ArrowLeft')  { e.preventDefault(); isMobile() ? navMobileDay(-1) : (() => { _viewStart=addDays(_viewStart,-7); refreshWeek(); })(); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); isMobile() ? navMobileDay(1)  : goWeek(1); }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); isMobile() ? navMobileDay(-1) : goWeek(-1); }
   });
 }
 
@@ -390,8 +405,8 @@ async function refreshSidebar() {
 
 // ─── Nav events ───────────────────────────────────────────────────────────
 function bindEvents() {
-  $('btn-prev').onclick  = () => { _viewStart = addDays(_viewStart,-7); refreshWeek(); };
-  $('btn-next').onclick  = () => { _viewStart = addDays(_viewStart, 7); refreshWeek(); };
+  $('btn-prev').onclick  = () => goWeek(-1);
+  $('btn-next').onclick  = () => goWeek(1);
   $('btn-oggi').onclick  = () => goToToday();
   $('btn-nuovo').onclick = () => openModal();
   $('btn-stampa').onclick = stampaDiario;

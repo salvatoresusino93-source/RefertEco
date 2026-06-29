@@ -129,6 +129,12 @@ button { font-family:inherit; }
 
 .cal-body { display:grid; grid-template-columns:52px repeat(7,1fr); }
 
+/* Animazione scorrimento tra settimane (page-turn direzionale) */
+@keyframes calSlideNext { from { opacity:.4; transform:translateX(26px); } to { opacity:1; transform:none; } }
+@keyframes calSlidePrev { from { opacity:.4; transform:translateX(-26px); } to { opacity:1; transform:none; } }
+.cal-body.slide-next { animation:calSlideNext .2s cubic-bezier(.22,.61,.36,1); }
+.cal-body.slide-prev { animation:calSlidePrev .2s cubic-bezier(.22,.61,.36,1); }
+
 .cal-time-col { position:relative; }
 .cal-lbl { position:absolute; right:6px; font-size:10px; color:var(--muted);
   transform:translateY(-7px); white-space:nowrap; }
