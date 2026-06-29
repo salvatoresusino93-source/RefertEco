@@ -377,6 +377,27 @@ function initSwipe() {
     }
   }, { passive: true });
 
+  // ── Scroll orizzontale trackpad/mouse (desktop): cambia settimana ────────
+  // Due dita orizzontali sul trackpad (o rotellina con shift) scorrono le settimane.
+  let wheelAccum = 0, wheelLock = false, wheelReset = null;
+  el.addEventListener('wheel', e => {
+    // Solo gesto prevalentemente orizzontale; quello verticale resta scroll normale
+    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+    e.preventDefault();            // evita il "back/forward" del browser sullo swipe orizzontale
+    if (wheelLock) return;
+
+    wheelAccum += e.deltaX;
+    clearTimeout(wheelReset);
+    wheelReset = setTimeout(() => { wheelAccum = 0; }, 200); // azzera se il gesto si ferma
+
+    if (Math.abs(wheelAccum) > 80) {
+      goWeek(wheelAccum > 0 ? 1 : -1);
+      wheelAccum = 0;
+      wheelLock  = true;          // una settimana per gesto, niente salti multipli
+      setTimeout(() => { wheelLock = false; }, 420);
+    }
+  }, { passive: false });
+
   // Frecce tastiera (desktop)
   document.addEventListener('keydown', e => {
     if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
