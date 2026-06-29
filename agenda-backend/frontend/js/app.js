@@ -118,13 +118,16 @@ function initSocket() {
 }
 
 // ─── Calendar load & render ───────────────────────────────────────────────
+let _weekReqId = 0;   // guard: solo l'ultima richiesta settimana può ridisegnare
+
 async function refreshWeek() {
+  const reqId   = ++_weekReqId;
   const from    = toISO(_viewStart);
   const to      = toISO(addDays(_viewStart, 7));
   const fromStr = toDateStr(_viewStart);
   const toStr   = toDateStr(addDays(_viewStart, 6));
 
-  // Render immediato con dati vuoti per risposta visiva istantanea
+  // Render immediato della griglia (svuota i dati) per risposta visiva istantanea
   _appointments = []; _blocchi = []; _indisponibilita = [];
   renderCalendar();
   renderPeriod();
@@ -135,6 +138,10 @@ async function refreshWeek() {
     api.blocchi(from, to),
     api.indisponibilita(fromStr, toStr),
   ]);
+
+  // Se nel frattempo è arrivata una navigazione più recente, scarta questo risultato
+  if (reqId !== _weekReqId) return;
+
   _appointments    = apps.status    === 'fulfilled' ? apps.value    : [];
   _blocchi         = blocchi.status === 'fulfilled' ? blocchi.value : [];
   _indisponibilita = indisp.status  === 'fulfilled' ? indisp.value  : [];
@@ -152,18 +159,6 @@ function renderCalendar() {
   const totalMin = (CAL_END - CAL_START) * 60;
   const totalPx  = totalMin * PX_PER_MIN;
 
-  // ── Header
-  let hdr = `<div class="cal-header"><div class="cal-th-time"></div>`;
-  for (let i=0; i<7; i++) {
-    const d = addDays(_viewStart, i);
-    const cls = isToday(d) ? ' today' : '';
-    hdr += `<div class="cal-th-day${cls}">
-      <span class="cal-th-dayname">${GIORNI[i]}</span>
-      <span class="cal-th-daynum">${d.getDate()}</span>
-    </div>`;
-  }
-  hdr += `</div>`;
-
   // ── Time labels
   let timeLbls = `<div class="cal-time-col" style="height:${totalPx}px">`;
   for (let m=0; m<=totalMin; m+=60) {
@@ -173,8 +168,7 @@ function renderCalendar() {
   timeLbls += `</div>`;
 
   // ── Header con indicatore festività
-  // Ricostruiamo l'header aggiungendo il badge festivo
-  hdr = `<div class="cal-header"><div class="cal-th-time"></div>`;
+  let hdr = `<div class="cal-header"><div class="cal-th-time"></div>`;
   for (let i=0; i<7; i++) {
     const d       = addDays(_viewStart, i);
     const dateStr = toDateStr(d);
