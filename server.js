@@ -354,17 +354,21 @@ app.post('/api/config', (req, res) => {
 const AGENDA_API_URL = 'https://referteco-production.up.railway.app/api';
 const AGENDA_TOKEN   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRlMzliY2YxLTRjZTctNDdiNy1iMzk2LTgyNmU4MTE1NTI0OSIsInVzZXJuYW1lIjoibWVkaWNvIiwicnVvbG8iOiJtZWRpY28iLCJpYXQiOjE3Nzk1NDMzMDAsImV4cCI6MjA5NTExOTMwMH0.siqAwgLKT7pN9zaGNnP6kcne-3lhEaQBIY30Z0X8ji0';
 
+async function getPazientiArrivati() {
+  const from = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+  const to   = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const r = await fetch(
+    `${AGENDA_API_URL}/appuntamenti?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    { headers: { 'Authorization': `Bearer ${AGENDA_TOKEN}` } }
+  );
+  if (!r.ok) return [];
+  const lista = await r.json();
+  return lista.filter(a => a.stato === 'arrivato');
+}
+
 app.get('/api/agenda/pazienti-attesa', async (req, res) => {
   try {
-    const from = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
-    const to   = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-    const r = await fetch(
-      `${AGENDA_API_URL}/appuntamenti?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-      { headers: { 'Authorization': `Bearer ${AGENDA_TOKEN}` } }
-    );
-    if (!r.ok) return res.json([]);
-    const lista = await r.json();
-    res.json(lista.filter(a => a.stato === 'arrivato'));
+    res.json(await getPazientiArrivati());
   } catch (e) { res.json([]); }
 });
 
@@ -381,7 +385,7 @@ app.post('/api/agenda/marca-refertato/:id', async (req, res) => {
 
 // ── ORTHANC PROXY ────────────────────────────────────────────
 
-const ORTHANC_BASE = 'http://localhost:8042';
+const ORTHANC_BASE = 'http://192.168.1.166:8042';
 const WORKLIST_DIR = 'K:\\OrthancWorklists';
 
 async function orthancFetch(path, opts) {
@@ -552,7 +556,22 @@ app.get('/api/orthanc/istanze-nuove', async (req, res) => {
       body: JSON.stringify({ Level: 'Study', Query: { AccessionNumber: accession } }),
     })).json();
     if (!found || !found.length) return res.json([]);
-    const studyId = found[0];
+
+    // Se ci sono più studi con lo stesso AccessionNumber (es. residui temporanei),
+    // prendi quello con più istanze (= le immagini vere dell'ecografo)
+    let studyId = found[0];
+    if (found.length > 1) {
+      let maxInst = -1;
+      for (const sid of found) {
+        try {
+          const insts = await (await orthancFetch('/studies/' + sid + '/instances')).json();
+          if (Array.isArray(insts) && insts.length > maxInst) {
+            maxInst = insts.length;
+            studyId = sid;
+          }
+        } catch {}
+      }
+    }
 
     // Lista istanze dello studio
     const instArr = await (await orthancFetch('/studies/' + studyId + '/instances')).json();
@@ -593,18 +612,27 @@ app.post('/api/orthanc/importa-istanza/:instanceId', async (req, res) => {
 // Crea una voce di worklist DICOM che il Samsung V5 vedrà al prossimo
 // "DICOM Worklist Query". Usa /tools/create-dicom di Orthanc per generare il file
 // DICOM con i tag corretti, poi lo salva in K:\OrthancWorklists.
-app.post('/api/worklist/crea', async (req, res) => {
-  const {
-    paziente_cognome,
-    paziente_nome,
-    paziente_data_nascita,
-    accession_number,
-    tipo_esame,
-    data_ora_inizio,
-  } = req.body;
-
+async function creaWorklistFile({
+  paziente_cognome,
+  paziente_nome,
+  paziente_data_nascita,
+  accession_number,
+  tipo_esame,
+  data_ora_inizio,
+}) {
   if (!paziente_cognome || !paziente_nome || !accession_number) {
-    return res.status(400).json({ error: 'Mancano campi: cognome, nome, accession_number' });
+    throw new Error('Mancano campi: cognome, nome, accession_number');
+  }
+
+  // ── BLOCCO ANTI-DOPPIONI 2026-06-30 ───────────────────────────────────────
+  // Su questo PC (Acer) la worklist NON va creata: la gestisce la CENTRALINA
+  // sull'HP (.166). Se la cartella worklist (K:) non è presente QUI, esci SUBITO
+  // senza fare nulla. Altrimenti /tools/create-dicom creerebbe un "finto studio"
+  // in Orthanc che poi non riusciamo a cancellare (K: manca) → doppioni infiniti.
+  // Vale per QUALSIASI chiamante: endpoint HTTP, pagina web, polling.
+  const wlRoot = path.parse(WORKLIST_DIR).root;   // es. "K:\\"
+  if (!fs.existsSync(wlRoot)) {
+    return { ok: false, skipped: true, reason: 'Worklist gestita dalla centralina HP (K: non presente su questo PC)' };
   }
 
   const patientName = `${paziente_cognome.toUpperCase()}^${paziente_nome}`;
@@ -647,7 +675,7 @@ app.post('/api/worklist/crea', async (req, res) => {
 
     if (!orthancRes.ok) {
       const err = await orthancRes.text();
-      return res.status(500).json({ error: 'Orthanc create-dicom fallito: ' + err });
+      throw new Error('Orthanc create-dicom fallito: ' + err);
     }
 
     // L'istanza è stata creata; per la worklist serve il FILE DICOM raw
@@ -656,7 +684,7 @@ app.post('/api/worklist/crea', async (req, res) => {
     const instanceId = json.ID;
     const fileRes = await orthancFetch('/instances/' + instanceId + '/file');
     if (!fileRes.ok) {
-      return res.status(500).json({ error: 'Impossibile recuperare il file DICOM' });
+      throw new Error('Impossibile recuperare il file DICOM');
     }
     const buf = Buffer.from(await fileRes.arrayBuffer());
 
@@ -667,12 +695,59 @@ app.post('/api/worklist/crea', async (req, res) => {
     // Rimuovi l'istanza temporanea da Orthanc (era solo per generare il file)
     await orthancFetch('/instances/' + instanceId, { method: 'DELETE' }).catch(() => {});
 
-    res.json({ ok: true, accession_number, file: wlFile });
+    return { ok: true, accession_number, file: wlFile };
   } catch (e) {
     console.error('[worklist crea]', e);
-    res.status(500).json({ error: e.message });
+    throw e;
+  }
+}
+
+// Endpoint HTTP: sottile involucro attorno a creaWorklistFile()
+app.post('/api/worklist/crea', async (req, res) => {
+  try {
+    res.json(await creaWorklistFile(req.body));
+  } catch (e) {
+    const code = /Mancano campi/.test(e.message) ? 400 : 500;
+    res.status(code).json({ error: e.message });
   }
 });
+
+// ── WORKLIST AUTOMATICA (lato motore) ────────────────────────
+// Genera le worklist da sola, in continuo, ANCHE se la pagina RefertEco
+// non è aperta nel browser. Risolve il problema "il nome a volte non
+// compare sull'ecografo" (prima dipendeva dalla finestra web aperta).
+async function pollWorklistAuto() {
+  try {
+    const arrivati = await getPazientiArrivati();
+    for (const app of (arrivati || [])) {
+      const acc = app.accession_number;
+      if (!acc) continue;
+      const wlFile = path.join(WORKLIST_DIR, acc + '.wl');
+      if (fs.existsSync(wlFile)) continue; // worklist già presente
+      try {
+        await creaWorklistFile({
+          paziente_cognome:      app.pazienti?.cognome      || app.cognome,
+          paziente_nome:         app.pazienti?.nome         || app.nome,
+          paziente_data_nascita: app.pazienti?.data_nascita || app.nascita,
+          accession_number:      acc,
+          tipo_esame:            app.tipi_prestazione?.nome || app.tipo,
+          data_ora_inizio:       app.data_ora_inizio,
+        });
+        console.log('[Worklist auto] Creata per', acc);
+      } catch (e) {
+        console.error('[Worklist auto] Errore per', acc, '-', e.message);
+      }
+    }
+  } catch (e) {
+    console.error('[Worklist auto] Polling fallito:', e.message);
+  }
+}
+// DISATTIVATO 2026-06-30: la worklist è gestita dalla CENTRALINA sull'HP (.166).
+// Su questo PC (Acer) il disco K: non esiste, quindi pollWorklistAuto creava un
+// "finto studio" in Orthanc a ogni giro senza riuscire a cancellarlo → doppioni
+// di pazienti in Orthanc/RefertEco. Lasciare DISATTIVATO qui.
+// setInterval(pollWorklistAuto, 15000);   // ogni 15 secondi
+// setTimeout(pollWorklistAuto, 3000);     // primo giro poco dopo l'avvio
 
 // Cerca studi Orthanc per AccessionNumber — restituisce [{id, stabile, nImmagini}]
 app.get('/api/orthanc/cerca-accession', async (req, res) => {
