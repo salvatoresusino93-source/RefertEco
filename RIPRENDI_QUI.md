@@ -4,7 +4,7 @@
 > Contiene tutto il contesto, le decisioni prese, i bug già risolti, e i prossimi passi.
 > Aggiornalo alla fine di ogni sessione importante.
 
-Ultimo aggiornamento: **2026-05-29** (sito vetrina, prenotazione online, esami e preparazione)
+Ultimo aggiornamento: **2026-06-30**
 
 ---
 
@@ -12,93 +12,59 @@ Ultimo aggiornamento: **2026-05-29** (sito vetrina, prenotazione online, esami e
 
 **Dott. Salvatore Susino** — medico radiologo, ambulatorio privato.
 - Email: salvatore.susino93@gmail.com
-- Usa RefertEco per scrivere referti ecografici, importare immagini DICOM, esportare PDF
-- Ha anche un modulo **Agenda** (prenotazioni pazienti) separato
-
-**Profilo tecnico:**
 - Non programmatore — spiega tutto in italiano, a parole semplici, MAI stack trace
 - Preferisce soluzioni semplici, a un click
 - Conferma sempre prima di operazioni distruttive o irreversibili
-- Windows 11 (PC principale/portatile), MacBook, workstation Windows in studio (IP 192.168.1.17)
-- Sincronizzazione dati tramite Google Drive
 
 ---
 
-## 2. ARCHITETTURA — DUE APP DISTINTE
+## 2. ARCHITETTURA — TRE PC IN STUDIO
 
-### A) RefertEco (referti ecografici)
-- **Stack**: Node.js + Express, porta 3000
-- **Database**: file JSON (`referteco_data.json`) — in `K:\RefertEco Dati Pazienti\` sulla workstation
-- **Frontend**: HTML + CSS + JS vanilla in `public/`
-- **Avvio**: `Avvia RefertEco.bat` in `AppData\Local\RefertEco\` — apre automaticamente il browser
-- **Config locale**: `~\.referteco\config.json` → `{ "dataDir": "K:\\RefertEco Dati Pazienti", "anthropicApiKey": "sk-ant-..." }`
-- Serve come proxy per l'agenda: `/api/agenda/pazienti-attesa` e `/api/agenda/marca-refertato/:id`
-- Integrato con Orthanc per DICOM
+### Acer (IP 192.168.1.17 — PC principale studio)
 
-### B) Agenda Studio (prenotazioni)
-- **Stack**: Node.js + Express — `agenda-backend/src/app.js`, porta 3001
-- **Database**: Supabase (PostgreSQL cloud)
-- **Frontend**: HTML + CSS + JS vanilla
-  - ⚠️ SORGENTE in `agenda-frontend/` — modificare QUI
-  - ⚠️ COPIA per Railway in `agenda-backend/frontend/` — copiare sempre anche QUI
-- **URL produzione**: https://referteco-production.up.railway.app/
-- **SMS**: SMS Hosting (smshosting.it) — numero fisso 394390009000 (campo `from` rimosso)
-- **Email**: Resend (resend.com) → salvatore.susino93@gmail.com
-- **Socket.io**: aggiornamento real-time multi-dispositivo
-- **Google Calendar**: service account `agenda-calendar@agendastudio-497611.iam.gserviceaccount.com`
-- **Google Business Profile**: OAuth2 account `salvatoresusino.md@gmail.com`
+**Fa:** RefertEco gestionale — refertare, firmare, stampare.
 
-### Struttura cartelle (workstation in studio)
-```
-C:\Users\Luciano Susino\Desktop\RefertEco\   ← SORGENTE (modificare qui)
-├── server.js                                 ← backend RefertEco
-├── config.js, database.js                   ← config e DB
-├── public/                                   ← frontend RefertEco (index.html, app.js, style.css)
-├── agenda-backend/
-│   ├── src/app.js                            ← entry point Railway
-│   ├── src/routes/                           ← appuntamenti, pazienti, public, prenota, blocchi, gbp, auth, prestazioni, sync
-│   ├── src/services/                         ← email, sms, googleCalendar, googleBusiness, festivita, reminder, supabase
-│   ├── frontend/                             ← ⚠️ COPIA per Railway
-│   └── .env                                  ← credenziali (MAI in git)
-├── agenda-frontend/                          ← ⚠️ SORGENTE frontend agenda
-└── railway.json
+| Cosa | Dove |
+|------|------|
+| Sorgente codice | `C:\Users\Luciano Susino\Desktop\RefertEco\` (repo git, aggiornato) |
+| Dati pazienti | `C:\RefertEco Dati Pazienti\` |
+| Node.js + moduli | `C:\Users\Luciano Susino\AppData\Local\RefertEco\` |
+| Motore (server.js) | avviato da `watchdog-motore.vbs` (auto-restart) |
+| Avvio automatico | Startup utente → `watchdog-motore.vbs` → avvia `Desktop\RefertEco\server.js` |
+| Browser | `apri-referteco.vbs` aspetta TCP 3000 poi apre `http://localhost:3000` |
+| Stampante | Epson ET-2860 (impostata su Alta qualità) |
+| Firma | Namirial (username = Codice dispositivo, non la mail) |
 
-AppData\Local\RefertEco\                      ← INSTALLAZIONE ATTIVA workstation
-  ├── server.js (copia da Desktop)
-  ├── public/ (copia da Desktop)
-  ├── node_modules/
-  ├── Avvia RefertEco.bat
-  └── node.exe
+**NON ha** il disco K: — K: è sull'HP. Orthanc è sull'HP.
 
-K:\RefertEco Dati Pazienti\                  ← dati pazienti reali (MAI toccare direttamente)
-  ├── referteco_data.json                     ← database referti
-  └── immagini\{refertoId}\*.dcm             ← immagini DICOM per referto
+### HP (IP 192.168.1.166 — mini-PC sempre acceso)
 
-K:\OrthancStorage\                            ← archivio DICOM Orthanc
-K:\OrthancWorklists\                          ← file .wl per DICOM Worklist (generati da RefertEco)
+**Fa:** Archivio DICOM Orthanc + Centralina Worklist.
 
-G:\Il mio Drive\RefertEco Dati Pazienti\     ← dati pazienti su Google Drive (laptop/altri PC)
-G:\Il mio Drive\Installer RefertEco\         ← QUESTA cartella (RIPRENDI_QUI + CLAUDE.md)
-```
+| Cosa | Dove |
+|------|------|
+| Orthanc | gira come SYSTEM, HTTP :8042, DICOM :4242 |
+| Centralina worklist | `C:\Users\User\Desktop\RefertEco\centralina-worklist.js` |
+| Guardiano centralina | `guardiano-centralina-SYSTEM.vbs` (Scheduled Task SYSTEM, AtStartup) |
+| Disco K: | UnionSine (fisico), `K:\OrthancStorage`, `K:\OrthancWorklists` |
+| Accesso da Acer | SOLO via HTTP Orthanc :8042 (SMB bloccato — Errore 5) |
+| Accesso remoto | RDP (mstsc 192.168.1.166) per manutenzione |
 
-### Repository GitHub
-- URL: https://github.com/salvatoresusino93-source/RefertEco
-- Branch: `main` — auto-deploy Railway su ogni push
-- Root Directory Railway: `/agenda-backend`
-- `core.fileMode = false` già configurato (file .sh su Windows sembrano sempre modificati)
+### Linux ex-server (ora spento/abbandonato)
+Il vecchio server Linux con IP .77 è stato dismesso a giugno 2025. Ignorare qualsiasi riferimento a quell'IP.
 
 ---
 
-## 3. ORTHANC — SERVER DICOM (workstation in studio)
+## 3. ORTHANC — SERVER DICOM (HP .166)
 
-### Configurazione Orthanc
-- **Versione**: 1.12.11, gira come **servizio Windows**
-- **HTTP**: http://localhost:8042 (admin: admin/admin00)
-- **DICOM**: porta 4242, AET: ORTHANC
-- **Storage**: `K:\OrthancStorage`
-- **Worklist plugin**: attivo → legge file .wl da `K:\OrthancWorklists`
-- **Config file**: `C:\Program Files\Orthanc Server\Configuration\orthanc.json`
+⚠️ **CAMBIATO**: Orthanc NON è più sull'Acer — è sull'HP .166
 
+### Accesso
+- HTTP admin: `http://192.168.1.166:8042` (admin:admin00)
+- DICOM: porta 4242, AET: ORTHANC
+- Da Acer: `http://192.168.1.166:8042`
+
+### Configurazione HP (file `C:\Program Files\Orthanc Server\Configuration\orthanc.json`)
 ```json
 {
   "Name": "ORTHANC",
@@ -119,90 +85,96 @@ G:\Il mio Drive\Installer RefertEco\         ← QUESTA cartella (RIPRENDI_QUI +
 }
 ```
 
-⚠️ `C:\Program Files\Orthanc Server\` richiede **admin** per modificare i file.
-Per modifiche alla config senza admin → usare la REST API di Orthanc (es. `PUT /modalities/XXX`).
-
-### MicroDicom collegato a Orthanc
-- **Scopo**: visualizzare e analizzare i video/cine (che RefertEco non riproduce)
-- **Configurazione in MicroDicom**: Address `192.168.1.17`, Port `4242`, AE Title `ORTHANC`, Protocollo **C-MOVE**
-- **MicroDicom registrato in Orthanc** via REST API (in memoria, non nel file):
+### Note importanti
+- Orthanc gira come SYSTEM (non come servizio utente) → parte al boot senza login
+- K: su HP è disco fisico accessibile anche da SYSTEM
+- MicroDicom registrato solo in RAM Orthanc (non in orthanc.json) → se reinstalli Orthanc:
   ```
-  PUT http://localhost:8042/modalities/MICRODICOM
+  PUT http://192.168.1.166:8042/modalities/MICRODICOM
   {"AET":"MICRODICOM","Host":"127.0.0.1","Port":11112,"Manufacturer":"Generic"}
   ```
-  ⚠️ Se Orthanc viene reinstallato/riavviato a freddo, rieseguire il comando sopra.
-- Per usarlo: Search → click paziente → click serie → Download
+- Se riesci con MicroDicom: Query → click paziente → click serie → Download
 
 ---
 
-## 4. ECOGRAFO SAMSUNG MEDISON V5
+## 4. CENTRALINA WORKLIST (HP .166)
+
+La centralina è il programma che legge l'Agenda online e aggiorna la Lista Lavoro sull'ecografo.
+
+### Come funziona
+```
+Agenda "arrivato" → centralina crea K:\OrthancWorklists\{accession}.wl
+                  → Orthanc lo serve all'ecografo via C-FIND
+                  → Medico preme QUERY sull'ecografo → vede il paziente
+Agenda "refertato" → centralina elimina il .wl → sparisce dalla Lista
+```
+
+### Avvio automatico (SYSTEM, senza login)
+- Scheduled Task **"RefertEco Centralina Worklist"** (AtStartup, SYSTEM, RunLevel Highest)
+- Esegue: `wscript.exe "C:\Users\User\Desktop\RefertEco\guardiano-centralina-SYSTEM.vbs"`
+- Il VBS ha percorsi HARDCODED (non %LOCALAPPDATA% che sotto SYSTEM punta al profilo sbagliato)
+- Log: `C:\Users\User\Desktop\RefertEco\guardiano-SYSTEM.log`
+- Log centralina: `C:\Users\User\Desktop\RefertEco\centralina.log`
+
+### Trappola ecografo Samsung Medison
+L'ecografo NON aggiorna la lista in automatico. Dopo aver messo "arrivato", bisogna premere **QUERY** (o "Cerca") sull'ecografo per vedere il paziente.
+
+### Se la centralina non funziona
+1. Connettersi in RDP all'HP (mstsc 192.168.1.166)
+2. Aprire `C:\Users\User\Desktop\RefertEco\guardiano-SYSTEM.log` e `centralina.log`
+3. Se la Scheduled Task non è attiva: rieseguire `setup-task-centralina-HP.ps1` come admin
+
+---
+
+## 5. ECOGRAFO SAMSUNG MEDISON V5
 
 ### Configurazione DICOM (Configurazione → Connettività → DICOM)
 - Nome stazione: MEDISON, N. porta: 1005, AE Title: MEDISON
-- **ARCHIVIO**: Pseudonimo ORTHANC, AE Title ORTHANC, Host 192.168.1.17, porta 4242
-- **LISTA LAVORO**: Pseudonimo ORTHANC-WL, AE Title ORTHANC, Host 192.168.1.17, porta 4242
+- **ARCHIVIO**: Pseudonimo ORTHANC, AE Title ORTHANC, Host **192.168.1.166**, porta 4242
+- **LISTA LAVORO**: Pseudonimo ORTHANC-WL, AE Title ORTHANC, Host **192.168.1.166**, porta 4242
 
 ### Tasti utente (Configurazione → Personalizzare → Tasto utente)
-- **P1** = Arch./Invia/Stampa → 2D = **Immagine** → ☑ Arch. + ☑ Invia → DICOM (Orthanc)
-- **P2** = Arch./Invia/Stampa → 2D = **Cine** (video) → ☑ Arch. + ☑ Invia → DICOM (Orthanc)
-- P1 invia immediatamente ogni immagine fissa a Orthanc
-- P2 invia il video/cine a Orthanc (NON entra in RefertEco, solo per MicroDicom)
+- **P1** = 2D → Immagine → ☑ Arch. + ☑ Invia → DICOM (Orthanc)
+- **P2** = 2D → Cine (video) → ☑ Arch. + ☑ Invia → DICOM (Orthanc)
 
-### Memorizzazione cine (Configurazione → Imaging → Preimposta)
-- Tipo cine: Prospettiva (o Retrospettiva — preferibile)
-- Lunghezza cine: 2 sec (consigliato 3 sec)
-
-### Workflow completo (funzionante al 2026-05-29)
+### Workflow completo
 ```
 1. Segreteria segna "Arrivato" in Agenda
-        ↓ RefertEco genera automaticamente K:\OrthancWorklists\{accession}.wl
-2. Medico seleziona paziente dalla LISTA LAVORO sull'ecografo (NON inserire a mano!)
-        ↓ Il paziente ha l'AccessionNumber corretto collegato all'agenda
-3. Esame: P1 = immagine fissa → Orthanc → RefertEco entro 5 sec (automatico)
+        ↓ centralina HP genera K:\OrthancWorklists\{accession}.wl entro 15 secondi
+2. Medico preme QUERY sull'ecografo → seleziona paziente dalla LISTA LAVORO
+3. Esame: P1 = immagine fissa → Orthanc → RefertEco entro 5s (automatico)
           P2 = video/cine → solo Orthanc → analizzare con MicroDicom
-4. RefertEco watch ogni 5s → nuove immagini compaiono nel viewer da sole
-5. Scrivi referto e salva
-        ↓ Stampa e PDF escludono automaticamente i video (solo immagini fisse)
+4. Scrivi referto in RefertEco e salva
+5. Firma digitale (Namirial): username = Codice dispositivo (NON la mail)
+6. Stampa/PDF
 ```
 
 ---
 
-## 5. REFERTECO — FUNZIONALITÀ E BUG RISOLTI
-
-### Funzionalità attive
-- CRUD referti con database JSON
-- Viewer immagini DICOM + JPEG con ordine cronologico (per mtime file)
-- Riordino manuale drag-and-drop (sovrascrive ordine cronologico)
-- Export PDF referto con immagini (tema colore selezionabile)
-- Stampa immagini (layout 4/6/8 per pagina)
-- Import immagini da Orthanc (manuale dal pannello + automatico real-time)
-- Dettatura vocale F8 (avvia/ferma microfono sul form referto)
-- Proxy verso Agenda: pazienti in attesa + marca refertato
-- Sincronizzazione Google Drive a 1-click
-- Correzione AI del testo referto (richiede anthropicApiKey in config.json)
+## 6. REFERTECO — FUNZIONALITÀ E BUG RISOLTI
 
 ### Endpoint server.js principali
 ```
 GET  /api/referti                         ← lista referti
-POST /api/referti                         ← salva referto (usa _tempRefertoId come id)
+POST /api/referti                         ← salva referto
 PUT  /api/referti/:id                     ← modifica referto
 DELETE /api/referti/:id                   ← elimina referto + immagini
 
-GET  /api/referti/:id/immagini            ← lista file immagini (ordine cronologico mtime)
+GET  /api/referti/:id/immagini            ← lista file immagini (ordine per AcquisitionDateTime)
 POST /api/referti/:id/immagini            ← upload immagini
 POST /api/referti/:id/immagini/ordine     ← salva ordine personalizzato
 DELETE /api/referti/:id/immagini/:fname   ← elimina singola immagine
 
 GET  /api/orthanc/status                  ← Orthanc online?
-GET  /api/orthanc/studi                   ← ultimi 40 studi (nInstances da /statistics)
-POST /api/orthanc/importa/:studyId        ← importa studio completo (salta video NumberOfFrames>1)
-GET  /api/orthanc/cerca-accession?n=XXX  ← trova studio per AccessionNumber → [{id, stabile, nImmagini}]
-GET  /api/orthanc/istanze-nuove?accession=XXX&viste=id1,id2  ← istanze nuove non ancora importate
+GET  /api/orthanc/studi                   ← ultimi 40 studi
+POST /api/orthanc/importa/:studyId        ← importa studio (salta cine NumberOfFrames>1)
+GET  /api/orthanc/cerca-accession?n=XXX  ← trova studio per AccessionNumber
+GET  /api/orthanc/istanze-nuove           ← istanze nuove non ancora importate
 POST /api/orthanc/importa-istanza/:id    ← importa singola istanza nel referto
 POST /api/orthanc/archivia/:refertoId    ← invia immagini referto → Orthanc
 
 GET  /api/worklist                        ← lista file .wl attivi
-POST /api/worklist/crea                   ← crea file .wl per ecografo
+POST /api/worklist/crea                   ← crea file .wl (skipped se K: non presente su questo PC)
 DELETE /api/worklist/:accession           ← rimuove file .wl
 
 GET  /api/agenda/pazienti-attesa          ← proxy verso Agenda Railway
@@ -211,196 +183,122 @@ POST /api/agenda/marca-refertato/:id      ← proxy verso Agenda Railway
 POST /api/quit                            ← spegne il server
 ```
 
-### Bug risolti (NON riaprire questi problemi)
-1. **Import Orthanc scaricava 0 immagini** (bug critico, risolto 2026-05-29):
-   `study.Instances` non esiste a livello Study in Orthanc. Fix: usare `/studies/{id}/instances`.
+### Bug risolti — NON riaprire
 
-2. **Pannello Orthanc mostrava "0 immagini"** per tutti i pazienti (risolto 2026-05-29):
-   Stesso errore in `/api/orthanc/studi`. Fix: usare `/studies/{id}/statistics` → `CountInstances`.
+1. **Import Orthanc scaricava 0 immagini** (2026-05-29): usare `/studies/{id}/instances` non `study.Instances`.
+2. **Pannello Orthanc mostrava "0 immagini"** (2026-05-29): usare `/studies/{id}/statistics → CountInstances`.
+3. **Cine incluse in stampa/PDF** (2026-05-29): filtro `NumberOfFrames > 1` → salta cine.
+4. **Ordine immagini non cronologico** (2026-05-29): ordinamento per `AcquisitionDateTime` tag DICOM.
+5. **Doppioni pazienti in Orthanc** (2026-06-30, CAUSA RADICE):
+   - `creaWorklistFile()` chiamava `/tools/create-dicom` PRIMA di verificare se K: esiste
+   - Se K: assente (come su Acer), il finto studio rimaneva in Orthanc per sempre
+   - **Fix**: blocco anti-doppioni all'inizio di `creaWorklistFile()` — controlla se K:\ esiste, se no ritorna `{skipped:true}` senza toccare Orthanc
+   - `pollWorklistAuto` anche disattivato (righe 749-750 commentate)
+6. **Caricamento immagini sbagliato** (2026-06-28): sceglie lo studio con più istanze (evita studi fake con 0 immagini).
+7. **Dati su K: vs C:** (2026-06-28): dati pazienti ora in `C:\RefertEco Dati Pazienti` su Acer (K: è sull'HP).
 
-3. **Cine non escluse da stampa/PDF** (risolto 2026-05-29):
-   Le cine DICOM (video, NumberOfFrames>1) venivano incluse nella stampa stampando centinaia di fotogrammi.
-   Fix: in `stampaImmagini`, `stampaImmaginiArchivio`, `esportaPDF` → parse DICOM → salta se `NumberOfFrames > 1`.
-   Funzione helper: `_isDicomCine(ds)` → legge tag `x00280008`.
-
-4. **Ordine immagini non cronologico** (risolto 2026-05-29):
-   I file DICOM hanno nomi casuali. Fix: ordinamento per `fs.statSync(filepath).mtime` invece che per nome.
-   L'ordine manuale personalizzato (drag-and-drop) sovrascrive quello cronologico.
-
-5. **ricaricaViewer non aggiornava il viewer** (risolto 2026-05-29):
-   `importaDaOrthanc` passava `res.files` (array di stringhe) a `ricaricaViewer(nuoviFile)` che
-   cercava `f.name` su ogni stringa → TypeError silenzioso → viewer bloccato su "caricamento".
-   Fix: passare `[]` → ricaricaViewer rilegge tutto dal server.
-
-6. **DICOM JPEG Lossless non decodificato** (risolto 2026-05-19): decoder + fallback manuale.
-
-7. **Bug "Caricamento..." eterno** (risolto 2026-05-19): `apiGet` non propagava gli errori.
-
-### Logica _tempRefertoId (importante)
-```
-_tempRefertoId = null inizialmente
-↓
-Quando si carica un'immagine (upload drag-drop) → _tempRefertoId = Date.now().toString()
-Quando si fa import da Orthanc → _tempRefertoId = Date.now().toString() (se null)
-↓
-Al salvataggio (salvaReferto) → usa _tempRefertoId come id del referto nel DB
-→ la cartella immagini K:\RefertEco Dati Pazienti\immagini\{_tempRefertoId}\ è già al posto giusto
-↓
-Dopo il salvataggio → _tempRefertoId = null, viewer svuotato
-```
-
-### Import real-time Orthanc (logica)
+### Logica anti-doppioni (server.js ~riga 627)
 ```javascript
-// In frontend app.js — si attiva quando si clicca "Avvia referto →"
-_accessionAttivo = app.accession_number  // es. "20260529-0003"
-_avviaWatchOrthanc(accession)  // setInterval 5000ms
-
-// Ogni 5 secondi:
-// 1. GET /api/orthanc/istanze-nuove?accession=...&viste=id1,id2,...
-// 2. Per ogni istanza nuova:
-//    POST /api/orthanc/importa-istanza/:id  { refertoId: _tempRefertoId }
-// 3. Se importate > 0 → ricaricaViewer([]) + toast
-// Il server filtra automaticamente le cine (NumberOfFrames > 1)
+// Su questo PC (Acer) K: non esiste → esci SUBITO senza toccare Orthanc
+const wlRoot = path.parse(WORKLIST_DIR).root;
+if (!fs.existsSync(wlRoot)) {
+  return { ok: false, skipped: true, reason: 'Worklist gestita dalla centralina HP' };
+}
 ```
+**Non rimuovere questo blocco.** L'Acer non deve mai creare file .wl — lo fa SOLO la centralina HP.
 
 ---
 
-## 6. AGENDA STUDIO — FUNZIONALITÀ
+## 7. AGENDA STUDIO (Railway — https://referteco-production.up.railway.app)
 
 ### Funzionalità attive
-- Login/auth JWT (medico + segreteria, tabella `utenti` su Supabase)
-- Calendario settimanale con navigazione settimana + vista mobile giornaliera (swipe)
+- Login/auth JWT (medico + segreteria)
+- Calendario settimanale + vista mobile giornaliera (swipe) + scroll orizzontale trackpad
 - CRUD appuntamenti con verifica sovrapposizione e blocchi agenda
-- CRUD pazienti (ricerca per cognome/nome/CF/telefono)
-- Tipi prestazione (esami) con durata 30 min
-- Socket.io: aggiornamento real-time quando qualcuno crea/modifica appuntamenti
-- **Notifiche email** (Resend):
-  - Nuovo appuntamento → email verde al medico
-  - Annullamento → email rossa al medico
-  - Prenotazione online → email ambra al medico con pulsanti ✅ Conferma / ❌ Rifiuta
-- **SMS** (SMS Hosting, numero fisso 394390009000):
-  - Conferma prenotazione (immediato)
-  - Promemoria serale 19:00 per appuntamenti domani
-  - Promemoria 1 ora prima (cron ogni minuto)
-  - SMS immediato se prenotato dopo le 19:00 per domani
-- **Festività italiane**: auto-popolate in `blocchi_agenda` a ogni avvio e cron 1 gennaio
-- **Google Calendar sync**:
-  - Crea evento su nuovo appuntamento, elimina su cancellazione
-  - Cron 06:00 → importa impegni personali come blocchi tipo='google_calendar'
-- **Google Business Profile**: orari automatici (cron domenica 20:00)
-- **Prenotazione online** (`/prenota`): mobile-first, 4 step
-  - Step 1: scegli esame, Step 2: scegli data/orario, Step 3: dati + consenso GDPR, Step 4: conferma
-  - Solo Martedì e Venerdì, 9-13 e 15-19
-  - Stato `in_attesa` blocca slot, medico approva via email
-  - Conferma → `stato='prenotato'` + SMS paziente
-  - Rifiuta → `stato='annullato'` (medico chiama manualmente)
-- **Privacy GDPR** (`/privacy`): informativa art.13, dati sanitari ex art.9
+- CRUD pazienti
+- Tipi prestazione con durata 30 min
+- Socket.io aggiornamento real-time
+- **Notifiche email** (Resend): nuovo appuntamento (verde), annullamento (rosso), prenotazione online (ambra)
+- **SMS** (SMS Hosting, 394390009000): conferma, promemoria 19:00 e 1h prima
+- **Festività italiane** auto-popolate
+- **Google Calendar sync** + **Google Business Profile** orari
+- **Prenotazione online** (/prenota): 4 step, solo Mart/Ven 9-13 e 15-19
+- **Privacy GDPR** (/privacy)
+- **Domenica e sabato sempre cliccabili** (header arancio-rosso; medico bypassa blocchi GCal) — commit 8c6ad88
 
-### Tabelle Supabase principali
-- `utenti` — medico + segreteria (bcrypt password, ruolo: medico/segreteria)
-- `pazienti` — anagrafica pazienti
-- `tipi_prestazione` — esami (nome, durata_minuti=30, attivo, codice_dicom)
-- `appuntamenti` — accession_number, stato (prenotato/arrivato/in_corso/refertato/annullato/in_attesa), worklist_status
-- `blocchi_agenda` — festività (tipo='festivo'), impegni GCal (tipo='google_calendar'), manuali
-
-### Stato appuntamento `in_attesa` (prenotazione online)
-- Colore in calendario: ambra chiaro con bordo sinistro giallo tratteggiato
-- Modal modifica: banner giallo con spiegazione + pulsante "Prenotato" per conferma manuale
-- Print view: badge ambra
+### ⚠️ Frontend in DUE posti — modificare SEMPRE entrambi
+- `agenda-frontend/` ← SORGENTE
+- `agenda-backend/frontend/` ← COPIA per Railway
 
 ---
 
-## 7. VARIABILI RAILWAY (mai committare valori reali)
+## 8. VARIABILI RAILWAY (mai committare valori reali)
 
-```
-SUPABASE_URL                = <da Railway dashboard>
-SUPABASE_SERVICE_KEY        = <da Railway dashboard>
-JWT_SECRET                  = <da Railway dashboard>
-RESEND_API_KEY              = <da Railway dashboard>
-SMSHOSTING_API_KEY          = <da Railway dashboard>
-SMSHOSTING_API_SECRET       = <da Railway dashboard>
-STUDIO_NOME                 = Studio Dr. Susino
-STUDIO_TELEFONO             = 339-4028454
-# Google Calendar (service account agendastudio-497611)
-GOOGLE_PRIVATE_KEY          = <JSON completo service account>
-GOOGLE_CLIENT_EMAIL         = agenda-calendar@agendastudio-497611.iam.gserviceaccount.com
-GOOGLE_CALENDAR_ID          = salvatoresusino.md@gmail.com
-# Google Business Profile (OAuth2)
-GOOGLE_OAUTH_CLIENT_ID      = <da Railway dashboard>
-GOOGLE_OAUTH_CLIENT_SECRET  = <da Railway dashboard>
-GOOGLE_OAUTH_REFRESH_TOKEN  = <da Railway dashboard>
-GOOGLE_OAUTH_REDIRECT_URI   = https://referteco-production.up.railway.app/api/gbp/callback
-GBP_LOCATION_NAME           = (opzionale — si scopre auto)
-```
+Le variabili sono nel Railway dashboard. Categorie:
+- Supabase: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `JWT_SECRET`
+- Email: `RESEND_API_KEY`
+- SMS: `SMSHOSTING_API_KEY`, `SMSHOSTING_API_SECRET`
+- Google Calendar: `GOOGLE_PRIVATE_KEY`, `GOOGLE_CLIENT_EMAIL`, `GOOGLE_CALENDAR_ID`
+- Google Business Profile: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REFRESH_TOKEN`
+- Info studio: `STUDIO_NOME`, `STUDIO_TELEFONO`
 
 ---
 
-## 8. FILE LOCALI (mai in git)
-- `~\.referteco\config.json` → `{ "dataDir": "K:\\RefertEco Dati Pazienti", "anthropicApiKey": "sk-ant-..." }`
-- `agenda-backend\.env` → tutte le credenziali Railway
-- `K:\RefertEco Dati Pazienti\referteco_data.json` → database referti reali
-- `K:\RefertEco Dati Pazienti\immagini\` → immagini DICOM dei pazienti
+## 9. FILE LOCALI (mai in git)
+- `C:\Users\Luciano Susino\AppData\Local\RefertEco\config.json` → `{ "dataDir": "C:\\RefertEco Dati Pazienti" }`
+- `agenda-backend\.env` → credenziali Railway
+- `C:\RefertEco Dati Pazienti\referteco_data.json` → database referti reali
+- `C:\RefertEco Dati Pazienti\immagini\` → immagini DICOM dei pazienti
+- `G:\Il mio Drive\RefertEco Dati Pazienti\` → copia Google Drive (sync manuale)
 
 ---
 
-## 9. COSE IN SOSPESO ⚠️
+## 10. COSE IN SOSPESO ⚠️
 
-1. ~~**Rimozione MioDottore da GBP**~~ ✅ **Fatto** (verificato 2026-05-31): su Google compare solo RefertEco sotto Appuntamenti.
+1. **API GBP in attesa approvazione Google**
+   - Case ID: **1-7862000040720** (inviata 2026-05-27)
+   - Quando arriva email: POST `/api/gbp/set-regular-hours` + `/api/gbp/aggiorna-orari`
 
-2. **API GBP in attesa approvazione Google**:
-   Case ID: **1-7862000040720** (inviata 2026-05-27, 7-10 gg lavorativi).
-   Quando arriva email: POST `/api/gbp/set-regular-hours` + `/api/gbp/aggiorna-orari`.
+2. **(Futuro) Accesso remoto immagini Orthanc con password** — da casa via HP
 
-3. **MicroDicom registrato in Orthanc solo in memoria**:
-   La registrazione (`PUT /modalities/MICRODICOM`) è stata fatta via REST API e sopravvive ai
-   riavvii del servizio Orthanc, MA non è nel file `orthanc.json`. Se Orthanc viene reinstallato:
-   ```
-   curl -X PUT http://localhost:8042/modalities/MICRODICOM -H "Content-Type: application/json" -d "{\"AET\":\"MICRODICOM\",\"Host\":\"127.0.0.1\",\"Port\":11112}"
-   ```
-
-4. **Workflow DICOM Worklist end-to-end** — funzionante ma da testare in produzione con pazienti reali.
+3. **Adware "Garanzia Reparo" + AnyDesk** in All Users Startup dell'HP
+   - Appaiono come popup all'avvio — non urgente ma da rimuovere
 
 ---
 
-## 10. TRAPPOLE NOTE 🚫
+## 11. TRAPPOLE NOTE 🚫
 
-1. **Frontend Agenda in DUE posti**: modificare SEMPRE sia `agenda-frontend/` che `agenda-backend/frontend/`.
-2. **PowerShell encoding**: usare `[System.IO.File]::WriteAllText` (non Set-Content/Out-File → aggiunge BOM UTF-8).
-3. **Non toccare** `referteco_data.json` o `immagini/` direttamente (dati pazienti reali).
-4. **RefertEco gira da AppData**, non da Desktop → dopo ogni modifica copiare i file in `AppData\Local\RefertEco\`.
-5. **Cache browser**: aggiornare `?v=YYYYMMDD` nel tag script di `index.html` dopo modifiche a `app.js` o `style.css`.
-6. **`C:\Program Files\Orthanc Server\`** richiede admin per modifiche → usare REST API di Orthanc dove possibile.
-7. **`.env` e `config.json`** non vanno MAI in git.
-8. **git fileMode**: già configurato `core.fileMode = false` (file .sh sembrano sempre modificati su Windows).
-9. **Workstation in studio e portatile**: non sovrascrivere mai i file dell'uno con quelli dell'altro senza un git merge.
-10. **API key Anthropic in config.json**: non loggarla mai, non metterla in git.
-11. **Le cine/video NON devono entrare in RefertEco**: solo immagini fisse (NumberOfFrames=1). I video restano su Orthanc per MicroDicom.
-12. **`_tempRefertoId`**: non ha il prefisso "temp-" quando viene usato per importare (è un timestamp numerico). Viene usato sia come cartella immagini che come id nel DB al salvataggio.
+1. **Frontend Agenda in DUE posti**: modificare SEMPRE `agenda-frontend/` E `agenda-backend/frontend/`
+2. **SMB verso HP bloccato** (Errore 5): operazioni remote solo via RDP o Orthanc HTTP :8042
+3. **Percorsi SYSTEM sull'HP**: il guardiano VBS usa percorsi HARDCODED `C:\Users\User\...` (non variabili d'ambiente)
+4. **K: è sull'HP**, non sull'Acer. L'Acer non ha K: → il BLOCCO anti-doppioni in creaWorklistFile lo gestisce.
+5. **Ecografo non aggiorna in automatico** → premere QUERY dopo "arrivato"
+6. **Firma Namirial**: username = Codice dispositivo (non la mail!)
+7. **pollWorklistAuto DISATTIVATO** in server.js Acer → NON riattivare
+8. **Non toccare** `referteco_data.json` o `immagini/` direttamente (dati pazienti reali)
+9. **Cache browser**: aggiornare `?v=YYYYMMDD` in index.html dopo modifiche a app.js/style.css
+10. **`.env` e `config.json`** non vanno mai in git
+11. **Le cine/video NON entrano in RefertEco**: solo immagini fisse (NumberOfFrames=1)
+12. **fetch failed Orthanc HP→Railway**: ricorrente (internet HP a tratti) — non bloccante, la logica worklist locale funziona lo stesso
+13. **Guardiano Acer** (`watchdog-motore.vbs`): usa %USERPROFILE%/%LOCALAPPDATA% (OK perché gira come utente, non SYSTEM)
 
 ---
 
-## 11. COME RIPRENDERE SU QUALSIASI PC
+## 12. COME RIPRENDERE
 
-### Su questa workstation (studio)
-```
-1. Doppio clic su "Avvia RefertEco.bat" in AppData\Local\RefertEco\
-   (il browser si apre automaticamente su localhost:3000)
-2. Per l'Agenda: aprire browser su https://referteco-production.up.railway.app/
-3. Orthanc: già attivo come servizio Windows (verifica su http://localhost:8042)
-```
+### Su questa workstation Acer (studio)
+Il motore parte da solo all'accensione (watchdog-motore.vbs in Startup). Aprire Chrome su `http://localhost:3000`.
 
-### Su un altro PC (portatile, Mac, ecc.)
+Se il motore non parte: doppio clic su `Desktop\RefertEco\watchdog-motore.vbs`.
+
+### Su un altro PC
 ```bash
 git clone https://github.com/salvatoresusino93-source/RefertEco.git
 cd RefertEco && npm install
-cd agenda-backend && npm install && cd ..
-# Crea ~/.referteco/config.json con dataDir puntante a Google Drive
-# Crea agenda-backend/.env con le credenziali (recupera da Railway dashboard)
-node server.js  # RefertEco su localhost:3000
-# Agenda: già su Railway, non serve avviarla
 ```
+Poi puntare `ORTHANC_BASE` a `http://192.168.1.166:8042` in server.js (già impostato).
 
-### Primo messaggio a Claude su un nuovo PC
+### Primo messaggio a Claude (nuova sessione)
 ```
 "Leggi RIPRENDI_QUI.md e poi dimmi cosa vuoi fare."
 ```
@@ -408,46 +306,23 @@ oppure semplicemente:
 ```
 "Recupera tutto"
 ```
-Claude leggerà CLAUDE.md (in questa cartella Google Drive) → poi RIPRENDI_QUI.md → avrà tutto il contesto.
 
 ---
 
-## 12. SITO VETRINA studio-susino-web (2026-05-29)
-
-Progetto separato ma collegato all’Agenda.
+## 13. SITO VETRINA studio-susino-web
 
 | | |
 |--|--|
 | GitHub | https://github.com/salvatoresusino93-source/studio-susino-web |
-| Locale Mac | `~/Projects/studio-susino-web` |
-| Google Drive | `Il mio Drive/studio-susino-web` |
 | Live | https://salvatoresusino93-source.github.io/studio-susino-web/ |
-| Dominio futuro | studiosusino.it (DNS Aruba da attivare) |
-
-**Prenotazione online:** https://referteco-production.up.railway.app/prenota
-
-### Modifiche recenti sessione
-- **24 esami** prenotabili (sync `scripts/sync_tipi.js`): ripristinati **Ecografia renale**, **Doppler aorta addominale**, **Doppler arterie renali**, **Anca neonatale** — esclusa **Ecografia prostatica transrettale**
-- Slot fissi **30 min** (`agenda-backend/src/routes/public.js` → `SLOT_MINUTI = 30`)
-- **Preparazione** digiuno + vescica piena: solo in `/prenota` (`preparazione-esami.js`), non sul sito vetrina
-- Sito: no martedì/venerdì, no fasce 9–13 / 15–19 — solo «su appuntamento»
-- Prenota: esami raggruppati per categoria; banner preparazione dopo scelta esame
-
-### Supabase — se mancano esami in prenota
-```bash
-cd agenda-backend && NODE_PATH=./node_modules node ../scripts/sync_tipi.js
-```
-Oppure SQL in `supabase/slot_30_minuti.sql`, `fix_duplicati_esami.sql`.
+| Prenotazione | https://referteco-production.up.railway.app/prenota |
 
 ---
 
-## 13. CONTATTI E LINK UTILI
+## 14. CONTATTI E LINK UTILI
 - **GitHub RefertEco**: https://github.com/salvatoresusino93-source/RefertEco
-- **GitHub sito**: https://github.com/salvatoresusino93-source/studio-susino-web
 - **Agenda produzione**: https://referteco-production.up.railway.app/
-- **Railway dashboard**: https://railway.app/
+- **Railway**: https://railway.app/
 - **Supabase**: https://app.supabase.com/
-- **Resend**: https://resend.com/
-- **SMS Hosting**: https://www.smshosting.it/
-- **Orthanc locale**: http://localhost:8042 (admin/admin00)
-- **MicroDicom**: già installato sulla workstation
+- **Orthanc HP**: http://192.168.1.166:8042 (admin/admin00)
+- **RDP HP**: mstsc → 192.168.1.166
