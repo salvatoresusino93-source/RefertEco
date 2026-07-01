@@ -56,6 +56,18 @@ function isToday(d) {
   return d.getFullYear()===t.getFullYear() && d.getMonth()===t.getMonth() && d.getDate()===t.getDate();
 }
 function minFromMidnight(iso) { const d=new Date(iso); return d.getHours()*60+d.getMinutes(); }
+const FASCE_MAP = { mattina:{s:8,e:14}, pomeriggio:{s:14,e:20}, giornata:{s:8,e:20} };
+// Restituisce { s, e } in ore (decimali) per un blocco indisponibilità:
+// fasce fisse da FASCE_MAP, fascia 'personalizzata' dai propri ora_inizio/ora_fine.
+function fasciaOre(b) {
+  if (b.tipo === 'personalizzata') {
+    if (!b.ora_inizio || !b.ora_fine) return null;
+    const [sh, sm] = b.ora_inizio.split(':').map(Number);
+    const [eh, em] = b.ora_fine.split(':').map(Number);
+    return { s: sh + sm/60, e: eh + em/60 };
+  }
+  return FASCE_MAP[b.tipo] || null;
+}
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────
@@ -209,8 +221,7 @@ function renderCalendar() {
       return bS < nextMs && bE > dayMs;
     });
 
-    // Indisponibilità per fascia oraria (mattina/pomeriggio/giornata)
-    const FASCE_MAP = { mattina:{s:8,e:14}, pomeriggio:{s:14,e:20}, giornata:{s:8,e:20} };
+    // Indisponibilità per fascia oraria (mattina/pomeriggio/giornata/personalizzata)
     const indispDay = _indisponibilita.filter(b => b.data === dateStr);
 
     // Hour lines
@@ -231,7 +242,7 @@ function renderCalendar() {
         return bSm < absMin + SLOT_MIN && bEm > absMin;
       });
       const indispSlot = !bloccoGiorno && !bloccoSlot && indispDay.find(b => {
-        const f = FASCE_MAP[b.tipo]; if (!f) return false;
+        const f = fasciaOre(b); if (!f) return false;
         return f.s * 60 < absMin + SLOT_MIN && f.e * 60 > absMin;
       });
       if (bloccoGiorno && !isWeekend) {
@@ -241,7 +252,7 @@ function renderCalendar() {
         slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
           onclick="onSlotBlockedClick('${esc(bloccoSlot.motivo || 'Impegno personale')}')"></div>`;
       } else if (indispSlot) {
-        const fasciaLabel = {mattina:'Mattina bloccata',pomeriggio:'Pomeriggio bloccato',giornata:'Giornata bloccata'}[indispSlot.tipo] || 'Fascia bloccata';
+        const fasciaLabel = {mattina:'Mattina bloccata',pomeriggio:'Pomeriggio bloccato',giornata:'Giornata bloccata',personalizzata:'Fascia bloccata'}[indispSlot.tipo] || 'Fascia bloccata';
         slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
           onclick="onSlotBlockedClick('${esc(indispSlot.motivo || fasciaLabel)}')"></div>`;
       } else {
@@ -276,14 +287,16 @@ function renderCalendar() {
       }
     }
 
-    // Overlay fasce indisponibilità (mattina/pomeriggio/giornata)
+    // Overlay fasce indisponibilità (mattina/pomeriggio/giornata/personalizzata)
     let indispHtml = '';
     if (!bloccoGiorno) {
       for (const b of indispDay) {
-        const f = FASCE_MAP[b.tipo]; if (!f) continue;
+        const f = fasciaOre(b); if (!f) continue;
         const top    = (f.s - CAL_START) * 60 * PX_PER_MIN;
         const height = (f.e - f.s) * 60 * PX_PER_MIN;
-        const fasciaLabel = {mattina:'Mattina',pomeriggio:'Pomeriggio',giornata:'Giornata intera'}[b.tipo];
+        const fasciaLabel = b.tipo === 'personalizzata'
+          ? `${b.ora_inizio.slice(0,5)}–${b.ora_fine.slice(0,5)}`
+          : {mattina:'Mattina',pomeriggio:'Pomeriggio',giornata:'Giornata intera'}[b.tipo];
         const motivo = esc(b.motivo || fasciaLabel + ' non disponibile');
         indispHtml += `<div class="cal-blocco cal-indisp"
           style="top:${top}px;height:${height}px"
@@ -825,8 +838,11 @@ function menuBlocco() {
 
 function apriBlocco(dateStr) {
   _tipoBlocco = null;
-  $('blocco-data').value   = dateStr || toDateStr(new Date());
-  $('blocco-motivo').value = '';
+  $('blocco-data').value       = dateStr || toDateStr(new Date());
+  $('blocco-motivo').value     = '';
+  $('blocco-ora-inizio').value = '';
+  $('blocco-ora-fine').value   = '';
+  $('blocco-orario-custom').classList.add('hidden');
   document.querySelectorAll('.blocco-tipo-btn').forEach(b => b.classList.remove('active'));
   $('blocco-overlay').classList.remove('hidden');
 }
@@ -841,28 +857,40 @@ function selezionaTipoBlocco(tipo, btn) {
   _tipoBlocco = tipo;
   document.querySelectorAll('.blocco-tipo-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
+  $('blocco-orario-custom').classList.toggle('hidden', tipo !== 'personalizzata');
 }
 
 async function salvaBlocco() {
   const data = $('blocco-data').value;
   if (!data)         { alert('Seleziona una data'); return; }
-  if (!_tipoBlocco)  { alert('Seleziona una fascia oraria (mattina, pomeriggio o giornata)'); return; }
+  if (!_tipoBlocco)  { alert('Seleziona una fascia oraria (mattina, pomeriggio, giornata o personalizzata)'); return; }
+
+  const body = {
+    data,
+    tipo:   _tipoBlocco,
+    motivo: $('blocco-motivo').value.trim() || null,
+  };
+
+  if (_tipoBlocco === 'personalizzata') {
+    const oraInizio = $('blocco-ora-inizio').value;
+    const oraFine   = $('blocco-ora-fine').value;
+    if (!oraInizio || !oraFine) { alert('Inserisci orario di inizio e fine'); return; }
+    if (oraInizio >= oraFine)   { alert('L\'orario di fine deve essere successivo a quello di inizio'); return; }
+    body.ora_inizio = oraInizio;
+    body.ora_fine   = oraFine;
+  }
 
   const btn = $('btn-salva-blocco');
   btn.textContent = 'Blocco…'; btn.disabled = true;
   try {
-    await api.creaIndisponibilita({
-      data,
-      tipo:   _tipoBlocco,
-      motivo: $('blocco-motivo').value.trim() || null,
-    });
+    await api.creaIndisponibilita(body);
     $('blocco-overlay').classList.add('hidden');
     _tipoBlocco = null;
     await refreshWeek();
   } catch (ex) {
-    // 409 = fascia già bloccata per quella data
+    // 409 = fascia già bloccata/sovrapposta per quella data
     alert(ex.status === 409
-      ? 'Esiste già un blocco per questa fascia oraria in questa data.'
+      ? 'Esiste già un blocco che si sovrappone a questa fascia oraria.'
       : 'Errore: ' + ex.message);
   } finally {
     btn.textContent = '🔒 Blocca'; btn.disabled = false;
