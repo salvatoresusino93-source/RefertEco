@@ -19,15 +19,17 @@ const STATI = {
 const GIORNI = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
 
 // ─── Stato ────────────────────────────────────────────────────────────────
-let _user         = null;
-let _viewStart    = null;   // lunedì della settimana visualizzata
-let _mobileDay    = null;   // giorno corrente in vista mobile
-let _appointments = [];
-let _prestazioni  = [];
-let _blocchi      = [];     // blocchi agenda (festività, impegni)
-let _editId       = null;   // id appuntamento in modifica
-let _pazienteId   = null;   // paziente selezionato nel modal
-let _searchTimer  = null;
+let _user           = null;
+let _viewStart      = null;   // lunedì della settimana visualizzata
+let _mobileDay      = null;   // giorno corrente in vista mobile
+let _appointments   = [];
+let _prestazioni    = [];
+let _blocchi        = [];     // blocchi agenda (festività, impegni)
+let _indisponibilita = [];    // fasce orarie bloccate (mattina/pomeriggio/giornata)
+let _navDir         = 0;      // verso navigazione settimana: +1 avanti, -1 indietro, 0 nessuno
+let _editId         = null;   // id appuntamento in modifica
+let _pazienteId     = null;   // paziente selezionato nel modal
+let _searchTimer    = null;
 
 function isMobile() { return window.innerWidth <= 768; }
 
@@ -113,17 +115,41 @@ function initSocket() {
     s.on('appuntamento:nuovo',      refresh);
     s.on('appuntamento:aggiornato', refresh);
     s.on('appuntamento:annullato',  refresh);
+    s.on('indisponibilita:creata',  refresh);
+    s.on('indisponibilita:rimossa', refresh);
   } catch {}
 }
 
 // ─── Calendar load & render ───────────────────────────────────────────────
+let _weekReqId = 0;   // guard: solo l'ultima richiesta settimana può ridisegnare
+
 async function refreshWeek() {
-  const from = toISO(_viewStart);
-  const to   = toISO(addDays(_viewStart, 7));
-  try { _appointments = await api.appuntamenti(from, to); } catch { _appointments = []; }
-  try { _blocchi      = await api.blocchi(from, to);      } catch { _blocchi = []; }
-  renderCalendar();
+  const reqId   = ++_weekReqId;
+  const from    = toISO(_viewStart);
+  const to      = toISO(addDays(_viewStart, 7));
+  const fromStr = toDateStr(_viewStart);
+  const toStr   = toDateStr(addDays(_viewStart, 6));
+
+  // Render immediato della griglia (svuota i dati) per risposta visiva istantanea
+  _appointments = []; _blocchi = []; _indisponibilita = [];
+  renderCalendar();        // questo render porta l'animazione di scorrimento
+  _navDir = 0;             // consuma la direzione: il render coi dati non ri-anima
   renderPeriod();
+
+  // Fetch paralleli
+  const [apps, blocchi, indisp] = await Promise.allSettled([
+    api.appuntamenti(from, to),
+    api.blocchi(from, to),
+    api.indisponibilita(fromStr, toStr),
+  ]);
+
+  // Se nel frattempo è arrivata una navigazione più recente, scarta questo risultato
+  if (reqId !== _weekReqId) return;
+
+  _appointments    = apps.status    === 'fulfilled' ? apps.value    : [];
+  _blocchi         = blocchi.status === 'fulfilled' ? blocchi.value : [];
+  _indisponibilita = indisp.status  === 'fulfilled' ? indisp.value  : [];
+  renderCalendar();
 }
 
 function renderPeriod() {
@@ -137,18 +163,6 @@ function renderCalendar() {
   const totalMin = (CAL_END - CAL_START) * 60;
   const totalPx  = totalMin * PX_PER_MIN;
 
-  // ── Header
-  let hdr = `<div class="cal-header"><div class="cal-th-time"></div>`;
-  for (let i=0; i<7; i++) {
-    const d = addDays(_viewStart, i);
-    const cls = isToday(d) ? ' today' : '';
-    hdr += `<div class="cal-th-day${cls}">
-      <span class="cal-th-dayname">${GIORNI[i]}</span>
-      <span class="cal-th-daynum">${d.getDate()}</span>
-    </div>`;
-  }
-  hdr += `</div>`;
-
   // ── Time labels
   let timeLbls = `<div class="cal-time-col" style="height:${totalPx}px">`;
   for (let m=0; m<=totalMin; m+=60) {
@@ -158,8 +172,7 @@ function renderCalendar() {
   timeLbls += `</div>`;
 
   // ── Header con indicatore festività
-  // Ricostruiamo l'header aggiungendo il badge festivo
-  hdr = `<div class="cal-header"><div class="cal-th-time"></div>`;
+  let hdr = `<div class="cal-header"><div class="cal-th-time"></div>`;
   for (let i=0; i<7; i++) {
     const d       = addDays(_viewStart, i);
     const dateStr = toDateStr(d);
@@ -196,6 +209,10 @@ function renderCalendar() {
       return bS < nextMs && bE > dayMs;
     });
 
+    // Indisponibilità per fascia oraria (mattina/pomeriggio/giornata)
+    const FASCE_MAP = { mattina:{s:8,e:14}, pomeriggio:{s:14,e:20}, giornata:{s:8,e:20} };
+    const indispDay = _indisponibilita.filter(b => b.data === dateStr);
+
     // Hour lines
     let lines = '';
     for (let m=0; m<=totalMin; m+=20) {
@@ -213,12 +230,20 @@ function renderCalendar() {
         const bEm = minFromMidnight(b.data_ora_fine);
         return bSm < absMin + SLOT_MIN && bEm > absMin;
       });
+      const indispSlot = !bloccoGiorno && !bloccoSlot && indispDay.find(b => {
+        const f = FASCE_MAP[b.tipo]; if (!f) return false;
+        return f.s * 60 < absMin + SLOT_MIN && f.e * 60 > absMin;
+      });
       if (bloccoGiorno && !isWeekend) {
         slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
           onclick="onSlotBlockedClick('${esc(bloccoGiorno.motivo)}')"></div>`;
       } else if (bloccoSlot && !isWeekend) {
         slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
           onclick="onSlotBlockedClick('${esc(bloccoSlot.motivo || 'Impegno personale')}')"></div>`;
+      } else if (indispSlot) {
+        const fasciaLabel = {mattina:'Mattina bloccata',pomeriggio:'Pomeriggio bloccato',giornata:'Giornata bloccata'}[indispSlot.tipo] || 'Fascia bloccata';
+        slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
+          onclick="onSlotBlockedClick('${esc(indispSlot.motivo || fasciaLabel)}')"></div>`;
       } else {
         slots += `<div class="cal-slot" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
           onclick="onSlotClick('${dateStr}','${hh}:${mm}')"></div>`;
@@ -251,6 +276,25 @@ function renderCalendar() {
       }
     }
 
+    // Overlay fasce indisponibilità (mattina/pomeriggio/giornata)
+    let indispHtml = '';
+    if (!bloccoGiorno) {
+      for (const b of indispDay) {
+        const f = FASCE_MAP[b.tipo]; if (!f) continue;
+        const top    = (f.s - CAL_START) * 60 * PX_PER_MIN;
+        const height = (f.e - f.s) * 60 * PX_PER_MIN;
+        const fasciaLabel = {mattina:'Mattina',pomeriggio:'Pomeriggio',giornata:'Giornata intera'}[b.tipo];
+        const motivo = esc(b.motivo || fasciaLabel + ' non disponibile');
+        indispHtml += `<div class="cal-blocco cal-indisp"
+          style="top:${top}px;height:${height}px"
+          onclick="onSlotBlockedClick('${motivo}')">
+          <span class="cal-blocco-icon">🟠</span>
+          ${height >= 60 ? `<span class="cal-blocco-label">${fasciaLabel}</span>` : ''}
+          ${height >= 90 && b.motivo ? `<span class="cal-blocco-motivo">${esc(b.motivo)}</span>` : ''}
+        </div>`;
+      }
+    }
+
     // Appointments
     let appHtml = '';
     for (const a of _appointments.filter(x => x.data_ora_inizio.startsWith(dateStr))) {
@@ -274,11 +318,17 @@ function renderCalendar() {
       </div>`;
     }
 
-    days += `<div class="cal-day${todayCls}${festivoCls}" style="height:${totalPx}px">${lines}${slots}${bloccoOverlay}${blocchiTimedHtml}${appHtml}</div>`;
+    days += `<div class="cal-day${todayCls}${festivoCls}" style="height:${totalPx}px">${lines}${slots}${bloccoOverlay}${indispHtml}${blocchiTimedHtml}${appHtml}</div>`;
   }
 
   $('cal-wrap').innerHTML = `${hdr}
     <div class="cal-body">${timeLbls}${days}</div>`;
+
+  // Animazione direzionale di scorrimento tra settimane (page-turn)
+  if (_navDir !== 0) {
+    const body = $('cal-wrap').querySelector('.cal-body');
+    if (body) body.classList.add(_navDir > 0 ? 'slide-next' : 'slide-prev');
+  }
 
   // Su mobile: scrolla in modo che la colonna di oggi sia visibile
   if (isMobile()) {
@@ -290,13 +340,21 @@ function renderCalendar() {
 }
 
 // ─── Navigazione settimana (mobile: frecce, desktop: frecce + swipe) ─────
-function navMobileWeek(n) {
+// n = numero di settimane (±1). Imposta la direzione per l'animazione di scorrimento.
+function goWeek(n) {
+  _navDir = n > 0 ? 1 : (n < 0 ? -1 : 0);
   _viewStart = addDays(_viewStart, n * 7);
   refreshWeek();
 }
 
+function navMobileWeek(n) {
+  goWeek(n);
+}
+
 function goToToday() {
-  _viewStart = getMon(new Date());
+  const target = getMon(new Date());
+  _navDir = target > _viewStart ? 1 : (target < _viewStart ? -1 : 0);
+  _viewStart = target;
   refreshWeek();
 }
 
@@ -317,16 +375,36 @@ function initSwipe() {
     const dt = Date.now() - t0;
     // Swipe veloce e orizzontale: cambia settimana
     if (dt < 400 && Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy) * 2) {
-      if (dx < 0) { _viewStart = addDays(_viewStart,  7); refreshWeek(); }
-      else        { _viewStart = addDays(_viewStart, -7); refreshWeek(); }
+      goWeek(dx < 0 ? 1 : -1);
     }
   }, { passive: true });
+
+  // ── Scroll orizzontale trackpad/mouse (desktop): cambia settimana ────────
+  // Due dita orizzontali sul trackpad (o rotellina con shift) scorrono le settimane.
+  let wheelAccum = 0, wheelLock = false, wheelReset = null;
+  el.addEventListener('wheel', e => {
+    // Solo gesto prevalentemente orizzontale; quello verticale resta scroll normale
+    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+    e.preventDefault();            // evita il "back/forward" del browser sullo swipe orizzontale
+    if (wheelLock) return;
+
+    wheelAccum += e.deltaX;
+    clearTimeout(wheelReset);
+    wheelReset = setTimeout(() => { wheelAccum = 0; }, 200); // azzera se il gesto si ferma
+
+    if (Math.abs(wheelAccum) > 80) {
+      goWeek(wheelAccum > 0 ? 1 : -1);
+      wheelAccum = 0;
+      wheelLock  = true;          // una settimana per gesto, niente salti multipli
+      setTimeout(() => { wheelLock = false; }, 420);
+    }
+  }, { passive: false });
 
   // Frecce tastiera (desktop)
   document.addEventListener('keydown', e => {
     if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
-    if (e.key === 'ArrowRight') { e.preventDefault(); isMobile() ? navMobileDay(1)  : (() => { _viewStart=addDays(_viewStart, 7); refreshWeek(); })(); }
-    if (e.key === 'ArrowLeft')  { e.preventDefault(); isMobile() ? navMobileDay(-1) : (() => { _viewStart=addDays(_viewStart,-7); refreshWeek(); })(); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); isMobile() ? navMobileDay(1)  : goWeek(1); }
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); isMobile() ? navMobileDay(-1) : goWeek(-1); }
   });
 }
 
@@ -350,8 +428,8 @@ async function refreshSidebar() {
 
 // ─── Nav events ───────────────────────────────────────────────────────────
 function bindEvents() {
-  $('btn-prev').onclick  = () => { _viewStart = addDays(_viewStart,-7); refreshWeek(); };
-  $('btn-next').onclick  = () => { _viewStart = addDays(_viewStart, 7); refreshWeek(); };
+  $('btn-prev').onclick  = () => goWeek(-1);
+  $('btn-next').onclick  = () => goWeek(1);
   $('btn-oggi').onclick  = () => goToToday();
   $('btn-nuovo').onclick = () => openModal();
   $('btn-stampa').onclick = stampaDiario;
@@ -735,6 +813,60 @@ function menuLogout() {
 function menuArchivio() {
   chiudiMenu();
   apriArchivio();
+}
+
+// ─── Blocco fasce orarie (indisponibilità) ────────────────────────────────
+let _tipoBlocco = null;   // 'mattina' | 'pomeriggio' | 'giornata'
+
+function menuBlocco() {
+  chiudiMenu();
+  apriBlocco();
+}
+
+function apriBlocco(dateStr) {
+  _tipoBlocco = null;
+  $('blocco-data').value   = dateStr || toDateStr(new Date());
+  $('blocco-motivo').value = '';
+  document.querySelectorAll('.blocco-tipo-btn').forEach(b => b.classList.remove('active'));
+  $('blocco-overlay').classList.remove('hidden');
+}
+
+function chiudiBlocco(e) {
+  if (e && e.target !== e.currentTarget) return;   // click dentro il modal → ignora
+  $('blocco-overlay').classList.add('hidden');
+  _tipoBlocco = null;
+}
+
+function selezionaTipoBlocco(tipo, btn) {
+  _tipoBlocco = tipo;
+  document.querySelectorAll('.blocco-tipo-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+async function salvaBlocco() {
+  const data = $('blocco-data').value;
+  if (!data)         { alert('Seleziona una data'); return; }
+  if (!_tipoBlocco)  { alert('Seleziona una fascia oraria (mattina, pomeriggio o giornata)'); return; }
+
+  const btn = $('btn-salva-blocco');
+  btn.textContent = 'Blocco…'; btn.disabled = true;
+  try {
+    await api.creaIndisponibilita({
+      data,
+      tipo:   _tipoBlocco,
+      motivo: $('blocco-motivo').value.trim() || null,
+    });
+    $('blocco-overlay').classList.add('hidden');
+    _tipoBlocco = null;
+    await refreshWeek();
+  } catch (ex) {
+    // 409 = fascia già bloccata per quella data
+    alert(ex.status === 409
+      ? 'Esiste già un blocco per questa fascia oraria in questa data.'
+      : 'Errore: ' + ex.message);
+  } finally {
+    btn.textContent = '🔒 Blocca'; btn.disabled = false;
+  }
 }
 
 // ─── Archivio Pazienti ─────────────────────────────────────────────────────

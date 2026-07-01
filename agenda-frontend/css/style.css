@@ -129,6 +129,12 @@ button { font-family:inherit; }
 
 .cal-body { display:grid; grid-template-columns:52px repeat(7,1fr); }
 
+/* Animazione scorrimento tra settimane (page-turn direzionale) */
+@keyframes calSlideNext { from { opacity:.4; transform:translateX(26px); } to { opacity:1; transform:none; } }
+@keyframes calSlidePrev { from { opacity:.4; transform:translateX(-26px); } to { opacity:1; transform:none; } }
+.cal-body.slide-next { animation:calSlideNext .2s cubic-bezier(.22,.61,.36,1); }
+.cal-body.slide-prev { animation:calSlidePrev .2s cubic-bezier(.22,.61,.36,1); }
+
 .cal-time-col { position:relative; }
 .cal-lbl { position:absolute; right:6px; font-size:10px; color:var(--muted);
   transform:translateY(-7px); white-space:nowrap; }
@@ -377,6 +383,22 @@ button { font-family:inherit; }
 .cal-blocco-motivo { font-size: 10px; color: rgba(153,27,27,.6); text-align: center;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 90%; padding: 0 4px; }
+
+/* Fascia oraria bloccata (indisponibilità: mattina / pomeriggio / giornata) */
+.cal-blocco.cal-indisp {
+  background: repeating-linear-gradient(-45deg,
+    rgba(234,88,12,.08), rgba(234,88,12,.08) 10px,
+    rgba(234,88,12,.02) 10px, rgba(234,88,12,.02) 20px);
+  border-left-color: rgba(234,88,12,.6);
+  border-top-color:  rgba(234,88,12,.4);
+}
+.cal-blocco.cal-indisp:hover {
+  background: repeating-linear-gradient(-45deg,
+    rgba(234,88,12,.18), rgba(234,88,12,.18) 10px,
+    rgba(234,88,12,.07) 10px, rgba(234,88,12,.07) 20px);
+}
+.cal-blocco.cal-indisp .cal-blocco-label  { color: rgba(154,52,18,.85); }
+.cal-blocco.cal-indisp .cal-blocco-motivo { color: rgba(154,52,18,.6); }
 
 /* Tipo selector nel modal blocco */
 .blocco-tipo-btns { display: flex; gap: 8px; }

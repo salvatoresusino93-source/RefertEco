@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agenda Studio</title>
+  <title>Agenda Ecografie</title>
   <!-- PWA -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Agenda Studio">
+  <meta name="apple-mobile-web-app-title" content="Agenda Ecografie">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
   <meta name="theme-color" content="#2563eb">
-  <link rel="stylesheet" href="/css/style.css?v=20260527d">
+  <link rel="stylesheet" href="/css/style.css?v=20260629a">
 </head>
 <body>
 
@@ -20,7 +20,7 @@
 <div id="login-screen" class="login-screen">
   <div class="login-card">
     <div class="login-logo">🏥</div>
-    <h1 class="login-title">Agenda Studio</h1>
+    <h1 class="login-title">Agenda Ecografie</h1>
     <p class="login-sub">Sistema prenotazioni ecografie</p>
     <form id="login-form" class="login-form">
       <div class="field">
@@ -49,11 +49,14 @@
           <button class="menu-item" onclick="menuNuovoApp()">➕&nbsp; Nuovo appuntamento</button>
           <button class="menu-item" onclick="menuArchivio()">👥&nbsp; Archivio pazienti</button>
           <button class="menu-item" onclick="menuStampa()">🖨&nbsp; Stampa giornata</button>
+          <button class="menu-item" onclick="menuBlocco()">🔒&nbsp; Blocca fascia oraria</button>
+          <button class="menu-item" onclick="menuCredenziali()">🔐&nbsp; Cambia credenziali</button>
+          <button class="menu-item" onclick="menuSistemaTS()">📋&nbsp; Sistema TS / 730</button>
           <div class="menu-divider"></div>
           <button class="menu-item menu-item--danger" onclick="menuLogout()">🚪&nbsp; Esci</button>
         </div>
       </div>
-      <h1 class="app-title">🏥 Agenda Studio</h1>
+      <h1 class="app-title">🏥 Agenda Ecografie</h1>
     </div>
     <div class="hdr-nav">
       <button class="btn-icon" id="btn-prev" title="Settimana precedente">&#8249;</button>
@@ -110,7 +113,7 @@
     <span class="mbb-icon">📅</span>
     <span class="mbb-lbl">Oggi</span>
   </button>
-  <button onclick="document.getElementById('btn-menu').click()">
+  <button onclick="toggleMenu()">
     <span class="mbb-icon">☰</span>
     <span class="mbb-lbl">Menu</span>
   </button>
@@ -135,6 +138,14 @@
         <div id="paz-selezionato" class="paz-selezionato hidden">
           <span id="paz-nome-display"></span>
           <button class="btn-link" id="btn-cambia-paz">cambia</button>
+        </div>
+        <!-- Dati paziente esistente: sola lettura + link modifica -->
+        <div id="paz-info-panel" class="paz-info-panel hidden">
+          <div class="paz-info-row"><span class="paz-info-lbl">📅 Nascita</span><span id="paz-info-nascita">—</span></div>
+          <div class="paz-info-row"><span class="paz-info-lbl">⚧ Sesso</span><span id="paz-info-sesso">—</span></div>
+          <div class="paz-info-row"><span class="paz-info-lbl">📱 Telefono</span><span id="paz-info-tel">—</span></div>
+          <div class="paz-info-row"><span class="paz-info-lbl">🪪 Cod. Fiscale</span><span id="paz-info-cf">—</span></div>
+          <button class="btn-link paz-info-edit" id="btn-modifica-paz" onclick="abilitaModificaPaz()">✏️ Modifica dati paziente</button>
         </div>
         <button class="btn-link" id="btn-nuovo-paz-toggle">+ Crea nuovo paziente</button>
       </div>
@@ -179,6 +190,26 @@
           <div class="field">
             <label>Email</label>
             <input type="email" id="np-email" placeholder="nome@esempio.it">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Via / Indirizzo</label>
+            <input type="text" id="np-indirizzo" placeholder="Via Roma">
+          </div>
+          <div class="field" style="max-width:80px">
+            <label>N° civico</label>
+            <input type="text" id="np-civico" placeholder="10">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field" style="max-width:100px">
+            <label>CAP residenza</label>
+            <input type="text" id="np-cap" placeholder="97016" maxlength="5">
+          </div>
+          <div class="field">
+            <label>Comune di residenza</label>
+            <input type="text" id="np-comune" placeholder="Pozzallo">
           </div>
         </div>
         <button class="btn-sec" id="btn-salva-nuovo-paz">✓ Salva paziente</button>
@@ -230,7 +261,7 @@
           <span>📱 Invia SMS di promemoria al paziente</span>
         </label>
         <small style="color:#6b7280;font-size:11px;display:block;margin-left:22px;margin-top:2px">
-          La sera prima e un'ora prima dell'appuntamento. Toglila per non inviare (utile per test).
+          La sera prima e un'ora prima dell'appuntamento. Toglila per non inviare SMS.
         </small>
       </div>
 
@@ -238,6 +269,12 @@
       <div class="field" id="field-stato">
         <label>Stato appuntamento</label>
         <div class="stato-btns" id="stato-btns"></div>
+      </div>
+
+      <!-- Numero documento/ricevuta (solo in modifica, appuntamento confermato) -->
+      <div class="field hidden" id="field-fattura">
+        <label>Numero documento / ricevuta</label>
+        <div id="fattura-info"></div>
       </div>
 
     </div>
@@ -362,10 +399,172 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════ MODAL CREDENZIALI ════════════════════════════ -->
+<div id="cred-overlay" class="modal-overlay hidden">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-hdr">
+      <h2>🔐 Cambia credenziali</h2>
+      <button class="btn-icon modal-close" onclick="chiudiCredenziali()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="field">
+        <label>Password attuale *</label>
+        <input type="password" id="cred-pass-attuale" autocomplete="current-password" placeholder="Password attuale">
+      </div>
+
+      <div class="field">
+        <label>Nuovo username <span style="font-weight:400;color:var(--muted)">(lascia vuoto per non cambiare)</span></label>
+        <input type="text" id="cred-nuovo-username" autocomplete="username" placeholder="es. medico">
+      </div>
+
+      <div class="field">
+        <label>Nuova password <span style="font-weight:400;color:var(--muted)">(lascia vuoto per non cambiare)</span></label>
+        <input type="password" id="cred-nuova-pass" autocomplete="new-password" placeholder="Nuova password">
+      </div>
+
+      <div class="field">
+        <label>Conferma nuova password</label>
+        <input type="password" id="cred-conferma-pass" autocomplete="new-password" placeholder="Ripeti la nuova password">
+      </div>
+
+      <div id="cred-err" class="login-err hidden"></div>
+
+      <p style="font-size:12px;color:var(--muted);margin-top:4px">
+        ⚠️ Dopo il salvataggio verrà inviata un'email di sicurezza e dovrai effettuare di nuovo il login.
+      </p>
+
+    </div>
+    <div class="modal-ftr">
+      <div></div>
+      <div class="modal-ftr-r">
+        <button class="btn-ghost" onclick="chiudiCredenziali()">Annulla</button>
+        <button class="btn-pri" id="btn-salva-cred" onclick="salvaCredenziali()">💾 Salva</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ MODAL BLOCCO FASCIA ══════════════════════════ -->
+<div id="blocco-overlay" class="modal-overlay hidden">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-hdr">
+      <h2>🔒 Blocca fascia oraria</h2>
+      <button class="btn-icon modal-close" onclick="chiudiBlocco()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="field">
+        <label>Data *</label>
+        <input type="date" id="blocco-data" required>
+      </div>
+
+      <div class="field">
+        <label>Fascia oraria *</label>
+        <div class="blocco-tipo-btns">
+          <button class="blocco-tipo-btn" data-tipo="mattina"
+            onclick="selezionaTipoBlocco('mattina',this)">
+            🌅 Mattina<br><small>08:00 – 14:00</small>
+          </button>
+          <button class="blocco-tipo-btn" data-tipo="pomeriggio"
+            onclick="selezionaTipoBlocco('pomeriggio',this)">
+            🌆 Pomeriggio<br><small>14:00 – 20:00</small>
+          </button>
+          <button class="blocco-tipo-btn" data-tipo="giornata"
+            onclick="selezionaTipoBlocco('giornata',this)">
+            📅 Giornata intera<br><small>08:00 – 20:00</small>
+          </button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Motivo (opzionale — visibile solo lato admin)</label>
+        <input type="text" id="blocco-motivo"
+          placeholder="es. Assenza studio, Formazione, Chiusura straordinaria…">
+      </div>
+
+    </div>
+    <div class="modal-ftr">
+      <div></div>
+      <div class="modal-ftr-r">
+        <button class="btn-ghost" onclick="chiudiBlocco()">Annulla</button>
+        <button class="btn-danger" id="btn-salva-blocco" onclick="salvaBlocco()">🔒 Blocca</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SISTEMA TS / 730 ════════════════════════════ -->
+<div id="ts-overlay" class="modal-overlay hidden">
+  <div class="modal" style="max-width:900px;width:95vw">
+    <div class="modal-hdr">
+      <h2>📋 Sistema TS / 730 — Spese sanitarie</h2>
+      <button class="btn-icon modal-close" onclick="chiudiSistemaTS()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Filtri -->
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+        <div class="field" style="flex:0 0 auto">
+          <label>Anno</label>
+          <select id="ts-anno" onchange="caricaTS()">
+            <option value="2026">2026</option>
+            <option value="2025">2025</option>
+            <option value="2024">2024</option>
+          </select>
+        </div>
+        <div class="field" style="flex:0 0 auto">
+          <label>Stato invio</label>
+          <select id="ts-filtro-stato" onchange="caricaTS()">
+            <option value="">Tutti</option>
+            <option value="no">Da inviare</option>
+            <option value="si">Già inviati</option>
+          </select>
+        </div>
+        <div style="flex:1"></div>
+        <div style="font-size:13px;color:var(--muted)" id="ts-contatore">—</div>
+      </div>
+
+      <!-- Tabella prestazioni -->
+      <div style="overflow-x:auto;max-height:55vh;overflow-y:auto">
+        <table class="ts-table" id="ts-table">
+          <thead>
+            <tr>
+              <th style="width:32px"><input type="checkbox" id="ts-check-all" onchange="tsToggleAll(this.checked)" title="Seleziona tutti"></th>
+              <th>Data</th>
+              <th>Paziente</th>
+              <th>CF Paziente</th>
+              <th>Prestazione</th>
+              <th>Importo €</th>
+              <th>Pagamento</th>
+              <th>Stato TS</th>
+            </tr>
+          </thead>
+          <tbody id="ts-tbody">
+            <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">Caricamento…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+    <div class="modal-ftr">
+      <div style="font-size:12px;color:var(--muted)">
+        Seleziona le prestazioni da inviare al Sistema Tessera Sanitaria (MEF)
+      </div>
+      <div class="modal-ftr-r">
+        <button class="btn-ghost" onclick="chiudiSistemaTS()">Chiudi</button>
+        <button class="btn-pri" id="btn-invia-ts" onclick="inviaSistemaTS()">
+          📤 Invia selezionati al Sistema TS
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Scripts -->
 <script src="/socket.io/socket.io.js"></script>
-<script src="/js/api.js?v=20260527d"></script>
+<script src="/js/api.js?v=20260528m"></script>
 <script src="/js/preparazione-esami.js?v=20260529a"></script>
-<script src="/js/app.js?v=20260531a"></script>
+<script src="/js/app.js?v=20260701a"></script>
 </body>
 </html>

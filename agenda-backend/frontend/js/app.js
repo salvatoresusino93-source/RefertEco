@@ -115,6 +115,8 @@ function initSocket() {
     s.on('appuntamento:nuovo',      refresh);
     s.on('appuntamento:aggiornato', refresh);
     s.on('appuntamento:annullato',  refresh);
+    s.on('indisponibilita:creata',  refresh);
+    s.on('indisponibilita:rimossa', refresh);
   } catch {}
 }
 
@@ -811,6 +813,60 @@ function menuLogout() {
 function menuArchivio() {
   chiudiMenu();
   apriArchivio();
+}
+
+// ─── Blocco fasce orarie (indisponibilità) ────────────────────────────────
+let _tipoBlocco = null;   // 'mattina' | 'pomeriggio' | 'giornata'
+
+function menuBlocco() {
+  chiudiMenu();
+  apriBlocco();
+}
+
+function apriBlocco(dateStr) {
+  _tipoBlocco = null;
+  $('blocco-data').value   = dateStr || toDateStr(new Date());
+  $('blocco-motivo').value = '';
+  document.querySelectorAll('.blocco-tipo-btn').forEach(b => b.classList.remove('active'));
+  $('blocco-overlay').classList.remove('hidden');
+}
+
+function chiudiBlocco(e) {
+  if (e && e.target !== e.currentTarget) return;   // click dentro il modal → ignora
+  $('blocco-overlay').classList.add('hidden');
+  _tipoBlocco = null;
+}
+
+function selezionaTipoBlocco(tipo, btn) {
+  _tipoBlocco = tipo;
+  document.querySelectorAll('.blocco-tipo-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+async function salvaBlocco() {
+  const data = $('blocco-data').value;
+  if (!data)         { alert('Seleziona una data'); return; }
+  if (!_tipoBlocco)  { alert('Seleziona una fascia oraria (mattina, pomeriggio o giornata)'); return; }
+
+  const btn = $('btn-salva-blocco');
+  btn.textContent = 'Blocco…'; btn.disabled = true;
+  try {
+    await api.creaIndisponibilita({
+      data,
+      tipo:   _tipoBlocco,
+      motivo: $('blocco-motivo').value.trim() || null,
+    });
+    $('blocco-overlay').classList.add('hidden');
+    _tipoBlocco = null;
+    await refreshWeek();
+  } catch (ex) {
+    // 409 = fascia già bloccata per quella data
+    alert(ex.status === 409
+      ? 'Esiste già un blocco per questa fascia oraria in questa data.'
+      : 'Errore: ' + ex.message);
+  } finally {
+    btn.textContent = '🔒 Blocca'; btn.disabled = false;
+  }
 }
 
 // ─── Archivio Pazienti ─────────────────────────────────────────────────────
