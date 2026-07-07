@@ -407,7 +407,15 @@ app.get('/api/orthanc/studi', async (req, res) => {
     const r = await orthancFetch('/studies?expand');
     if (!r.ok) return res.status(503).json({ error: 'Orthanc: ' + r.status });
     const tutti = await r.json();
-    const studi = tutti.map(s => {
+    // /studies?expand NON include il conteggio immagini (niente Statistics/Instances a
+    // livello di studio): va richiesto a parte per ogni studio, in parallelo.
+    const conteggi = await Promise.all(tutti.map(async s => {
+      try {
+        const st = await (await orthancFetch('/studies/' + s.ID + '/statistics')).json();
+        return parseInt(st.CountInstances || 0, 10);
+      } catch { return 0; }
+    }));
+    const studi = tutti.map((s, i) => {
       try {
         const pt = s.PatientMainDicomTags || {};
         const st = s.MainDicomTags || {};
@@ -420,12 +428,11 @@ app.get('/api/orthanc/studi', async (req, res) => {
         const rawDate = (st.StudyDate || '').replace(/\D/g, '');
         const studyDate = rawDate.length === 8
           ? rawDate.slice(6) + '/' + rawDate.slice(4, 6) + '/' + rawDate.slice(0, 4) : '';
-        const nInstances = parseInt(s.Statistics?.CountInstances || s.Instances?.length || 0, 10);
         return {
           id: s.ID, patientName, patientId: pt.PatientID || '', birthDate, studyDate,
           description: st.StudyDescription || st.RequestedProcedureDescription || '',
           modality: st.ModalitiesInStudy || '',
-          nInstances,
+          nInstances: conteggi[i],
           stabile: s.IsStable,
           rawDate: rawDate || '00000000',
         };
