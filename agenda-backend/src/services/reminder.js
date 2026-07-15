@@ -171,7 +171,7 @@ async function sincronizzaBlocchiGoogleCalendar() {
     const { error } = await supabase.from('blocchi_agenda').insert({
       data_ora_inizio: inizio,
       data_ora_fine:   fine,
-      motivo:          'Impegno personale',
+      motivo:          'Indisponibile',
       tipo:            'google_calendar',
       tutto_il_giorno: tuttoIlGiorno,
     });

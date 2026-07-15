@@ -111,7 +111,16 @@ router.get('/', async (req, res) => {
   // Merge con impegni personali del medico da Google Calendar / iCal
   const gcal = from && to ? await impegniGoogleCalendar(from, to) : [];
 
-  res.json([...(data || []), ...gcal]);
+  // I blocchi tipo='google_calendar' salvati nel DB (cron 06:00) duplicano gli
+  // eventi letti in diretta → se la lettura live è attiva vanno esclusi, altrimenti
+  // sull'agenda compaiono due scritte sovrapposte. In ogni caso il motivo non deve
+  // mai rivelare il titolo dell'evento privato: sempre e solo "Indisponibile".
+  const liveAttivo = gcal.length > 0 || getCreds() || icalConfigurato();
+  const blocchiDb = (data || [])
+    .filter(b => !(liveAttivo && b.tipo === 'google_calendar'))
+    .map(b => b.tipo === 'google_calendar' ? { ...b, motivo: 'Indisponibile' } : b);
+
+  res.json([...blocchiDb, ...gcal]);
 });
 
 // ─── POST /api/blocchi — crea blocco manuale ──────────────────────────────
