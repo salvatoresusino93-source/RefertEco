@@ -43,12 +43,14 @@ async function impegniGoogleCalendar(from, to) {
       return eventi
         .filter(ev => ev.transparency !== 'transparent' && ev.status !== 'cancelled')
         .map(ev => {
+          // Non mostrare mai il titolo reale dell'evento Google Calendar (privacy):
+          // sul calendario dello studio appare solo "Indisponibile".
           if (ev.start?.dateTime && ev.end?.dateTime) {
             return {
               id:              `gcal_${ev.id}`,
               data_ora_inizio: ev.start.dateTime,
               data_ora_fine:   ev.end.dateTime,
-              motivo:          ev.summary || 'Impegno personale',
+              motivo:          'Indisponibile',
               tipo:            'gcal',
               tutto_il_giorno: false,
             };
@@ -57,7 +59,7 @@ async function impegniGoogleCalendar(from, to) {
               id:              `gcal_${ev.id}`,
               data_ora_inizio: makeRomeDateTime(ev.start.date, 0).toISOString(),
               data_ora_fine:   makeRomeDateTime(ev.end.date,   0).toISOString(),
-              motivo:          ev.summary || 'Impegno personale',
+              motivo:          'Indisponibile',
               tipo:            'gcal',
               tutto_il_giorno: true,
             };
@@ -78,7 +80,7 @@ async function impegniGoogleCalendar(from, to) {
         id:              `ical_${b.data_ora_inizio}`,
         data_ora_inizio: b.data_ora_inizio,
         data_ora_fine:   b.data_ora_fine,
-        motivo:          'Impegno personale',
+        motivo:          'Indisponibile',
         tipo:            'gcal',
         tutto_il_giorno: false,
       }));

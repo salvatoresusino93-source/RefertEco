@@ -250,7 +250,7 @@ function renderCalendar() {
           onclick="onSlotBlockedClick('${esc(bloccoGiorno.motivo)}')"></div>`;
       } else if (bloccoSlot && !isWeekend) {
         slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
-          onclick="onSlotBlockedClick('${esc(bloccoSlot.motivo || 'Impegno personale')}')"></div>`;
+          onclick="onSlotBlockedClick('${esc(bloccoSlot.motivo || 'Indisponibile')}')"></div>`;
       } else if (indispSlot) {
         const fasciaLabel = {mattina:'Mattina bloccata',pomeriggio:'Pomeriggio bloccato',giornata:'Giornata bloccata',personalizzata:'Fascia bloccata'}[indispSlot.tipo] || 'Fascia bloccata';
         slots += `<div class="cal-slot cal-slot-blocked" style="top:${m*PX_PER_MIN}px;height:${SLOT_H}px"
@@ -277,7 +277,7 @@ function renderCalendar() {
         const top    = (startM - CAL_START*60) * PX_PER_MIN;
         const height = Math.max((endM - startM) * PX_PER_MIN, 22);
         if (top < 0 || top >= totalPx) continue;
-        const motivo = esc(b.motivo || 'Impegno personale');
+        const motivo = esc(b.motivo || 'Indisponibile');
         blocchiTimedHtml += `<div class="cal-blocco"
           style="top:${top}px;height:${height}px"
           onclick="onSlotBlockedClick('${motivo}')">
