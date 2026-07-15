@@ -159,8 +159,11 @@ router.post('/', async (req, res) => {
   // Notifica email al medico
   notificaNuovoAppuntamento(data).catch(() => {});
 
-  // SMS conferma prenotazione al paziente (immediato)
-  inviaSmsConferma(data).catch(e => console.error('[SMS] Conferma prenotazione:', e.message));
+  // SMS conferma prenotazione al paziente (immediato) — rispetta la spunta
+  // "Invia SMS di promemoria": se disattivata, nessun SMS per questo appuntamento.
+  if (data.invia_sms_promemoria !== false) {
+    inviaSmsConferma(data).catch(e => console.error('[SMS] Conferma prenotazione:', e.message));
+  }
 
   // Google Calendar — crea evento (ID appuntamento salvato in extendedProperties)
   creaEvento(data).catch(e => console.error('[GCal] Crea evento:', e.message));
@@ -178,7 +181,7 @@ router.post('/', async (req, res) => {
                     appData.getMonth()     === domani.getMonth()    &&
                     appData.getDate()      === domani.getDate();
 
-    if (eDomani && eDopoMezzogiorno) {
+    if (eDomani && eDopoMezzogiorno && data.invia_sms_promemoria !== false) {
       inviaPromemoria(data).catch(e => console.error('[SMS] Promemoria immediato:', e.message));
     }
   } catch (e) {
