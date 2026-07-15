@@ -259,7 +259,10 @@ Le variabili sono nel Railway dashboard. Categorie:
    - Case ID: **1-7862000040720** (inviata 2026-05-27)
    - Quando arriva email: POST `/api/gbp/set-regular-hours` + `/api/gbp/aggiorna-orari`
 
-2. **(Futuro) Accesso remoto immagini Orthanc con password** — da casa via HP
+2. **(Futuro) Accesso remoto a Orthanc + app universale** (deciso 2026-07-15):
+   - **Tailscale** su workstation HP + telefono/portatile → RefertEco (`http://NOME-PC:3000`) e Orthanc (`:8042`) raggiungibili da fuori studio, niente esposto su internet
+   - **Cambiare password Orthanc** (admin/admin00 troppo debole) PRIMA di aprire ad altri dispositivi
+   - **App universale**: installer Windows (Inno Setup) per installare RefertEco su qualsiasi PC; `ORTHANC_BASE` configurabile in config.json (oggi hardcoded `localhost:8042` in server.js); upload DICOM dall'esterno già possibile via drag&drop + `/api/orthanc/archivia`
 
 3. **Adware "Garanzia Reparo" + AnyDesk** in All Users Startup dell'HP
    - Appaiono come popup all'avvio — non urgente ma da rimuovere
