@@ -582,14 +582,18 @@ app.get('/api/orthanc/istanze-nuove', async (req, res) => {
 
     // Lista istanze dello studio
     const instArr = await (await orthancFetch('/studies/' + studyId + '/instances')).json();
-    const nuove = (instArr || [])
+    const nuoveIds = (instArr || [])
       .filter(inst => {
         if (giàViste.has(inst.ID)) return false;
         const nf = parseInt((inst.MainDicomTags && inst.MainDicomTags.NumberOfFrames) || '1', 10);
         return nf <= 1; // salta video/cine
       })
-      .map(inst => ({ id: inst.ID }));
-    res.json(nuove);
+      .map(inst => inst.ID);
+    // Orthanc restituisce le istanze in ordine ARBITRARIO (non cronologico): se in un solo
+    // giro di polling arrivano più immagini nuove insieme, vanno riordinate per data/ora di
+    // acquisizione prima di importarle una a una, altrimenti finiscono fuori ordine nel viewer.
+    const nuoveIdOrdinati = await _ordinaIstanzeCronologico(nuoveIds);
+    res.json(nuoveIdOrdinati.map(id => ({ id })));
   } catch (e) {
     res.json([]);
   }
