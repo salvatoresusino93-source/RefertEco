@@ -7,7 +7,7 @@ const path    = require('path');
 
 const jwt = require('jsonwebtoken');
 const { initSocket, getIO } = require('./socket');
-const { avviaReminder, inviaPromemoriDomani } = require('./services/reminder');
+const { avviaReminder, inviaPromemoriDomani, inviaRichiesteRecensione } = require('./services/reminder');
 const supabase = require('./services/supabase');
 const { costruisciEventoWebhook } = require('./services/stripe');
 const { creaEvento } = require('./services/googleCalendar');
@@ -41,6 +41,48 @@ app.use((req, res, next) => {
     return res.redirect(302, 'https://studiosusino.it');
   }
   next();
+});
+
+// ─── Sottodominio prenota.studiosusino.it ─────────────────────────────────
+// Stessa applicazione, stesso database, stessa agenda: cambia solo l'indirizzo
+// che vede il paziente. Serve a non mandarlo su un URL tecnico tipo
+// "referteco-production.up.railway.app", che fa scappare la gente.
+//
+// Su questo sottodominio lasciamo passare SOLO ciò che serve a prenotare:
+//   /prenota            la pagina di prenotazione
+//   /privacy            l'informativa, linkata dal modulo
+//   /api/public/*       esami, disponibilità, invio prenotazione, webhook Stripe
+//   /api/prenota/*      conferma/rifiuto dal link nell'email al medico
+//   /api/health         controllo che il servizio sia vivo
+//   file statici        css, js, immagini, icone
+// Tutto il resto (login e API dell'agenda) viene mandato al sito vetrina: il
+// gestionale non deve essere raggiungibile da un indirizzo pubblicizzato ai
+// pazienti.
+const PRENOTA_HOST = 'prenota.studiosusino.it';
+const PRENOTA_CONSENTITI = [
+  /^\/prenota\/?$/,
+  /^\/privacy\/?$/,
+  /^\/api\/public(\/|$)/,
+  /^\/api\/prenota(\/|$)/,
+  /^\/api\/health$/,
+  /^\/(css|js|images|icons)\//,
+  /^\/(favicon\.svg|manifest\.json)$/,
+];
+
+app.use((req, res, next) => {
+  if (req.hostname !== PRENOTA_HOST) return next();
+
+  // La radice porta direttamente al modulo di prenotazione
+  if (req.path === '/') return res.redirect(302, '/prenota');
+
+  if (PRENOTA_CONSENTITI.some(r => r.test(req.path))) {
+    // Il modulo di prenotazione non deve comparire su Google come pagina a sé:
+    // la pagina "vetrina" indicizzata resta studiosusino.it/prenota.html
+    res.set('X-Robots-Tag', 'noindex, follow');
+    return next();
+  }
+
+  return res.redirect(302, 'https://studiosusino.it');
 });
 
 // ─── Webhook Stripe (pagamento visita) ────────────────────────────────────
@@ -249,6 +291,18 @@ app.post('/api/reminder/test', async (req, res) => {
   try {
     const result = await inviaPromemoriDomani();
     res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Test invito recensione (esami refertati ieri) ────────────────────────
+// Serve a provarlo subito senza aspettare le 11:00. Chiamarlo più volte non
+// genera doppioni: ogni appuntamento viene marcato appena l'SMS parte.
+app.post('/api/recensione/test', async (req, res) => {
+  try {
+    const result = await inviaRichiesteRecensione();
+    res.json(result || { ok: true, nota: 'SMS_RECENSIONE non attivo: nessun invio.' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

@@ -182,8 +182,12 @@ router.post('/aggiorna-orari', requireAuth, async (req, res) => {
 // Imposta il pulsante "Prenota" su Google che punta a /prenota
 // (può richiedere l'approvazione API GBP se GBP_LOCATION_NAME non è impostato)
 router.post('/set-booking-url', requireAuth, async (req, res) => {
-  const APP_URL   = process.env.APP_URL || 'https://referteco-production.up.railway.app';
-  const bookingUrl = req.body.url || `${APP_URL}/prenota`;
+  // NB: NON usare APP_URL — quello punta a conferma.studiosusino.it, che
+  // reindirizza al sito vetrina: il pulsante "Prenota" su Google finirebbe in
+  // homepage invece che sul modulo. Serve il dominio che serve davvero
+  // /prenota, cioè la stessa variabile usata per i ritorni da Stripe.
+  const BASE_URL   = process.env.PUBLIC_BASE_URL || 'https://referteco-production.up.railway.app';
+  const bookingUrl = req.body.url || `${BASE_URL}/prenota`;
   try {
     const result = await impostaUrlPrenotazione(bookingUrl);
     res.json({ ok: true, url: bookingUrl, result });

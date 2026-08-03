@@ -6,7 +6,7 @@
 
 const cron    = require('node-cron');
 const supabase = require('./supabase');
-const { inviaPromemoria, inviaPromemoria1Ora } = require('./sms');
+const { inviaPromemoria, inviaPromemoria1Ora, inviaRichiestaRecensione } = require('./sms');
 const { popolaFestivita } = require('./festivita');
 const { leggiEventiPersonali, getCreds } = require('./googleCalendar');
 const { aggiornaOreSettimana } = require('./googleBusiness');
@@ -131,6 +131,92 @@ async function controllaSmsUnaOra() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// INVITO A LASCIARE UNA RECENSIONE SU GOOGLE
+//
+// Il giorno dopo l'esame parte un SMS con il link alla recensione. Chiediamo
+// SOLO a chi l'esame l'ha davvero fatto: lo stato 'refertato' è il segnale
+// affidabile (il referto è stato consegnato). Chi non si è presentato, ha
+// disdetto o è ancora 'prenotato' non viene contattato.
+//
+// Si attiva impostando su Railway:
+//   SMS_RECENSIONE = true
+//   GOOGLE_REVIEW_URL = https://g.page/r/.../review
+// Senza queste due variabili la funzione non fa nulla.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Diversamente dai promemoria, l'invito alla recensione va anche a chi ha
+// pagato online: sono i pazienti più soddisfatti, escluderli sarebbe un
+// autogol. Resta valida la spunta "Invia SMS" del singolo appuntamento.
+async function inviaRichiesteRecensione() {
+  if (process.env.SMS_RECENSIONE !== 'true') return;
+
+  if (!process.env.GOOGLE_REVIEW_URL) {
+    console.warn('[SMS Recensione] GOOGLE_REVIEW_URL non impostata — niente invii.');
+    return;
+  }
+
+  // Finestra: la giornata di ieri
+  const ieri = new Date();
+  ieri.setDate(ieri.getDate() - 1);
+  ieri.setHours(0, 0, 0, 0);
+  const oggi = new Date(ieri);
+  oggi.setDate(oggi.getDate() + 1);
+
+  const { data, error } = await supabase
+    .from('appuntamenti')
+    .select('*, pazienti(*), tipi_prestazione(*)')
+    .eq('stato', 'refertato')
+    .is('sms_recensione_at', null)
+    .gte('data_ora_inizio', ieri.toISOString())
+    .lt('data_ora_inizio', oggi.toISOString());
+
+  if (error) {
+    console.error('[SMS Recensione] Errore lettura appuntamenti:', error.message);
+    return;
+  }
+  if (!data || data.length === 0) {
+    console.log('[SMS Recensione] Nessun esame refertato ieri. Nessun invito.');
+    return;
+  }
+
+  console.log(`[SMS Recensione] ${data.length} esami refertati ieri.`);
+
+  let inviati = 0, saltati = 0, errori = 0;
+
+  for (const app of data) {
+    const nome = app.pazienti ? `${app.pazienti.nome} ${app.pazienti.cognome}` : app.id;
+
+    if (!app.pazienti?.telefono) {
+      console.log(`  [SALTATO] ${nome} — nessun numero di telefono`);
+      saltati++;
+      continue;
+    }
+    if (app.invia_sms_promemoria === false) {
+      console.log(`  [SALTATO] ${nome} — SMS disattivati per questo appuntamento`);
+      saltati++;
+      continue;
+    }
+
+    try {
+      const result = await inviaRichiestaRecensione(app);
+      // Segniamo subito: se il server si riavvia, nessuno riceve il doppione.
+      await supabase
+        .from('appuntamenti')
+        .update({ sms_recensione_at: new Date().toISOString() })
+        .eq('id', app.id);
+      console.log(`  [OK] ${nome} → ${result.numero}`);
+      inviati++;
+    } catch (e) {
+      console.error(`  [ERRORE] ${nome} → ${e.message}`);
+      errori++;
+    }
+  }
+
+  console.log(`[SMS Recensione] Fine — Inviati: ${inviati}, Saltati: ${saltati}, Errori: ${errori}`);
+  return { ok: true, inviati, saltati, errori, totale: data.length };
+}
+
 // ─── Sincronizza impegni personali da Google Calendar → blocchi_agenda ───
 async function sincronizzaBlocchiGoogleCalendar() {
   if (!getCreds()) {
@@ -224,6 +310,15 @@ function avviaReminder() {
   // Ogni minuto → controlla appuntamenti tra 1 ora
   cron.schedule('* * * * *', controllaSmsUnaOra);
 
+  // Ogni giorno alle 11:00 → invito alla recensione per gli esami di ieri.
+  // Le 11:00 sono un buon momento: la giornata è iniziata, il paziente ha in
+  // mente l'esame del giorno prima e non è né troppo presto né sera tardi.
+  cron.schedule('0 11 * * *', () => {
+    inviaRichiesteRecensione().catch(e =>
+      console.error('[SMS Recensione] Errore:', e.message)
+    );
+  }, { timezone: 'Europe/Rome' });
+
   // Ogni 1 gennaio alle 09:00 → popola festività anno nuovo
   cron.schedule('0 9 1 1 *', () => {
     const anno = new Date().getFullYear();
@@ -249,7 +344,7 @@ function avviaReminder() {
   // All'avvio: allinea subito gli orari
   aggiornaOreSettimana().catch(e => console.error('[GBP avvio]', e.message));
 
-  console.log('[SMS Reminder] Cron job attivi — 19:00 SMS + 1h prima + sync GCal ogni 30min + GBP ogni 30min (Europe/Rome)');
+  console.log('[SMS Reminder] Cron job attivi — 19:00 SMS + 1h prima + recensione 11:00 + sync GCal ogni 30min + GBP ogni 30min (Europe/Rome)');
 
   // All'avvio: popola festività anno corrente e prossimo se non già presenti
   const annoOra = new Date().getFullYear();
@@ -257,4 +352,4 @@ function avviaReminder() {
   popolaFestivita(annoOra + 1).catch(e => console.error('[Festività avvio]', e.message));
 }
 
-module.exports = { avviaReminder, inviaPromemoriDomani };
+module.exports = { avviaReminder, inviaPromemoriDomani, inviaRichiesteRecensione };

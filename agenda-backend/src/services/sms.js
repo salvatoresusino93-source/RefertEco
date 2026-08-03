@@ -176,4 +176,39 @@ async function inviaSmsAnnullamento(appuntamento) {
   return { sid: result.id || 'ok', numero, testo };
 }
 
-module.exports = { inviaPromemoria, inviaPromemoria1Ora, inviaSmsConferma, inviaSmsAnnullamento, normalizzaNumero };
+// ─── SMS invito a lasciare una recensione (il giorno dopo l'esame) ────────
+// Testo volutamente corto: un SMS si paga ogni 160 caratteri, e un messaggio
+// breve si legge per intero già nell'anteprima della notifica.
+async function inviaRichiestaRecensione(appuntamento) {
+  const p = appuntamento.pazienti;
+  if (!p) throw new Error('Dati paziente mancanti');
+
+  const numero = normalizzaNumero(p.telefono);
+  if (!numero) throw new Error(`Numero non valido: "${p.telefono}"`);
+
+  const link = process.env.GOOGLE_REVIEW_URL;
+  if (!link) throw new Error('GOOGLE_REVIEW_URL non impostata');
+
+  const testo =
+    `${STUDIO}: grazie della visita. ` +
+    `Se ti sei trovato bene, una recensione su Google ci aiuta molto: ${link}`;
+
+  if (testo.length > 160) {
+    console.warn(
+      `[SMS Recensione] Testo di ${testo.length} caratteri: partirà come 2 SMS ` +
+      `(costo doppio). Accorcia STUDIO_NOME oppure usa un link più corto.`
+    );
+  }
+
+  const result = await inviaSms(numero, testo);
+  return { sid: result.id || 'ok', numero, testo };
+}
+
+module.exports = {
+  inviaPromemoria,
+  inviaPromemoria1Ora,
+  inviaSmsConferma,
+  inviaSmsAnnullamento,
+  inviaRichiestaRecensione,
+  normalizzaNumero,
+};
