@@ -166,7 +166,13 @@ async function notificaPrenotazioneOnline(appuntamento, tokenJwt) {
   const resend = getResend();
   if (!resend) return;
 
-  const BASE_URL  = process.env.APP_URL || 'https://referteco-production.up.railway.app';
+  // NB: NON usare APP_URL come fallback — quello punta a conferma.studiosusino.it
+  // (dominio riservato ai link SMS di conferma presenza paziente: in app.js
+  // reindirizza a studiosusino.it qualsiasi percorso diverso da /p/...).
+  // Se usato qui, il click del medico su "Conferma"/"Rifiuta" nell'email
+  // finirebbe reindirizzato al sito vetrina invece di raggiungere
+  // /api/prenota/conferma|rifiuta — la prenotazione non viene mai confermata.
+  const BASE_URL  = process.env.PUBLIC_BASE_URL || 'https://referteco-production.up.railway.app';
   const paziente  = appuntamento.pazienti;
   const esame     = appuntamento.tipi_prestazione;
   const nome      = paziente ? `${paziente.cognome} ${paziente.nome}` : '—';
