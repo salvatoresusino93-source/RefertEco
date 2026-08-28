@@ -29,33 +29,51 @@
 // l'SMS. Per questo ogni funzione qui sotto invia un template con dei
 // parametri, non una stringa qualsiasi.
 //
-// Testo dei modelli da creare su Meta (categoria Utility, lingua "it") —
-// IDENTICI parola per parola all'SMS equivalente in services/sms.js: se
-// modifichi un testo qui, aggiorna anche l'SMS gemello, e viceversa.
+// VINCOLI META SUI TEMPLATE (scoperti creando il primo modello, ago 2026):
+// Meta rifiuta un modello che abbia "troppe variabili rispetto alla sua
+// lunghezza", e NON permette che il testo inizi o finisca con una
+// variabile. Per questo i modelli qui sotto non possono essere identici
+// parola per parola all'SMS gemello: usano MENO variabili, con nome dello
+// studio e contatti scritti come testo FISSO dentro il modello.
+// Conseguenza pratica: se cambiano il nome dello studio, il telefono o il
+// sito, NON basta cambiare la variabile d'ambiente — va rifatto e
+// riapprovato il modello su Meta.
+//
+//   promemoria_appuntamento  (gemello: sms.js → inviaPromemoria)
+//   ────────────────────────  ✅ APPROVATO/IN USO — 2 variabili
+//   Promemoria dello Studio Ecografico Dr. Susino: il Suo appuntamento è
+//   domani, {{1}}. Confermi la presenza o disdica cliccando qui: {{2}}
+//   Info: studiosusino.it - 351 374 6102.
+//      {{1}} = data + ora insieme (es. "venerdì 5 settembre alle ore 10:30")
+//      {{2}} = link di conferma presenza (/p/:token)
+//   Validità impostata su Meta: 12 ore (il default di 10 minuti è troppo
+//   corto: se il paziente ha il telefono spento, il messaggio si perde).
+//
+// ── I modelli qui sotto NON sono ancora stati creati su Meta ───────────
+// Le funzioni che li userebbero esistono ma non sono collegate a nessuna
+// route (vedi PR #3: la conferma resta solo SMS). Se un giorno si vorranno
+// attivare, vanno prima creati e approvati su Meta RISPETTANDO i vincoli
+// descritti sopra — i testi seguenti sono bozze col vecchio formato a più
+// variabili e verrebbero probabilmente rifiutati così come sono.
 //
 //   conferma_prenotazione  (gemello: sms.js → inviaSmsConferma)
-//   ──────────────────────
+//   ──────────────────────  ⚠️ bozza, non creato su Meta
 //   Gentile paziente, la sua prenotazione è confermata: {{1}} alle ore
 //   {{2}} presso lo {{3}}. Per info: {{4}}.
 //
-//   promemoria_appuntamento  (gemello: sms.js → inviaPromemoria)
-//   ────────────────────────
-//   Promemoria {{1}}: appuntamento domani {{2}} ore {{3}}. Conferma o
-//   disdici qui: {{4}} Info: {{5}}
-//
 //   promemoria_1ora  (gemello: sms.js → inviaPromemoria1Ora)
-//   ─────────────────
+//   ─────────────────  ⚠️ bozza, non creato su Meta
 //   PROMEMORIA: Gentile paziente, il suo appuntamento è tra un'ora, alle
 //   ore {{1}} presso lo {{2}}. Per info: {{3}}.
 //
 //   richiesta_recensione  (gemello: sms.js → inviaRichiestaRecensione)
-//   ──────────────────────
+//   ──────────────────────  ⚠️ bozza, non creato su Meta
 //   {{1}}: grazie della visita. Se ti sei trovato bene, una recensione su
 //   Google ci aiuta molto: {{2}}
 //
 //   annullamento_appuntamento  (gemello: sms.js → inviaSmsAnnullamento —
 //   pronto, non ancora collegato a nessuna route, come il suo gemello SMS)
-//   ─────────────────────────────────────────────────────────────────
+//   ─────────────────────────────────────────  ⚠️ bozza, non creato su Meta
 //   Gentile paziente, il suo appuntamento del {{1}} alle ore {{2}} è stato
 //   annullato. Per info o nuova prenotazione: {{3}}.
 //
@@ -191,11 +209,13 @@ async function inviaWhatsappPromemoria(appuntamento) {
   const numero = normalizzaNumero(p.telefono);
   if (!numero) throw new Error(`Numero non valido: "${p.telefono}"`);
 
-  const data = fmtData(appuntamento.data_ora_inizio);
-  const ora  = fmtOra(appuntamento.data_ora_inizio);
-  const link = await urlConferma(appuntamento);
+  // Il template Meta ha solo 2 variabili: data+ora unite in una sola, e il
+  // link. Nome studio e contatti sono testo fisso nel modello approvato —
+  // vedi la nota sui vincoli Meta in cima al file.
+  const dataOra = `${fmtData(appuntamento.data_ora_inizio)} alle ore ${fmtOra(appuntamento.data_ora_inizio)}`;
+  const link    = await urlConferma(appuntamento);
 
-  const result = await inviaTemplate(numero, TEMPLATE_PROMEMORIA, [STUDIO, data, ora, link, infoContatto()]);
+  const result = await inviaTemplate(numero, TEMPLATE_PROMEMORIA, [dataOra, link]);
   return { id: result.messages?.[0]?.id || 'ok', numero };
 }
 
