@@ -105,9 +105,19 @@ router.get('/:code/si', async (req, res) => {
   if (!app)              return res.status(404).send(page('Link non valido','❓','Link non valido o scaduto.','#f59e0b',false));
   if (app.stato === 'annullato') return res.send(page('Annullato','ℹ️','Questo appuntamento è già annullato.','#3b82f6',false));
 
-  await supabase.from('appuntamenti')
+  const { error: errConf } = await supabase.from('appuntamenti')
     .update({ conferma_paziente: 'confermato', updated_at: new Date().toISOString() })
     .eq('id', app.id);
+
+  // Prima l'esito non veniva controllato: se la colonna conferma_paziente
+  // mancasse sul database, la conferma sarebbe fallita in silenzio e il
+  // paziente avrebbe visto comunque "Presenza confermata".
+  if (errConf) {
+    console.error('[Presenza] Salvataggio conferma fallito:', errConf.message);
+    return res.status(500).send(page('Errore', '⚠️',
+      'Non siamo riusciti a registrare la conferma. Riprova tra poco o chiama lo studio.',
+      '#ef4444', false));
+  }
 
   try { getIO().emit('appuntamento:aggiornato', { ...app, conferma_paziente: 'confermato' }); } catch {}
 
@@ -122,7 +132,7 @@ router.get('/:code/no', async (req, res) => {
   if (!app)              return res.status(404).send(page('Link non valido','❓','Link non valido o scaduto.','#f59e0b',false));
   if (app.stato === 'annullato') return res.send(page('Già annullato','ℹ️','Questo appuntamento risulta già annullato.','#3b82f6',false));
 
-  await supabase.from('appuntamenti')
+  const { error: errDisd } = await supabase.from('appuntamenti')
     .update({
       stato: 'annullato',
       worklist_status: 'not_needed',
@@ -130,6 +140,16 @@ router.get('/:code/no', async (req, res) => {
       updated_at: new Date().toISOString(),
     })
     .eq('id', app.id);
+
+  // Come sopra: senza questo controllo una disdetta fallita mostrava
+  // comunque "Appuntamento disdetto" al paziente, che quindi non si
+  // presentava, mentre in agenda l'appuntamento restava attivo.
+  if (errDisd) {
+    console.error('[Presenza] Salvataggio disdetta fallito:', errDisd.message);
+    return res.status(500).send(page('Errore', '⚠️',
+      'Non siamo riusciti a registrare la disdetta. Chiama lo studio per annullare l\'appuntamento.',
+      '#ef4444', false));
+  }
 
   try { getIO().emit('appuntamento:annullato', { id: app.id }); } catch {}
   // Avvisa il medico via email così può richiamare/riempire lo slot

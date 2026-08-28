@@ -320,12 +320,14 @@ function renderCalendar() {
       const stato   = a.stato || 'prenotato';
       const pazNome = a.pazienti ? `${esc(a.pazienti.cognome)} ${esc(a.pazienti.nome)}` : '—';
       const esame   = esc(a.tipi_prestazione?.nome || '');
+      // Il paziente ha risposto al promemoria confermando la presenza
+      const conf    = a.conferma_paziente === 'confermato';
 
-      appHtml += `<div class="cal-app stato-${stato}"
+      appHtml += `<div class="cal-app stato-${stato}${conf?' confermato':''}"
         style="top:${top}px;height:${height}px"
         onclick="onAppClick('${a.id}',event)"
-        title="${pazNome} — ${esame}">
-        <div class="cal-app-time">${fmtTime(a.data_ora_inizio)}</div>
+        title="${pazNome} — ${esame}${conf?' — presenza confermata dal paziente':''}">
+        <div class="cal-app-time">${fmtTime(a.data_ora_inizio)}${conf?'<span class="conf-tick" aria-label="presenza confermata">✅</span>':''}</div>
         <div class="cal-app-nome">${pazNome}</div>
         ${height>=50?`<div class="cal-app-esame">${esame}</div>`:''}
       </div>`;
@@ -430,8 +432,10 @@ async function refreshSidebar() {
     el.innerHTML = list.map(a => {
       const nome  = a.pazienti ? `${esc(a.pazienti.cognome)} ${esc(a.pazienti.nome)}` : '—';
       const esame = esc(a.tipi_prestazione?.nome || '');
-      return `<div class="sidebar-item stato-${a.stato}" onclick="onAppClick('${a.id}')">
-        <div class="sidebar-time">${fmtTime(a.data_ora_inizio)}</div>
+      const conf  = a.conferma_paziente === 'confermato';
+      return `<div class="sidebar-item stato-${a.stato}${conf?' confermato':''}" onclick="onAppClick('${a.id}')"
+              title="${conf?'Presenza confermata dal paziente':'In attesa di risposta al promemoria'}">
+        <div class="sidebar-time">${fmtTime(a.data_ora_inizio)}${conf?'<span class="conf-tick" aria-label="presenza confermata">✅</span>':''}</div>
         <div class="sidebar-nome">${nome}</div>
         <div class="sidebar-esame">${esame}</div>
       </div>`;
@@ -524,6 +528,7 @@ function openModal(opts={}) {
   $('app-note').value   = '';
   $('app-invia-sms').checked = true; // default: invia promemoria
   $('prep-reminder').classList.add('hidden');
+  $('field-presenza').style.display = 'none';
   $('field-stato').style.display = 'none';
   $('btn-annulla-app').classList.add('hidden');
   $('nuovo-paz-form').classList.add('hidden');
@@ -560,9 +565,28 @@ async function loadAppInModal(id) {
     $('app-durata').value = Math.round((new Date(a.data_ora_fine)-new Date(a.data_ora_inizio))/60000);
     $('app-note').value = a.note_segreteria || '';
     $('app-invia-sms').checked = a.invia_sms_promemoria !== false; // default true
+    renderPresenza(a.conferma_paziente);
     $('field-stato').style.display = '';
     renderStatoBtns(a.stato);
   } catch { alert('Errore nel caricamento'); closeModal(); }
+}
+
+// ─── Risposta del paziente al promemoria SMS ──────────────────────────────
+// conferma_paziente vale 'confermato' se ha premuto CONFERMO nel link del
+// promemoria, 'disdetto' se ha disdetto (in quel caso l'appuntamento è già
+// annullato e sparisce dall'agenda), oppure è vuoto se non ha ancora
+// risposto. "In attesa" NON significa che non verrà: la maggior parte dei
+// pazienti si presenta senza rispondere al messaggio.
+function renderPresenza(stato) {
+  const box = $('app-presenza');
+  if (!box) return;
+  const testo = stato === 'confermato'
+    ? '<span style="color:#16a34a;font-weight:700">✅ Confermata dal paziente</span>'
+    : stato === 'disdetto'
+      ? '<span style="color:#dc2626;font-weight:700">❌ Disdetta dal paziente</span>'
+      : '<span style="color:#64748b">⏳ Nessuna risposta al promemoria</span>';
+  box.innerHTML = testo;
+  $('field-presenza').style.display = '';
 }
 
 function renderStatoBtns(attuale) {
