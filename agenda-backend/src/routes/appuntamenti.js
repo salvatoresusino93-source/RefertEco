@@ -287,6 +287,45 @@ router.put('/:id', async (req, res) => {
 
 router.patch = router.put; // PATCH è alias di PUT per aggiornamenti parziali
 
+// ─── POST /api/appuntamenti/:id/reinvia-conferma ──────────────────────────
+// Rimanda al paziente l'SMS di conferma e (ri)scrive l'evento su Google
+// Calendar per un appuntamento già confermato.
+//
+// Serve a recuperare i casi in cui la conferma non è mai partita: prima del
+// fix in questa stessa route, approvare una prenotazione online dall'agenda
+// cambiava solo lo stato, senza avvisare il paziente né creare l'evento.
+// Utile anche quando il paziente dice di non aver ricevuto nulla.
+//
+// creaEvento() è idempotente rispetto ai doppioni: cerca l'appuntamento per
+// il suo ID salvato in extendedProperties, quindi richiamarlo non crea due
+// eventi uguali sul calendario.
+router.post('/:id/reinvia-conferma', async (req, res) => {
+  const { data: app, error } = await supabase
+    .from('appuntamenti')
+    .select('*, pazienti(*), tipi_prestazione(*)')
+    .eq('id', req.params.id)
+    .single();
+
+  if (error || !app) return res.status(404).json({ error: 'Appuntamento non trovato' });
+  if (app.stato === 'annullato') {
+    return res.status(400).json({ error: 'Appuntamento annullato: nessun SMS inviato.' });
+  }
+  if (!app.pazienti?.telefono) {
+    return res.status(400).json({ error: 'Il paziente non ha un numero di telefono.' });
+  }
+
+  // A differenza degli invii automatici, qui l'esito viene atteso e
+  // riportato: è un'azione manuale, il medico deve sapere se è andata.
+  try {
+    const esito = await inviaSmsConferma(app);
+    creaEvento(app).catch(e => console.error('[GCal] Reinvia conferma:', e.message));
+    res.json({ ok: true, numero: esito.numero, testo: esito.testo });
+  } catch (e) {
+    console.error('[SMS] Reinvio conferma fallito:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── DELETE /api/appuntamenti/:id — soft delete (stato = annullato) ───────
 router.delete('/:id', async (req, res) => {
   const { data, error } = await supabase

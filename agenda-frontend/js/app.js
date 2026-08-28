@@ -458,6 +458,7 @@ function bindEvents() {
   $('btn-modal-cancel').onclick = closeModal;
   $('btn-salva-app').onclick    = salvaApp;
   $('btn-annulla-app').onclick  = annullaApp;
+  $('btn-reinvia-sms').onclick  = reinviaSmsConferma;
   $('app-tipo').onchange = () => {
     const p = _prestazioni.find(x => x.id===$('app-tipo').value);
     if (p) $('app-durata').value = p.durata_minuti;
@@ -531,6 +532,7 @@ function openModal(opts={}) {
   $('field-presenza').style.display = 'none';
   $('field-stato').style.display = 'none';
   $('btn-annulla-app').classList.add('hidden');
+  $('btn-reinvia-sms').classList.add('hidden');
   $('nuovo-paz-form').classList.add('hidden');
   $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
   $('app-data').value      = opts.date || toDateStr(new Date());
@@ -538,6 +540,7 @@ function openModal(opts={}) {
   $('modal-title').textContent = _editId ? 'Modifica appuntamento' : 'Nuovo appuntamento';
   if (_editId) {
     $('btn-annulla-app').classList.remove('hidden');
+    $('btn-reinvia-sms').classList.remove('hidden');
     loadAppInModal(_editId);
   }
   $('modal-overlay').classList.remove('hidden');
@@ -587,6 +590,27 @@ function renderPresenza(stato) {
       : '<span style="color:#64748b">⏳ Nessuna risposta al promemoria</span>';
   box.innerHTML = testo;
   $('field-presenza').style.display = '';
+}
+
+// ─── Reinvia l'SMS di conferma al paziente ────────────────────────────────
+// Serve quando la conferma non è mai partita (es. approvazione fatta prima
+// del fix che la collegava alla conferma dall'agenda) o quando il paziente
+// dice di non aver ricevuto nulla. Ricrea anche l'evento su Google Calendar
+// se mancava: creaEvento non genera doppioni.
+async function reinviaSmsConferma() {
+  if (!_editId) return;
+  if (!confirm('Inviare ora al paziente l\'SMS con data e ora dell\'appuntamento?')) return;
+  const btn = $('btn-reinvia-sms');
+  const testoOrig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Invio…';
+  try {
+    const r = await api._req('POST', `/appuntamenti/${_editId}/reinvia-conferma`);
+    alert('SMS inviato a ' + r.numero + '\n\n' + r.testo);
+  } catch (e) {
+    alert('Invio non riuscito: ' + (e.message || e));
+  } finally {
+    btn.disabled = false; btn.textContent = testoOrig;
+  }
 }
 
 function renderStatoBtns(attuale) {
