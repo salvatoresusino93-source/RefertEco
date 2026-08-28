@@ -417,6 +417,11 @@ router.post('/prenota', async (req, res) => {
       note_segreteria: note || null,
       stato:           'in_attesa',
       worklist_status: 'pending',
+      // Esplicito, non affidato al default della colonna: il promemoria in
+      // reminder.js salta gli appuntamenti con invia_sms_promemoria === false,
+      // e chi prenota dal sito deve sempre ricevere il promemoria col link
+      // per confermare o disdire.
+      invia_sms_promemoria: true,
     })
     .select('*, pazienti(*), tipi_prestazione(*)')
     .single();

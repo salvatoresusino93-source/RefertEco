@@ -484,3 +484,14 @@ button { font-family:inherit; }
   .modal-overlay[data-vv] .modal      { max-height:98% !important; }
   .modal-overlay[data-vv] .modal-body { max-height:calc(100% - 140px) !important; }
 }
+
+/* ─── Presenza confermata dal paziente (risposta al promemoria SMS) ────────
+   Il paziente ha aperto il link del promemoria e premuto "CONFERMO".
+   Serve a distinguere a colpo d'occhio chi ha risposto da chi non l'ha
+   ancora fatto: senza spunta = in attesa di risposta, non "non verrà". */
+.conf-tick { margin-left:4px; font-size:10px; line-height:1; }
+.cal-app.confermato {
+  border-left-color:#16a34a;
+  box-shadow: inset 0 0 0 1px rgba(22,163,74,.35);
+}
+.sidebar-item.confermato { border-left-color:#16a34a; }
