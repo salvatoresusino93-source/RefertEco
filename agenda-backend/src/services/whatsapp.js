@@ -87,7 +87,8 @@
 const { normalizzaNumero, urlConferma } = require('./sms');
 
 const STUDIO   = process.env.STUDIO_NOME     || 'Studio Medico';
-const TEL      = process.env.STUDIO_TELEFONO || '';
+// Stessi recapiti dell'SMS — vanno tenuti allineati a services/sms.js.
+const TEL      = '0932 954441 - 339 4028454';
 const SITO     = process.env.STUDIO_SITO     || 'studiosusino.it';
 const LINGUA   = process.env.WHATSAPP_LANG   || 'it';
 

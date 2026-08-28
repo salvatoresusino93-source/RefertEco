@@ -6,7 +6,13 @@ const crypto   = require('crypto');
 const supabase = require('./supabase');
 
 const STUDIO   = process.env.STUDIO_NOME     || 'Studio Medico';
-const TEL      = process.env.STUDIO_TELEFONO || '';
+// Recapiti dello studio mostrati ai pazienti negli SMS: fisso + cellulare.
+// NB: definiti QUI e non più via STUDIO_TELEFONO — quella variabile su
+// Railway contiene ancora il solo vecchio cellulare, e questo valore la
+// sovrascrive di proposito. Per cambiare i recapiti in futuro basta
+// modificare questa riga (oppure rimettere `process.env.STUDIO_TELEFONO`
+// come sorgente, dopo aver aggiornato la variabile su Railway).
+const TEL      = '0932 954441 - 339 4028454';
 const BASE_URL = process.env.APP_URL    || 'https://referteco-production.up.railway.app';
 const SITO     = process.env.STUDIO_SITO || 'studiosusino.it';
 
