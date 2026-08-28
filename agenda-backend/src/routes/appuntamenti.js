@@ -24,6 +24,40 @@ async function generaAccessionNumber() {
   return `${dataStr}-${String(n).padStart(4, '0')}`;
 }
 
+// ─── Rete di sicurezza: promemoria per un appuntamento di DOMANI creato o
+// confermato quando il cron di oggi è già passato ─────────────────────────
+// Il cron dei promemoria gira alle 08:00 e copre gli appuntamenti del giorno
+// dopo. Un appuntamento per domani inserito o approvato dopo le 08:00 di
+// oggi non verrebbe quindi mai coperto: nessun cron lo prenderà più (domani
+// alle 08:00 si guarda dopodomani). In quel caso il promemoria parte subito.
+//
+// NB: la soglia segue l'orario del cron in services/reminder.js — se lì
+// cambia l'ora, va cambiata anche qui.
+const ORA_CRON_PROMEMORIA = 8;
+
+function promemoriaImmediatoSeServe(app) {
+  try {
+    if (!app || app.invia_sms_promemoria === false) return;
+
+    const adesso = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+    const domani = new Date(adesso);
+    domani.setDate(domani.getDate() + 1);
+
+    const appData = new Date(new Date(app.data_ora_inizio).toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+    const eDomani = appData.getFullYear() === domani.getFullYear() &&
+                    appData.getMonth()    === domani.getMonth()    &&
+                    appData.getDate()     === domani.getDate();
+    const cronGiaPassato = adesso.getHours() >= ORA_CRON_PROMEMORIA;
+
+    if (eDomani && cronGiaPassato) {
+      inviaPromemoria(app).catch(e => console.error('[SMS] Promemoria immediato:', e.message));
+      inviaWhatsappPromemoria(app).catch(e => console.error('[WhatsApp] Promemoria immediato:', e.message));
+    }
+  } catch (e) {
+    console.error('[SMS] Controllo promemoria immediato:', e.message);
+  }
+}
+
 // ─── GET /api/appuntamenti?from=ISO&to=ISO ───────────────────────────────
 router.get('/', async (req, res) => {
   const { from, to } = req.query;
@@ -170,26 +204,7 @@ router.post('/', async (req, res) => {
   // Google Calendar — crea evento (ID appuntamento salvato in extendedProperties)
   creaEvento(data).catch(e => console.error('[GCal] Crea evento:', e.message));
 
-  // SMS promemoria immediato se l'appuntamento è domani e siamo già oltre le 19:00
-  // (il cron serale è già passato e non lo manderebbe più)
-  try {
-    const adesso = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
-    const domani = new Date(adesso);
-    domani.setDate(domani.getDate() + 1);
-
-    const appData = new Date(new Date(data_ora_inizio).toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
-    const eDopoMezzogiorno = adesso.getHours() >= 19;
-    const eDomani = appData.getFullYear() === domani.getFullYear() &&
-                    appData.getMonth()     === domani.getMonth()    &&
-                    appData.getDate()      === domani.getDate();
-
-    if (eDomani && eDopoMezzogiorno && data.invia_sms_promemoria !== false) {
-      inviaPromemoria(data).catch(e => console.error('[SMS] Promemoria immediato:', e.message));
-      inviaWhatsappPromemoria(data).catch(e => console.error('[WhatsApp] Promemoria immediato:', e.message));
-    }
-  } catch (e) {
-    console.error('[SMS] Controllo promemoria immediato:', e.message);
-  }
+  promemoriaImmediatoSeServe(data);
 
   res.status(201).json(data);
 });
@@ -226,6 +241,23 @@ router.put('/:id', async (req, res) => {
 
   updates.updated_at = new Date().toISOString();
 
+  // Una prenotazione dal sito che il medico approva DALL'AGENDA (invece che
+  // dal link nell'email) deve ricevere lo stesso trattamento del link:
+  // SMS di conferma al paziente ed evento su Google Calendar. Prima non
+  // accadeva — la PUT si limitava a cambiare lo stato — quindi il paziente
+  // approvato dall'agenda non veniva avvisato di nulla e l'appuntamento non
+  // finiva sul calendario del medico. Serve leggere lo stato precedente per
+  // riconoscere la transizione in_attesa → prenotato.
+  let statoPrecedente = null;
+  if (updates.stato === 'prenotato') {
+    const { data: prima } = await supabase
+      .from('appuntamenti')
+      .select('stato')
+      .eq('id', req.params.id)
+      .single();
+    statoPrecedente = prima?.stato || null;
+  }
+
   const { data, error } = await supabase
     .from('appuntamenti')
     .update(updates)
@@ -236,6 +268,19 @@ router.put('/:id', async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
 
   try { getIO().emit('appuntamento:aggiornato', data); } catch (e) {}
+
+  if (statoPrecedente === 'in_attesa' && data.stato === 'prenotato') {
+    // Stesso comportamento di routes/prenota.js (conferma dal link email):
+    // SMS al paziente rispettando la spunta "Invia SMS", niente WhatsApp
+    // sulla conferma, evento su Google Calendar.
+    if (data.invia_sms_promemoria !== false) {
+      inviaSmsConferma(data).catch(e =>
+        console.error('[SMS] Conferma da agenda:', e.message));
+    }
+    creaEvento(data).catch(e =>
+      console.error('[GCal] Crea evento (conferma da agenda):', e.message));
+    promemoriaImmediatoSeServe(data);
+  }
 
   res.json(data);
 });
