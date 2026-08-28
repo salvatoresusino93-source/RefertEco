@@ -4,6 +4,7 @@ const { requireAuth, requireMedico } = require('../middleware/auth');
 const { getIO }  = require('../socket');
 const { notificaNuovoAppuntamento, notificaAppuntamentoAnnullato } = require('../services/email');
 const { inviaPromemoria, inviaSmsConferma, inviaSmsAnnullamento } = require('../services/sms');
+const { inviaWhatsappConferma, inviaWhatsappPromemoria } = require('../services/whatsapp');
 const { creaEvento, eliminaEventoByAgendaId } = require('../services/googleCalendar');
 
 const router = express.Router();
@@ -163,6 +164,7 @@ router.post('/', async (req, res) => {
   // "Invia SMS di promemoria": se disattivata, nessun SMS per questo appuntamento.
   if (data.invia_sms_promemoria !== false) {
     inviaSmsConferma(data).catch(e => console.error('[SMS] Conferma prenotazione:', e.message));
+    inviaWhatsappConferma(data).catch(e => console.error('[WhatsApp] Conferma prenotazione:', e.message));
   }
 
   // Google Calendar — crea evento (ID appuntamento salvato in extendedProperties)
@@ -183,6 +185,7 @@ router.post('/', async (req, res) => {
 
     if (eDomani && eDopoMezzogiorno && data.invia_sms_promemoria !== false) {
       inviaPromemoria(data).catch(e => console.error('[SMS] Promemoria immediato:', e.message));
+      inviaWhatsappPromemoria(data).catch(e => console.error('[WhatsApp] Promemoria immediato:', e.message));
     }
   } catch (e) {
     console.error('[SMS] Controllo promemoria immediato:', e.message);

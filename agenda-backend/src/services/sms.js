@@ -211,4 +211,5 @@ module.exports = {
   inviaSmsAnnullamento,
   inviaRichiestaRecensione,
   normalizzaNumero,
+  urlConferma, // riusata da services/whatsapp.js per lo stesso link di conferma presenza
 };
