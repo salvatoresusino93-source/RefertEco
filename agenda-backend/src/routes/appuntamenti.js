@@ -4,7 +4,7 @@ const { requireAuth, requireMedico } = require('../middleware/auth');
 const { getIO }  = require('../socket');
 const { notificaNuovoAppuntamento, notificaAppuntamentoAnnullato } = require('../services/email');
 const { inviaPromemoria, inviaSmsConferma, inviaSmsAnnullamento } = require('../services/sms');
-const { inviaWhatsappConferma, inviaWhatsappPromemoria } = require('../services/whatsapp');
+const { inviaWhatsappPromemoria } = require('../services/whatsapp');
 const { creaEvento, eliminaEventoByAgendaId } = require('../services/googleCalendar');
 
 const router = express.Router();
@@ -163,8 +163,8 @@ router.post('/', async (req, res) => {
   // SMS conferma prenotazione al paziente (immediato) — rispetta la spunta
   // "Invia SMS di promemoria": se disattivata, nessun SMS per questo appuntamento.
   if (data.invia_sms_promemoria !== false) {
+    // Solo SMS qui — niente WhatsApp sulla conferma (vedi nota in routes/prenota.js)
     inviaSmsConferma(data).catch(e => console.error('[SMS] Conferma prenotazione:', e.message));
-    inviaWhatsappConferma(data).catch(e => console.error('[WhatsApp] Conferma prenotazione:', e.message));
   }
 
   // Google Calendar — crea evento (ID appuntamento salvato in extendedProperties)

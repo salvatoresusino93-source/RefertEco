@@ -162,6 +162,9 @@ async function inviaTemplate(numero, nomeTemplate, parametriTesto) {
 }
 
 // ─── WhatsApp: conferma prenotazione ──────────────────────────────────────
+// Pronta ma NON collegata (deciso col Dott. Susino, agosto 2026): la
+// conferma resta solo SMS, il WhatsApp è riservato al promemoria della
+// sera prima (vedi nota in routes/prenota.js e routes/appuntamenti.js).
 async function inviaWhatsappConferma(appuntamento) {
   if (!whatsappConfigurato()) return null; // no-op: WhatsApp non attivo
 
