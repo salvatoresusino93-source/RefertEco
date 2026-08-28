@@ -21,8 +21,16 @@ prenotazione (RefertEco), Google Business Profile, integrazioni.
 | Account Google Cloud | progetto ID `agendastudio-497611`, numero `685809157167` |
 
 **Contatti pubblicati:** fisso `0932 954441` (tel:+390932954441), mobile
-`351 374 6102` (tel:+393513746102, WhatsApp wa.me/393513746102).
+`339 4028454` (tel:+393394028454, WhatsApp wa.me/393394028454).
 Indirizzo: Via dell'Arno 34, 97016 Pozzallo (RG), presso Arcobaleno Dentisti.
+
+⚠️ **Cambio numero (28 ago 2026).** Il vecchio mobile `351 374 6102` è stato
+destinato alla Cloud API di WhatsApp (invii automatici) e NON è più
+raggiungibile da un'app: chi ci scrive non viene letto da nessuno.
+L'app WhatsApp Business è stata spostata sul `339 4028454`, che è ora il
+numero con cui i pazienti parlano davvero. Gli SMS mostrano entrambi i
+recapiti. **Il sito vetrina studio-susino-web va aggiornato di conseguenza**
+(pulsante WhatsApp e link wa.me puntano ancora al 351).
 
 ---
 
@@ -30,7 +38,9 @@ Indirizzo: Via dell'Arno 34, 97016 Pozzallo (RG), presso Arcobaleno Dentisti.
 - ✅ **HTTPS attivo** su studiosusino.it (certificato Let's Encrypt, "Enforce HTTPS"
   attivo, redirect http→https). Era bloccato (certificato non emesso): risolto
   rimuovendo e re-inserendo il dominio via API GitHub Pages.
-- ✅ **Pulsante WhatsApp fisso** su tutte le pagine (numero 351 374 6102).
+- ⚠️ **Pulsante WhatsApp fisso** su tutte le pagine — punta ancora al vecchio
+  `351 374 6102`, che dal 28 ago 2026 non è più letto da nessuno:
+  **da aggiornare al 339 4028454** (vedi avviso in cima).
 - ✅ Il **numero scritto** serve per CHIAMARE (tel:); WhatsApp solo dal pulsante.
 - ✅ **Pulsante "Lascia una recensione su Google"** nella pagina Contatti →
   link `https://g.page/r/CQUbXzXQvvzqEBM/review` (apre direttamente la recensione).
@@ -296,28 +306,35 @@ Il numero della fattura elettronica emessa su Aruba deve alimentare il Sistema T
 
 ---
 
-## 15. CONFERMA PRESENZA PAZIENTE via SMS — ✅ ATTIVO (1 giugno 2026)
+## 15. CONFERMA PRESENZA PAZIENTE via SMS — ✅ ATTIVO
 ### Cosa fa
-Riduce i no-show: il promemoria SMS della sera prima contiene un link con cui il
-paziente conferma o disdice la presenza con un tap (nessuna risposta SMS da parte
+Riduce i no-show: il promemoria SMS contiene un link con cui il paziente
+conferma o disdice la presenza con un tap (nessuna risposta SMS da parte
 sua, nessun costo per lui).
 
 ### Flusso
-1. Cron 19:00 → SMS di promemoria SOLO ai pazienti che **pagano in studio**
-   (chi ha già pagato online è escluso da TUTTI gli SMS — vedi sotto).
+1. Cron **08:00 del giorno prima** → SMS di promemoria SOLO ai pazienti che
+   **pagano in studio** (chi ha già pagato online è escluso da TUTTI gli SMS).
+   Il mattino presto viene letto più della sera; resta il giorno prima e non
+   la mattina stessa perché molti esami richiedono 6 ore di digiuno.
 2. SMS contiene: `Conferma o disdici qui: https://conferma.studiosusino.it/p/<token>`
-   + link al sito `studiosusino.it`.
+   + link al sito `studiosusino.it` e i recapiti dello studio.
 3. Il paziente apre la pagina `/p/:code` → due pulsanti:
-   - **✅ CONFERMO** → `conferma_paziente='confermato'`; in agenda appare il badge
-     verde ✅ (sia nel modal sia sul blocchetto del calendario).
-   - **❌ NON POSSO VENIRE** → appuntamento `annullato` + email di avviso al medico
-     (così può riempire lo slot).
+   - **✅ CONFERMO** → `conferma_paziente='confermato'`; in agenda appare la
+     spunta verde ✅ sul blocchetto del calendario, nella barra "oggi" e la
+     riga "Presenza" nel dettaglio dell'appuntamento.
+   - **❌ NON POSSO VENIRE** → appuntamento `annullato` (sparisce dall'agenda,
+     lo slot torna prenotabile) + email di avviso al medico.
 
-### Regola SMS aggiornata (chi riceve cosa)
-| Tipo paziente | SMS conferma iniziale | Promemoria sera prima | Promemoria 1h prima |
-|---|---|---|---|
-| Paga ONLINE  | ❌ no | ❌ no | ❌ no |
-| Paga in STUDIO | ✅ sì | ✅ sì (con link conferma) | ✅ sì |
+### Regola SMS (chi riceve cosa)
+| Tipo paziente | SMS conferma iniziale | Promemoria 08:00 giorno prima |
+|---|---|---|
+| Paga ONLINE  | ❌ no | ❌ no |
+| Paga in STUDIO | ✅ sì | ✅ sì (con link conferma) |
+
+Il promemoria "1 ora prima" è stato **disattivato** (ago 2026): niente link
+per disdire e troppo tardi per riassegnare lo slot. Il cron è commentato in
+`src/services/reminder.js`, riattivabile con una riga.
 
 Il filtro è `pagamento_stato === 'pagato'` in `src/services/reminder.js`.
 
@@ -325,17 +342,24 @@ Il filtro è `pagamento_stato === 'pagato'` in `src/services/reminder.js`.
 - `src/services/sms.js` — `urlConferma(app)` genera/salva token breve; link nel testo
 - `src/routes/presenza.js` — pagine `/p/:code`, `/p/:code/si`, `/p/:code/no`
 - `src/app.js` — monta `/p`; redirect dominio conferma (vedi sotto)
-- `frontend/js/app.js` — badge ✅ (modal `renderConfermaPaziente` + calendario)
+- `frontend/js/app.js` — spunta ✅ (calendario, sidebar, `renderPresenza` nel modal)
+  ⚠️ il frontend esiste in DUE copie (`agenda-backend/frontend/` servita in
+  produzione e `agenda-frontend/` sorgente): vanno modificate ENTRAMBE.
 
-### Database (SQL già eseguito su Supabase)
-```sql
-ALTER TABLE appuntamenti ADD COLUMN IF NOT EXISTS conferma_token TEXT;
-ALTER TABLE appuntamenti ADD COLUMN IF NOT EXISTS conferma_paziente TEXT;
-```
+### Database
+Vedi `supabase/conferma_presenza.sql` (colonne `conferma_token`,
+`conferma_paziente`, `invia_sms_promemoria` + indice sul token).
 
-### Testato end-to-end (1 giu 2026)
-SMS reale inviato al numero di lavoro 351 374 6102 → link aperto → CONFERMO →
-`conferma_paziente=confermato` salvato → badge verde in agenda. ✅
+### ⚠️ Guasto trovato e corretto (28 ago 2026)
+Questa sezione dichiarava il badge "testato end-to-end il 1 giugno". **Non era
+vero al 28 agosto**: nel codice del frontend non c'era alcun riferimento a
+`conferma_paziente`, quindi chi confermava era indistinguibile da chi non
+aveva risposto. Verosimilmente perso nel merge di giugno tra le due copie del
+frontend, senza che nessuno riprovasse dopo. Ricostruito (PR #8).
+
+Lezione: un appunto che dice "testato" non è una prova. Prima di fidarsi,
+eseguire la checklist in `COLLAUDO.md` — 15 minuti, e i pulsanti si premono
+davvero.
 
 ---
 
