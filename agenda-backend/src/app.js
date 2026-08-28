@@ -13,7 +13,7 @@ const { costruisciEventoWebhook } = require('./services/stripe');
 const { creaEvento } = require('./services/googleCalendar');
 const { notificaPrenotazionePagata, notificaPrenotazioneOnline, inviaRicevutaPagamento } = require('./services/email');
 const { normalizzaNumero } = require('./services/sms');
-const { whatsappConfigurato, inviaTemplate } = require('./services/whatsapp');
+const { whatsappConfigurato, inviaTemplate, registraNumero } = require('./services/whatsapp');
 const authRoutes         = require('./routes/auth');
 const pazientiRoutes     = require('./routes/pazienti');
 const appuntamentiRoutes = require('./routes/appuntamenti');
@@ -288,11 +288,12 @@ app.post('/api/test-sms', async (req, res) => {
   }
 });
 
-// ─── Test invio WhatsApp diretto — manda il template "conferma" a un numero ──
+// ─── Test invio WhatsApp diretto — manda il promemoria a un numero ───────
 // POST /api/test-whatsapp  { "numero": "333XXXXXXX" }
 // Utile per verificare che WHATSAPP_PHONE_NUMBER_ID/WHATSAPP_ACCESS_TOKEN
-// funzionino e che il template "conferma_prenotazione" sia stato approvato
-// da Meta. Manda dati finti (nessun appuntamento reale coinvolto).
+// funzionino e che il template "promemoria_appuntamento" (l'unico creato e
+// approvato su Meta, ago 2026 — vedi services/whatsapp.js) sia attivo.
+// Manda dati finti (nessun appuntamento reale coinvolto).
 app.post('/api/test-whatsapp', async (req, res) => {
   if (!whatsappConfigurato()) {
     return res.status(500).json({ error: 'WHATSAPP_PHONE_NUMBER_ID o WHATSAPP_ACCESS_TOKEN mancanti su Railway' });
@@ -301,17 +302,33 @@ app.post('/api/test-whatsapp', async (req, res) => {
   const numero = normalizzaNumero(req.body.numero);
   if (!numero) return res.status(400).json({ error: 'Campo "numero" mancante o non valido nel body' });
 
-  const nomeTemplate = process.env.WHATSAPP_TEMPLATE_CONFERMA || 'conferma_prenotazione';
-  const oraTest = new Date().toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome' });
+  const nomeTemplate = process.env.WHATSAPP_TEMPLATE_PROMEMORIA || 'promemoria_appuntamento';
 
   try {
     const r = await inviaTemplate(numero, nomeTemplate, [
-      process.env.STUDIO_NOME || 'Studio Medico',
-      'oggi (test)',
-      oraTest,
-      process.env.STUDIO_SITO || 'studiosusino.it',
+      'oggi (messaggio di test)',
+      'https://referteco-production.up.railway.app/prenota',
     ]);
     res.json({ ok: true, numero, template: nomeTemplate, risposta_meta: r });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Attiva un numero WhatsApp appena aggiunto su Meta ────────────────────
+// POST /api/whatsapp/registra-numero  { "pin": "123456" }
+// Da chiamare UNA VOLTA per numero, dopo averlo verificato su WhatsApp
+// Manager: senza questa chiamata il numero resta "Non in linea" e non può
+// mandare messaggi (non esiste un pulsante equivalente sul sito di Meta
+// per i numeri Cloud API). Il PIN è a scelta libera (6 cifre) — va tenuto a
+// mente ma non serve mai nell'uso normale del sistema.
+app.post('/api/whatsapp/registra-numero', async (req, res) => {
+  if (!whatsappConfigurato()) {
+    return res.status(500).json({ error: 'WHATSAPP_PHONE_NUMBER_ID o WHATSAPP_ACCESS_TOKEN mancanti su Railway' });
+  }
+  try {
+    const r = await registraNumero(req.body.pin);
+    res.json({ ok: true, risposta_meta: r });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

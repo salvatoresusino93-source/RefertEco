@@ -133,6 +133,40 @@ function whatsappConfigurato() {
   return Boolean(process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_ACCESS_TOKEN);
 }
 
+// ─── Registra il numero sulla Cloud API (da fare UNA VOLTA per numero) ────
+// Un numero appena aggiunto/verificato su WhatsApp Manager resta "Non in
+// linea" finché non viene registrato con questa chiamata — non esiste un
+// pulsante equivalente nell'interfaccia Meta per i numeri Cloud API, va
+// fatta così. Il PIN è a scelta libera (6 cifre): serve solo se in futuro
+// si deve ri-registrare lo stesso numero, va conservato ma non è mai
+// richiesto al paziente né al medico nell'uso normale.
+async function registraNumero(pin) {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken   = process.env.WHATSAPP_ACCESS_TOKEN;
+
+  if (!phoneNumberId || !accessToken) {
+    throw new Error('WHATSAPP_PHONE_NUMBER_ID o WHATSAPP_ACCESS_TOKEN non impostati');
+  }
+  if (!/^\d{6}$/.test(String(pin || ''))) {
+    throw new Error('Il PIN deve essere di 6 cifre');
+  }
+
+  const res = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/register`, {
+    method:  'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type':  'application/json',
+    },
+    body: JSON.stringify({ messaging_product: 'whatsapp', pin: String(pin) }),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json.error) {
+    throw new Error(`Registrazione numero fallita: ${JSON.stringify(json.error || json)}`);
+  }
+  return json;
+}
+
 // ─── Invia un messaggio template via Meta Cloud API ───────────────────────
 async function inviaTemplate(numero, nomeTemplate, parametriTesto) {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -273,7 +307,8 @@ async function inviaWhatsappRecensione(appuntamento) {
 
 module.exports = {
   whatsappConfigurato,
-  inviaTemplate, // esposta per l'endpoint di test /api/test-whatsapp
+  inviaTemplate,   // esposta per l'endpoint di test /api/test-whatsapp
+  registraNumero,  // esposta per l'endpoint di attivazione /api/whatsapp/registra-numero
   inviaWhatsappConferma,
   inviaWhatsappPromemoria,
   inviaWhatsappPromemoria1Ora,
