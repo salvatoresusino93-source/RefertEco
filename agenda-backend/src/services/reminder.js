@@ -307,8 +307,17 @@ async function sincronizzaBlocchiGoogleCalendar() {
 
 // ─── Avvia i cron job ────────────────────────────────────────────────────
 function avviaReminder() {
-  // Ogni giorno alle 19:00 ora italiana → promemoria per domani
-  cron.schedule('0 19 * * *', inviaPromemoriDomani, {
+  // Ogni giorno alle 08:00 ora italiana → promemoria per domani.
+  //
+  // Perché il mattino e non più le 19:00 (deciso col Dott. Susino, ago 2026):
+  // al mattino il messaggio viene letto molto più spesso che a cena. Resta
+  // però il promemoria del GIORNO PRIMA, non dello stesso giorno: molti
+  // esami richiedono 6 ore di digiuno (vedi frontend/js/preparazione-esami.js),
+  // quindi un avviso la mattina stessa arriverebbe a colazione già fatta e
+  // l'esame andrebbe rifatto. Così il paziente ha l'intera giornata e la
+  // notte per prepararsi, e lo studio un giorno pieno per riassegnare lo
+  // slot se disdice.
+  cron.schedule('0 8 * * *', inviaPromemoriDomani, {
     timezone: 'Europe/Rome'
   });
 
