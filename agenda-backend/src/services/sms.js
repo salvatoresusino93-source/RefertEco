@@ -99,12 +99,12 @@ async function inviaPromemoria(appuntamento) {
 
   const data  = fmtData(appuntamento.data_ora_inizio);
   const ora   = fmtOra(appuntamento.data_ora_inizio);
-  const esame = appuntamento.tipi_prestazione?.nome || 'visita';
 
   const link = await urlConferma(appuntamento);
 
+  // NB: niente tipo di esame — vedi nota in inviaSmsConferma.
   const testo =
-    `Promemoria ${STUDIO}: appuntamento domani ${data} ore ${ora} per ${esame}. ` +
+    `Promemoria ${STUDIO}: appuntamento domani ${data} ore ${ora}. ` +
     `Conferma o disdici qui: ${link} ` +
     `Info: ${SITO}` +
     (TEL ? ` - ${TEL}` : '');
@@ -121,11 +121,11 @@ async function inviaPromemoria1Ora(appuntamento) {
   const numero = normalizzaNumero(p.telefono);
   if (!numero) throw new Error(`Numero non valido: "${p.telefono}"`);
 
-  const ora   = fmtOra(appuntamento.data_ora_inizio);
-  const esame = appuntamento.tipi_prestazione?.nome || 'visita';
+  const ora = fmtOra(appuntamento.data_ora_inizio);
 
+  // NB: niente tipo di esame — vedi nota in inviaSmsConferma.
   const testo =
-    `PROMEMORIA: Gentile paziente, il suo appuntamento per ${esame} ` +
+    `PROMEMORIA: Gentile paziente, il suo appuntamento ` +
     `è tra un'ora, alle ore ${ora} ` +
     `presso lo ${STUDIO}.` +
     (TEL ? ` Per info: ${TEL}.` : '');
@@ -144,11 +144,14 @@ async function inviaSmsConferma(appuntamento) {
 
   const data  = fmtData(appuntamento.data_ora_inizio);
   const ora   = fmtOra(appuntamento.data_ora_inizio);
-  const esame = appuntamento.tipi_prestazione?.nome || 'visita';
 
+  // NB: niente tipo di esame nel testo — è un dato sanitario (art. 9 GDPR)
+  // e l'SMS non è un canale riservato. Stessa scelta per il messaggio
+  // WhatsApp equivalente (services/whatsapp.js): i due testi vanno tenuti
+  // allineati se si modifica uno dei due.
   const testo =
     `Gentile paziente, la sua prenotazione è confermata: ` +
-    `${data} alle ore ${ora} (${esame}) ` +
+    `${data} alle ore ${ora} ` +
     `presso lo ${STUDIO}.` +
     (TEL ? ` Per info: ${TEL}.` : '');
 

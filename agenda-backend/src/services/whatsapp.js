@@ -29,39 +29,41 @@
 // l'SMS. Per questo ogni funzione qui sotto invia un template con dei
 // parametri, non una stringa qualsiasi.
 //
-// Testo dei modelli da creare su Meta (categoria Utility, lingua "it"):
+// Testo dei modelli da creare su Meta (categoria Utility, lingua "it") —
+// IDENTICI parola per parola all'SMS equivalente in services/sms.js: se
+// modifichi un testo qui, aggiorna anche l'SMS gemello, e viceversa.
 //
-//   conferma_prenotazione
+//   conferma_prenotazione  (gemello: sms.js → inviaSmsConferma)
 //   ──────────────────────
-//   Gentile paziente, la sua prenotazione presso {{1}} è confermata per
-//   {{2}} alle ore {{3}}. Info: {{4}}.
+//   Gentile paziente, la sua prenotazione è confermata: {{1}} alle ore
+//   {{2}} presso lo {{3}}. Per info: {{4}}.
 //
-//   promemoria_appuntamento
+//   promemoria_appuntamento  (gemello: sms.js → inviaPromemoria)
 //   ────────────────────────
 //   Promemoria {{1}}: appuntamento domani {{2}} ore {{3}}. Conferma o
 //   disdici qui: {{4}} Info: {{5}}
 //
-//   promemoria_1ora
+//   promemoria_1ora  (gemello: sms.js → inviaPromemoria1Ora)
 //   ─────────────────
-//   PROMEMORIA: gentile paziente, il suo appuntamento è tra un'ora, alle
-//   ore {{1}}, presso {{2}}. Info: {{3}}.
+//   PROMEMORIA: Gentile paziente, il suo appuntamento è tra un'ora, alle
+//   ore {{1}} presso lo {{2}}. Per info: {{3}}.
 //
-//   richiesta_recensione
+//   richiesta_recensione  (gemello: sms.js → inviaRichiestaRecensione)
 //   ──────────────────────
 //   {{1}}: grazie della visita. Se ti sei trovato bene, una recensione su
 //   Google ci aiuta molto: {{2}}
 //
-//   annullamento_appuntamento (pronto, non ancora usato — vedi sms.js)
+//   annullamento_appuntamento  (gemello: sms.js → inviaSmsAnnullamento —
+//   pronto, non ancora collegato a nessuna route, come il suo gemello SMS)
 //   ─────────────────────────────────────────────────────────────────
 //   Gentile paziente, il suo appuntamento del {{1}} alle ore {{2}} è stato
-//   annullato. Info: {{3}}.
+//   annullato. Per info o nuova prenotazione: {{3}}.
 //
-// NOTA PRIVACY: i testi sopra NON includono il tipo di esame prenotato
-// (dato sanitario) — a differenza dell'SMS attuale, che lo riporta. Scelta
-// deliberata: WhatsApp è un canale meno "effimero" dell'SMS (resta in una
-// chat persistente, backup su cloud del telefono, ecc.). Se preferisci
-// includerlo comunque, aggiungi un placeholder in più quando crei il
-// modello su Meta e passa il valore da qui.
+// NOTA PRIVACY (decisione presa insieme al Dott. Susino): nessuno dei
+// testi sopra nomina il tipo di esame prenotato (dato sanitario, art. 9
+// GDPR) — tolto anche dall'SMS per lo stesso motivo. WhatsApp è un canale
+// meno "effimero" dell'SMS (chat persistente, backup su cloud del
+// telefono), quindi vale la stessa prudenza su entrambi i canali.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const { normalizzaNumero, urlConferma } = require('./sms');
@@ -91,8 +93,18 @@ function fmtOra(iso) {
   });
 }
 
+// Usata dal promemoria della sera prima (gemello SMS: mostra sito + telefono)
 function infoContatto() {
   return TEL ? `${SITO} - ${TEL}` : SITO;
+}
+
+// Usata da conferma / promemoria 1h / annullamento (gemelli SMS: mostrano
+// SOLO il telefono — "Per info: {TEL}."). Un template Meta non può far
+// sparire l'intera frase se manca il valore come fa l'SMS con la stringa
+// vuota, quindi qui, solo se STUDIO_TELEFONO non è configurato, ripieghiamo
+// sul sito per non lasciare il placeholder vuoto nel messaggio.
+function soloTelefono() {
+  return TEL || SITO;
 }
 
 // ─── Configurato? ──────────────────────────────────────────────────────────
@@ -162,7 +174,7 @@ async function inviaWhatsappConferma(appuntamento) {
   const data = fmtData(appuntamento.data_ora_inizio);
   const ora  = fmtOra(appuntamento.data_ora_inizio);
 
-  const result = await inviaTemplate(numero, TEMPLATE_CONFERMA, [STUDIO, data, ora, infoContatto()]);
+  const result = await inviaTemplate(numero, TEMPLATE_CONFERMA, [data, ora, STUDIO, soloTelefono()]);
   return { id: result.messages?.[0]?.id || 'ok', numero };
 }
 
@@ -196,7 +208,7 @@ async function inviaWhatsappPromemoria1Ora(appuntamento) {
 
   const ora = fmtOra(appuntamento.data_ora_inizio);
 
-  const result = await inviaTemplate(numero, TEMPLATE_PROMEMORIA_1H, [ora, STUDIO, infoContatto()]);
+  const result = await inviaTemplate(numero, TEMPLATE_PROMEMORIA_1H, [ora, STUDIO, soloTelefono()]);
   return { id: result.messages?.[0]?.id || 'ok', numero };
 }
 
@@ -215,7 +227,7 @@ async function inviaWhatsappAnnullamento(appuntamento) {
   const data = fmtData(appuntamento.data_ora_inizio);
   const ora  = fmtOra(appuntamento.data_ora_inizio);
 
-  const result = await inviaTemplate(numero, TEMPLATE_ANNULLAMENTO, [data, ora, infoContatto()]);
+  const result = await inviaTemplate(numero, TEMPLATE_ANNULLAMENTO, [data, ora, soloTelefono()]);
   return { id: result.messages?.[0]?.id || 'ok', numero };
 }
 
