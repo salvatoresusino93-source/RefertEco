@@ -7,6 +7,7 @@
 const cron    = require('node-cron');
 const supabase = require('./supabase');
 const { inviaPromemoria, inviaPromemoria1Ora, inviaRichiestaRecensione } = require('./sms');
+const { inviaWhatsappPromemoria, inviaWhatsappPromemoria1Ora, inviaWhatsappRecensione } = require('./whatsapp');
 const { popolaFestivita } = require('./festivita');
 const { leggiEventiPersonali, getCreds } = require('./googleCalendar');
 const { aggiornaOreSettimana } = require('./googleBusiness');
@@ -85,6 +86,8 @@ async function inviaPromemoriDomani() {
       console.error(`  [ERRORE] ${nome} → ${e.message}`);
       errori++;
     }
+    // WhatsApp in aggiunta all'SMS — no-op se non configurato, non blocca il ciclo
+    inviaWhatsappPromemoria(app).catch(e => console.error(`  [WhatsApp ERRORE] ${nome} → ${e.message}`));
   }
 
   console.log(`[SMS Reminder] Fine — Inviati: ${inviati}, Saltati: ${saltati}, Errori: ${errori}\n`);
@@ -128,6 +131,7 @@ async function controllaSmsUnaOra() {
     } catch (e) {
       console.error(`[SMS 1h] Errore ${nome}: ${e.message}`);
     }
+    inviaWhatsappPromemoria1Ora(app).catch(e => console.error(`[WhatsApp 1h] Errore ${nome}: ${e.message}`));
   }
 }
 
@@ -211,6 +215,7 @@ async function inviaRichiesteRecensione() {
       console.error(`  [ERRORE] ${nome} → ${e.message}`);
       errori++;
     }
+    inviaWhatsappRecensione(app).catch(e => console.error(`  [WhatsApp ERRORE] ${nome} → ${e.message}`));
   }
 
   console.log(`[SMS Recensione] Fine — Inviati: ${inviati}, Saltati: ${saltati}, Errori: ${errori}`);

@@ -12,6 +12,8 @@ const supabase = require('./services/supabase');
 const { costruisciEventoWebhook } = require('./services/stripe');
 const { creaEvento } = require('./services/googleCalendar');
 const { notificaPrenotazionePagata, notificaPrenotazioneOnline, inviaRicevutaPagamento } = require('./services/email');
+const { normalizzaNumero } = require('./services/sms');
+const { whatsappConfigurato, inviaTemplate } = require('./services/whatsapp');
 const authRoutes         = require('./routes/auth');
 const pazientiRoutes     = require('./routes/pazienti');
 const appuntamentiRoutes = require('./routes/appuntamenti');
@@ -281,6 +283,35 @@ app.post('/api/test-sms', async (req, res) => {
       risposta_smshosting: json,
       parametri_inviati: { numero, from: '(nessuno — usa numero fisso SMS Hosting)', apiKey_prefix: apiKey.slice(0, 6) + '...' }
     });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Test invio WhatsApp diretto — manda il template "conferma" a un numero ──
+// POST /api/test-whatsapp  { "numero": "333XXXXXXX" }
+// Utile per verificare che WHATSAPP_PHONE_NUMBER_ID/WHATSAPP_ACCESS_TOKEN
+// funzionino e che il template "conferma_prenotazione" sia stato approvato
+// da Meta. Manda dati finti (nessun appuntamento reale coinvolto).
+app.post('/api/test-whatsapp', async (req, res) => {
+  if (!whatsappConfigurato()) {
+    return res.status(500).json({ error: 'WHATSAPP_PHONE_NUMBER_ID o WHATSAPP_ACCESS_TOKEN mancanti su Railway' });
+  }
+
+  const numero = normalizzaNumero(req.body.numero);
+  if (!numero) return res.status(400).json({ error: 'Campo "numero" mancante o non valido nel body' });
+
+  const nomeTemplate = process.env.WHATSAPP_TEMPLATE_CONFERMA || 'conferma_prenotazione';
+  const oraTest = new Date().toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome' });
+
+  try {
+    const r = await inviaTemplate(numero, nomeTemplate, [
+      process.env.STUDIO_NOME || 'Studio Medico',
+      'oggi (test)',
+      oraTest,
+      process.env.STUDIO_SITO || 'studiosusino.it',
+    ]);
+    res.json({ ok: true, numero, template: nomeTemplate, risposta_meta: r });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
