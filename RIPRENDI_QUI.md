@@ -219,7 +219,11 @@ if (!fs.existsSync(wlRoot)) {
 - Tipi prestazione con durata 30 min
 - Socket.io aggiornamento real-time
 - **Notifiche email** (Resend): nuovo appuntamento (verde), annullamento (rosso), prenotazione online (ambra)
-- **SMS** (SMS Hosting, 394390009000): conferma, promemoria 19:00 e 1h prima
+- **SMS** (SMS Hosting, 394390009000): conferma immediata + promemoria alle
+  **08:00 del giorno prima** (col link conferma/disdici). Il promemoria
+  "1 ora prima" è stato disattivato ad agosto 2026 — erano troppi messaggi
+  e non serviva a liberare gli slot. Recapiti nei testi: 0932 954441 e
+  339 4028454. Vedi RESOCONTO.md §15.
 - **Festività italiane** auto-popolate
 - **Google Calendar sync** + **Google Business Profile** orari
 - **Prenotazione online** (/prenota): 4 step, solo Mart/Ven 9-13 e 15-19
