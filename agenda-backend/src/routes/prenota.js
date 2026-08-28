@@ -5,7 +5,6 @@ const express  = require('express');
 const jwt      = require('jsonwebtoken');
 const supabase = require('../services/supabase');
 const { inviaSmsConferma } = require('../services/sms');
-const { inviaWhatsappConferma } = require('../services/whatsapp');
 const { creaEvento } = require('../services/googleCalendar');
 const { getIO } = require('../socket');
 
@@ -111,11 +110,11 @@ router.get('/conferma/:token', async (req, res) => {
   // Notifica real-time all'agenda
   try { getIO().emit('appuntamento:aggiornato', { ...app, stato: 'prenotato' }); } catch {}
 
-  // SMS di conferma al paziente
+  // SMS di conferma al paziente. Niente WhatsApp qui (deciso col Dott.
+  // Susino, agosto 2026): è solo una ricevuta, non richiede azione — il
+  // WhatsApp è riservato al promemoria della sera prima, che invece ha il
+  // link per confermare/disdire ed è dove conta di più che venga letto.
   inviaSmsConferma(app).catch(e => console.error('[SMS] Conferma prenotazione online:', e.message));
-
-  // WhatsApp di conferma al paziente (in aggiunta all'SMS — no-op se non configurato)
-  inviaWhatsappConferma(app).catch(e => console.error('[WhatsApp] Conferma prenotazione online:', e.message));
 
   // Google Calendar — crea evento (come per le prenotazioni dall'agenda).
   // Le prenotazioni dal sito arrivano in_attesa: l'evento su Google va scritto

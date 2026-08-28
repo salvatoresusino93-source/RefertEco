@@ -312,8 +312,13 @@ function avviaReminder() {
     timezone: 'Europe/Rome'
   });
 
-  // Ogni minuto → controlla appuntamenti tra 1 ora
-  cron.schedule('* * * * *', controllaSmsUnaOra);
+  // Promemoria "1 ora prima" DISATTIVATO (deciso col Dott. Susino, agosto
+  // 2026): tra conferma + promemoria sera prima + questo, erano troppi
+  // messaggi. Questo è quello con meno valore reale (niente link per
+  // disdire, arriva troppo tardi per rimettere lo slot in disponibilità).
+  // La funzione controllaSmsUnaOra() resta definita sopra, pronta se si
+  // vuole riattivare in futuro — basta scommentare la riga sotto.
+  // cron.schedule('* * * * *', controllaSmsUnaOra);
 
   // Ogni giorno alle 11:00 → invito alla recensione per gli esami di ieri.
   // Le 11:00 sono un buon momento: la giornata è iniziata, il paziente ha in
