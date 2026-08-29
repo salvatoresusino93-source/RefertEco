@@ -539,7 +539,7 @@ function openModal(opts={}) {
   $('field-presenza').style.display = 'none';
   $('field-stato').style.display = 'none';
   $('btn-annulla-app').classList.add('hidden');
-  $('btn-reinvia-sms').classList.add('hidden');
+  $('field-reinvia-sms').classList.add('hidden');
   $('nuovo-paz-form').classList.add('hidden');
   $('btn-nuovo-paz-toggle').textContent = '+ Crea nuovo paziente';
   $('app-data').value      = opts.date || toDateStr(new Date());
@@ -547,7 +547,7 @@ function openModal(opts={}) {
   $('modal-title').textContent = _editId ? 'Modifica appuntamento' : 'Nuovo appuntamento';
   if (_editId) {
     $('btn-annulla-app').classList.remove('hidden');
-    $('btn-reinvia-sms').classList.remove('hidden');
+    $('field-reinvia-sms').classList.remove('hidden');
     loadAppInModal(_editId);
   }
   $('modal-overlay').classList.remove('hidden');

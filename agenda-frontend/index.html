@@ -259,6 +259,18 @@
         <div id="app-presenza"></div>
       </div>
 
+      <!-- Reinvia conferma (solo in modifica) — recupera i casi in cui SMS
+           ed evento calendario non sono mai partiti (es. approvato prima
+           del fix, o il paziente dice di non aver ricevuto nulla) -->
+      <div class="reinvia-box hidden" id="field-reinvia-sms">
+        <div class="reinvia-box-testo">
+          <strong>📩 SMS di conferma non arrivato?</strong>
+          <small>Rimanda al paziente data e ora dell'appuntamento e ricrea
+            l'evento su Google Calendar se manca.</small>
+        </div>
+        <button class="btn-reinvia" id="btn-reinvia-sms">Reinvia ora</button>
+      </div>
+
       <!-- SMS promemoria -->
       <div class="field">
         <label class="chk-label">
@@ -286,8 +298,6 @@
     </div>
     <div class="modal-ftr">
       <div>
-        <button class="btn-secondary hidden" id="btn-reinvia-sms"
-                title="Rimanda al paziente l'SMS con data e ora, e ricrea l'evento su Google Calendar">📩 Reinvia SMS di conferma</button>
         <button class="btn-danger hidden" id="btn-annulla-app">🗑 Annulla appuntamento</button>
       </div>
       <div class="modal-ftr-r">
