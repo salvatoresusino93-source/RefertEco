@@ -391,4 +391,15 @@ server.listen(PORT, () => {
   console.log(`╚══════════════════════════════════════════╝\n`);
 });
 
+// ─── One-shot: riscrive i regularHours su Google Business Profile ─────────
+// Si attiva solo impostando GBP_SET_REGULAR_HOURS_ONCE=true su Railway.
+// Va rimossa subito dopo l'uso: serve a riallineare gli orari fissi una volta,
+// non a riscriverli a ogni riavvio.
+if (process.env.GBP_SET_REGULAR_HOURS_ONCE === 'true') {
+  const { impostaOrariBase } = require('./services/googleBusiness');
+  impostaOrariBase()
+    .then(() => console.log('[GBP] one-shot: regularHours impostati (lun-ven 9:00-12:30 e 15:00-19:00)'))
+    .catch(e => console.error('[GBP] one-shot regularHours fallito:', e.message));
+}
+
 module.exports = { app, server };
