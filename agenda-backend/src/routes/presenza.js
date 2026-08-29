@@ -6,6 +6,7 @@ const express  = require('express');
 const supabase = require('../services/supabase');
 const { getIO } = require('../socket');
 const { notificaAppuntamentoAnnullato } = require('../services/email');
+const { eliminaEventoByAgendaId } = require('../services/googleCalendar');
 
 const router = express.Router();
 
@@ -152,6 +153,17 @@ router.get('/:code/no', async (req, res) => {
   }
 
   try { getIO().emit('appuntamento:annullato', { id: app.id }); } catch {}
+
+  // Elimina l'evento dal Google Calendar del medico. Mancava: la disdetta
+  // dal link SMS toglieva l'appuntamento dall'agenda ma lasciava l'evento
+  // sul calendario, quindi lo slot risultava ancora occupato lì (e non
+  // prenotabile online, dato che gli impegni Google bloccano la
+  // disponibilità — vedi routes/public.js). Stessa funzione già usata per
+  // l'annullamento dall'agenda: cerca l'evento per l'ID salvato al momento
+  // della creazione, quindi funziona anche se l'evento non esiste (es. era
+  // in_attesa e nessun evento era mai stato scritto).
+  eliminaEventoByAgendaId(app.id)
+    .catch(e => console.error('[GCal] Elimina evento (disdetta paziente):', e.message));
   // Avvisa il medico via email così può richiamare/riempire lo slot
   notificaAppuntamentoAnnullato({ ...app, stato: 'annullato' })
     .catch(e => console.error('[email] Notifica disdetta paziente:', e.message));
