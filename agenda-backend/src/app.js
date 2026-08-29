@@ -402,4 +402,14 @@ if (process.env.GBP_SET_REGULAR_HOURS_ONCE === 'true') {
     .catch(e => console.error('[GBP] one-shot regularHours fallito:', e.message));
 }
 
+// ─── Diagnostica one-shot: stampa gli orari attualmente salvati su GBP ────
+// Si attiva solo con GBP_LOG_HOURS_ONCE=true. Serve a verificare cosa Google
+// ha realmente memorizzato; va rimossa dopo la verifica.
+if (process.env.GBP_LOG_HOURS_ONCE === 'true') {
+  const { leggiOrari } = require('./services/googleBusiness');
+  leggiOrari()
+    .then(o => console.log('[GBP] orari-attuali:', JSON.stringify(o)))
+    .catch(e => console.error('[GBP] lettura orari fallita:', e.message));
+}
+
 module.exports = { app, server };
