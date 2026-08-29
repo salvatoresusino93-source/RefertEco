@@ -9,6 +9,7 @@ const supabase = require('./supabase');
 const { inviaPromemoria, inviaPromemoria1Ora, inviaRichiestaRecensione } = require('./sms');
 const { inviaWhatsappPromemoria, inviaWhatsappPromemoria1Ora, inviaWhatsappRecensione } = require('./whatsapp');
 const { popolaFestivita } = require('./festivita');
+const { getIO } = require('./socket');
 const { leggiEventiPersonali, getCreds } = require('./googleCalendar');
 const { aggiornaOreSettimana } = require('./googleBusiness');
 
@@ -31,6 +32,31 @@ async function appuntamentiDomani() {
 
   if (error) throw error;
   return data || [];
+}
+
+// ─── Segna quando il promemoria è stato mandato, e avvisa l'agenda ───────
+// Distingue "promemoria mandato, il paziente non ha ancora risposto" da
+// "promemoria non ancora mandato" (il caso normale per qualsiasi
+// appuntamento fino alle 08:00 del giorno prima). Senza questo, il
+// dettaglio dell'appuntamento in agenda diceva sempre "Nessuna risposta
+// al promemoria" anche per appuntamenti fra due settimane a cui non era
+// mai stato scritto nulla — fuorviante, perché suggeriva un promemoria
+// ignorato quando in realtà non era ancora partito.
+// L'evento socket aggiorna l'agenda di chi la sta guardando in quel
+// momento, senza bisogno di ricaricare la pagina.
+async function segnaPromemoriaInviato(app) {
+  const promemoria_inviato_at = new Date().toISOString();
+  const { error } = await supabase
+    .from('appuntamenti')
+    .update({ promemoria_inviato_at })
+    .eq('id', app.id);
+  if (error) {
+    console.error('[SMS Reminder] Salvataggio invio promemoria fallito:', error.message);
+    return;
+  }
+  try {
+    getIO().emit('appuntamento:aggiornato', { ...app, promemoria_inviato_at });
+  } catch {}
 }
 
 // ─── Invia promemoria per tutti gli appuntamenti di domani ────────────────
@@ -82,6 +108,7 @@ async function inviaPromemoriDomani() {
       const result = await inviaPromemoria(app);
       console.log(`  [OK] ${nome} → ${result.numero} (SID: ${result.sid})`);
       inviati++;
+      await segnaPromemoriaInviato(app);
     } catch (e) {
       console.error(`  [ERRORE] ${nome} → ${e.message}`);
       errori++;
