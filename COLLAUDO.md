@@ -58,6 +58,16 @@ conferma raggiunge il paziente.
       dello studio (0932 954441 - 339 4028454)
 - [ ] L'appuntamento compare sul **Google Calendar** del medico
 
+### Variante — conferma dall'agenda invece che dall'email
+
+Fai un secondo giro del Test 1, ma al posto del punto 5 apri l'appuntamento
+in agenda e cambia lo stato in **"Prenotato"** dal pulsante lì, senza
+passare dall'email.
+
+✅ **Deve succedere esattamente lo stesso** di sopra: SMS al paziente ed
+evento sul Google Calendar. Se manca uno dei due, il bug per cui approvare
+dall'agenda non avvisava nessuno (PR #10) è tornato.
+
 ---
 
 ## Test 2 — Promemoria e risposta del paziente
@@ -99,7 +109,10 @@ curl -X POST https://referteco-production.up.railway.app/api/reminder/test
 
 ## Test 3 — Disdetta
 
-**Cosa dimostra:** che una disdetta libera davvero lo slot e ti avvisa.
+**Cosa dimostra:** che una disdetta libera davvero lo slot ovunque e ti
+avvisa — non solo in agenda, ma anche sul Google Calendar del medico
+(altrimenti lo slot risulta libero in agenda ma bloccato dall'evento
+rimasto sul calendario, e quindi non torna prenotabile dal sito).
 
 1. Riapri lo stesso link dell'SMS
 2. Premi **"❌ NON POSSO VENIRE"**
@@ -107,6 +120,8 @@ curl -X POST https://referteco-production.up.railway.app/api/reminder/test
 ✅ **Deve succedere:**
 - [ ] Compare "Appuntamento disdetto"
 - [ ] **L'appuntamento sparisce dall'agenda** (non resta grigio: sparisce)
+- [ ] **L'evento sparisce anche dal tuo Google Calendar** — controlla
+      direttamente nell'app/sito di Google Calendar, non solo in agenda
 - [ ] Ti arriva un'**email** "❌ Appuntamento annullato"
 - [ ] Quello slot torna **prenotabile** dal sito
 
