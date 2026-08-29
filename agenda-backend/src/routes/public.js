@@ -393,17 +393,24 @@ router.post('/prenota', async (req, res) => {
     if (errPaz) return res.status(500).json({ error: 'Errore durante la registrazione. Riprova.' });
     pazienteId = newPaz.id;
   } else {
-    // Paziente esistente: completa l'email se mancante
-    // Aggiorna email, CAP e comune se mancanti
-    const aggiornamenti = {};
+    // Paziente esistente (trovato per codice fiscale o nome+data di
+    // nascita): allinea i suoi dati a quelli appena inseriti nel modulo.
+    //
+    // Il telefono viene SEMPRE aggiornato, non solo se mancante: è il dato
+    // più recente fornito direttamente dal paziente, e su questo campo la
+    // "prudenza" (aggiornare solo se vuoto) è un bug, non una precauzione —
+    // un paziente esistente che cambia numero e riprenota online continua a
+    // ricevere SMS al vecchio numero finché qualcuno non lo corregge a mano
+    // in agenda. Email/indirizzo/CAP/comune restano invece aggiornati solo
+    // se mancanti, per non sovrascrivere dati già completi con un modulo
+    // magari compilato di fretta.
+    const aggiornamenti = { telefono: telPulito };
     if (emailPulita)      aggiornamenti.email     = emailPulita;
     if (indirizzo?.trim()) aggiornamenti.indirizzo = indirizzo.trim();
     if (civico?.trim())    aggiornamenti.civico    = civico.trim();
     if (cap?.trim())       aggiornamenti.cap       = cap.trim();
     if (comune?.trim())    aggiornamenti.comune    = comune.trim();
-    if (Object.keys(aggiornamenti).length) {
-      await supabase.from('pazienti').update(aggiornamenti).eq('id', pazienteId);
-    }
+    await supabase.from('pazienti').update(aggiornamenti).eq('id', pazienteId);
   }
 
   // Crea appuntamento in_attesa
