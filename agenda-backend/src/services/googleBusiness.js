@@ -2,7 +2,7 @@
 // GOOGLE BUSINESS PROFILE — Aggiornamento automatico orari apertura
 //
 // Logica:
-//  • Orari base: Martedì e Venerdì 9:00-13:00 e 15:00-19:00
+//  • Orari base: Lunedì–Venerdì 9:00-12:30 e 15:00-19:00
 //  • Festivi (blocchi_agenda tipo='festivo'): mostra chiuso
 //  • Impegni personali su Google Calendar: riduce orari apertura
 //  • Ogni domenica sera (cron) aggiorna specialHours per i prossimi 30 gg
@@ -178,7 +178,7 @@ async function impostaOrariBase() {
   const body = {
     regularHours: {
       periods: days.flatMap(([open, close]) => [
-        { openDay: open, openTime: { hours: 9  }, closeDay: close, closeTime: { hours: 13 } },
+        { openDay: open, openTime: { hours: 9  }, closeDay: close, closeTime: { hours: 12, minutes: 30 } },
         { openDay: open, openTime: { hours: 15 }, closeDay: close, closeTime: { hours: 19 } },
       ]),
     },
