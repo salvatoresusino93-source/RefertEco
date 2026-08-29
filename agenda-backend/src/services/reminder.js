@@ -9,7 +9,7 @@ const supabase = require('./supabase');
 const { inviaPromemoria, inviaPromemoria1Ora, inviaRichiestaRecensione } = require('./sms');
 const { inviaWhatsappPromemoria, inviaWhatsappPromemoria1Ora, inviaWhatsappRecensione } = require('./whatsapp');
 const { popolaFestivita } = require('./festivita');
-const { getIO } = require('./socket');
+const { getIO } = require('../socket');
 const { leggiEventiPersonali, getCreds } = require('./googleCalendar');
 const { aggiornaOreSettimana } = require('./googleBusiness');
 
@@ -390,7 +390,7 @@ function avviaReminder() {
   // All'avvio: allinea subito gli orari
   aggiornaOreSettimana().catch(e => console.error('[GBP avvio]', e.message));
 
-  console.log('[SMS Reminder] Cron job attivi — 19:00 SMS + 1h prima + recensione 11:00 + sync GCal ogni 30min + GBP ogni 30min (Europe/Rome)');
+  console.log('[SMS Reminder] Cron job attivi — 08:00 promemoria + recensione 11:00 + sync GCal ogni 30min + GBP ogni 30min (Europe/Rome). Promemoria "1h prima" disattivato.');
 
   // All'avvio: popola festività anno corrente e prossimo se non già presenti
   const annoOra = new Date().getFullYear();
