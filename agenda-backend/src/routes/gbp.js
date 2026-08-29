@@ -149,7 +149,7 @@ router.post('/set-regular-hours', requireAuth, async (req, res) => {
     res.json({
       ok:      true,
       message: 'Orari settimanali base impostati su Google Business Profile',
-      orari:   'Lunedì–Venerdì: 9-13 e 15-19 | Sabato e Domenica: chiuso',
+      orari:   'Lunedì–Venerdì: 9:00-12:30 e 15:00-19:00 | Sabato e Domenica: chiuso',
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
