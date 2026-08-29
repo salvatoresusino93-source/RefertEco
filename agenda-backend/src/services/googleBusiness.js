@@ -198,7 +198,7 @@ async function impostaOrariBase() {
     throw new Error(`GBP regularHours error: ${JSON.stringify(err)}`);
   }
 
-  console.log('[GBP] ✓ Orari settimanali base impostati (Lunedì–Venerdì: 9-13 e 15-19)');
+  console.log('[GBP] ✓ Orari settimanali base impostati (Lunedì–Venerdì: 9:00-12:30 e 15:00-19:00)');
   return true;
 }
 
