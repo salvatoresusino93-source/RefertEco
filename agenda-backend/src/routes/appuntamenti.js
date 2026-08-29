@@ -50,12 +50,33 @@ function promemoriaImmediatoSeServe(app) {
     const cronGiaPassato = adesso.getHours() >= ORA_CRON_PROMEMORIA;
 
     if (eDomani && cronGiaPassato) {
-      inviaPromemoria(app).catch(e => console.error('[SMS] Promemoria immediato:', e.message));
+      inviaPromemoria(app)
+        .then(() => segnaPromemoriaInviato(app))
+        .catch(e => console.error('[SMS] Promemoria immediato:', e.message));
       inviaWhatsappPromemoria(app).catch(e => console.error('[WhatsApp] Promemoria immediato:', e.message));
     }
   } catch (e) {
     console.error('[SMS] Controllo promemoria immediato:', e.message);
   }
+}
+
+// Stessa contabilità di services/reminder.js (segnaPromemoriaInviato): segna
+// quando il promemoria è partito e avvisa l'agenda in tempo reale, così il
+// dettaglio dell'appuntamento non dice più "nessuna risposta" per un
+// promemoria che in realtà non era mai stato inviato. Duplicata qui invece
+// che importata perché questo è l'unico altro punto che invia un
+// promemoria (la rete di sicurezza per le prenotazioni tardive).
+async function segnaPromemoriaInviato(app) {
+  const promemoria_inviato_at = new Date().toISOString();
+  const { error } = await supabase
+    .from('appuntamenti')
+    .update({ promemoria_inviato_at })
+    .eq('id', app.id);
+  if (error) {
+    console.error('[SMS] Salvataggio invio promemoria fallito:', error.message);
+    return;
+  }
+  try { getIO().emit('appuntamento:aggiornato', { ...app, promemoria_inviato_at }); } catch {}
 }
 
 // ─── GET /api/appuntamenti?from=ISO&to=ISO ───────────────────────────────

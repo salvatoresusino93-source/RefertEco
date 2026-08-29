@@ -125,7 +125,14 @@ function initSocket() {
     const s = io();
     const refresh = () => { refreshWeek(); refreshSidebar(); };
     s.on('appuntamento:nuovo',      refresh);
-    s.on('appuntamento:aggiornato', refresh);
+    s.on('appuntamento:aggiornato', app => {
+      refresh();
+      // Se il dettaglio di QUESTO appuntamento è aperto in questo momento,
+      // aggiorna anche la riga "Presenza" senza bisogno di chiudere e
+      // riaprire — es. il promemoria delle 08:00 parte mentre il medico ha
+      // già la scheda del paziente sotto gli occhi.
+      if (app?.id && app.id === _editId) renderPresenza(app);
+    });
     s.on('appuntamento:annullato',  refresh);
     s.on('indisponibilita:creata',  refresh);
     s.on('indisponibilita:rimossa', refresh);
@@ -568,7 +575,7 @@ async function loadAppInModal(id) {
     $('app-durata').value = Math.round((new Date(a.data_ora_fine)-new Date(a.data_ora_inizio))/60000);
     $('app-note').value = a.note_segreteria || '';
     $('app-invia-sms').checked = a.invia_sms_promemoria !== false; // default true
-    renderPresenza(a.conferma_paziente);
+    renderPresenza(a);
     $('field-stato').style.display = '';
     renderStatoBtns(a.stato);
   } catch { alert('Errore nel caricamento'); closeModal(); }
@@ -580,14 +587,29 @@ async function loadAppInModal(id) {
 // annullato e sparisce dall'agenda), oppure è vuoto se non ha ancora
 // risposto. "In attesa" NON significa che non verrà: la maggior parte dei
 // pazienti si presenta senza rispondere al messaggio.
-function renderPresenza(stato) {
+function renderPresenza(app) {
   const box = $('app-presenza');
   if (!box) return;
-  const testo = stato === 'confermato'
-    ? '<span style="color:#16a34a;font-weight:700">✅ Confermata dal paziente</span>'
-    : stato === 'disdetto'
-      ? '<span style="color:#dc2626;font-weight:700">❌ Disdetta dal paziente</span>'
-      : '<span style="color:#64748b">⏳ Nessuna risposta al promemoria</span>';
+  const stato = app.conferma_paziente;
+  const inviatoIl = app.promemoria_inviato_at
+    ? new Date(app.promemoria_inviato_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })
+    : null;
+
+  let testo;
+  if (stato === 'confermato') {
+    testo = '<span style="color:#16a34a;font-weight:700">✅ Confermata dal paziente</span>';
+  } else if (stato === 'disdetto') {
+    testo = '<span style="color:#dc2626;font-weight:700">❌ Disdetta dal paziente</span>';
+  } else if (inviatoIl) {
+    // Il promemoria è partito ma il paziente non ha ancora risposto — non
+    // significa che non verrà, la maggior parte si presenta senza cliccare.
+    testo = `<span style="color:#64748b">⏳ Promemoria inviato il ${inviatoIl} — nessuna risposta</span>`;
+  } else {
+    // Distinto dal caso sopra: qui il promemoria non è MAI partito (il
+    // caso normale per qualsiasi appuntamento prima delle 08:00 del
+    // giorno prima) — prima dei due casi non si distinguevano.
+    testo = '<span style="color:#94a3b8">🕐 Promemoria non ancora inviato (parte alle 08:00 del giorno prima)</span>';
+  }
   box.innerHTML = testo;
   $('field-presenza').style.display = '';
 }
