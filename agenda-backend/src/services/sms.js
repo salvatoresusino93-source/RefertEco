@@ -119,11 +119,27 @@ async function inviaPromemoria(appuntamento) {
   const link = await urlConferma(appuntamento);
 
   // NB: niente tipo di esame — vedi nota in inviaSmsConferma.
-  const testo =
-    `Promemoria ${STUDIO}: appuntamento domani ${data} ore ${ora}. ` +
-    `Conferma o disdici qui: ${link} ` +
-    `Info: ${SITO}` +
-    (TEL ? ` - ${TEL}` : '');
+  //
+  // Il messaggio deve stare in 160 caratteri. Oltre quella soglia l'SMS viene
+  // spezzato in due parti: costa il doppio e, soprattutto, il confine cadeva
+  // in mezzo al link, che il telefono può quindi consegnare troncato — da cui
+  // il "Link non valido" visto dai pazienti. Per questo il link sta in fondo
+  // (nessun testo può spingerlo a cavallo del confine) e la coda con sito e
+  // recapiti viene aggiunta solo se ci sta: quelle informazioni sono comunque
+  // sulla pagina che il link apre.
+  const LIMITE = 160;
+  const testa = `${STUDIO}: appuntamento domani ${data} ore ${ora}.`;
+  const coda  = ` Info: ${SITO}${TEL ? ` - ${TEL}` : ''}`;
+  const invito = ` Conferma o disdici: ${link}`;
+
+  let testo = testa + coda + invito;
+  if (testo.length > LIMITE) testo = testa + invito;
+  if (testo.length > LIMITE) {
+    console.warn(
+      `[SMS Promemoria] Testo di ${testo.length} caratteri anche senza la coda: ` +
+      `partirà come 2 SMS. Accorcia STUDIO_NOME (ora ${STUDIO.length} caratteri).`
+    );
+  }
 
   const result = await inviaSms(numero, testo);
   return { sid: result.id || 'ok', numero, testo };
