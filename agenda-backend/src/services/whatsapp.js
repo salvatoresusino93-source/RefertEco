@@ -126,12 +126,26 @@ function soloTelefono() {
   return TEL || SITO;
 }
 
+// ─── Interruttore esplicito (richiesta Dott. Susino, 30/8/2026) ───────────
+// L'account WhatsApp Business non è ancora verificato su Meta: ogni invio
+// fallisce con errore 133010. Finché non si verifica l'account, WhatsApp è
+// spento QUI nel codice — non lasciato "a fallire e basta" — così: non si
+// accumulano errori nei log a ogni giro di cron, è chiaro leggendo il
+// codice che è una scelta e non un guasto, e SMS continua a funzionare
+// esattamente come prima (ogni funzione sotto è già non bloccante rispetto
+// all'SMS, invocata con .catch() e mai awaited dal flusso SMS).
+// Il default è OFF anche se WHATSAPP_PHONE_NUMBER_ID/ACCESS_TOKEN restano
+// impostati su Railway: va riacceso di proposito, con un'unica modifica
+// consapevole, quando l'account sarà verificato.
+const WHATSAPP_ABILITATO = process.env.WHATSAPP_ABILITATO === 'true';
+
 // ─── Configurato? ──────────────────────────────────────────────────────────
 // Come per Resend/SMS Hosting: se le credenziali mancano, l'invio è un
-// no-op silenzioso — così il progetto funziona anche senza WhatsApp attivo,
-// e attivarlo in futuro è solo questione di impostare le due variabili.
+// no-op silenzioso — così il progetto funziona anche senza WhatsApp attivo.
+// In più, va acceso esplicitamente con WHATSAPP_ABILITATO=true (vedi sopra).
 function whatsappConfigurato() {
-  return Boolean(process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_ACCESS_TOKEN);
+  return WHATSAPP_ABILITATO
+    && Boolean(process.env.WHATSAPP_PHONE_NUMBER_ID && process.env.WHATSAPP_ACCESS_TOKEN);
 }
 
 // ─── Registra il numero sulla Cloud API (da fare UNA VOLTA per numero) ────
