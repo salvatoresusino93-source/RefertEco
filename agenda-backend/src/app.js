@@ -6,6 +6,7 @@ const cors    = require('cors');
 const path    = require('path');
 
 const jwt = require('jsonwebtoken');
+const { requireAuth, requireMedico } = require('./middleware/auth');
 const { initSocket, getIO } = require('./socket');
 const { avviaReminder, inviaPromemoriDomani, inviaRichiesteRecensione } = require('./services/reminder');
 const supabase = require('./services/supabase');
@@ -305,7 +306,10 @@ app.post('/api/test-sms', async (req, res) => {
 //     salta la scrittura sul database — questa route non scrive MAI su
 //     Supabase, quindi non tocca promemoria_inviato_at né alcun altro
 //     campo, né dell'appuntamento di test né tantomeno dei pazienti reali.
-app.post('/api/test-promemoria', async (req, res) => {
+//   - Protetta da login (requireAuth + requireMedico): senza questo, era
+//     raggiungibile da chiunque sul sito pubblico e poteva far partire SMS
+//     reali senza alcuna verifica di identità (pulizia di sicurezza 30/8).
+app.post('/api/test-promemoria', requireAuth, requireMedico, async (req, res) => {
   const NUMERO_DOTTORE = '+393513746102';
   const appFinto = {
     id: '14456eca-9616-4173-824c-d0625c6eec14', // appuntamento di test, solo per riferimento nei log
@@ -341,7 +345,10 @@ app.post('/api/test-promemoria', async (req, res) => {
 //   - Tocca il campo conferma_token SOLO sull'appuntamento di test
 //     dedicato (lo stesso già usato da /api/test-promemoria) — nessun
 //     altro campo, nessun altro appuntamento, nessun paziente reale.
-app.post('/api/test-token-fix', async (req, res) => {
+//   - Protetta da login (requireAuth + requireMedico): senza questo, era
+//     raggiungibile da chiunque sul sito pubblico e poteva far partire SMS
+//     reali senza alcuna verifica di identità (pulizia di sicurezza 30/8).
+app.post('/api/test-token-fix', requireAuth, requireMedico, async (req, res) => {
   const NUMERO_DOTTORE = '+393513746102';
   const APP_TEST_ID = '14456eca-9616-4173-824c-d0625c6eec14';
 
