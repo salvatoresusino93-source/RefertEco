@@ -12,7 +12,7 @@ const supabase = require('./services/supabase');
 const { costruisciEventoWebhook } = require('./services/stripe');
 const { creaEvento } = require('./services/googleCalendar');
 const { notificaPrenotazionePagata, notificaPrenotazioneOnline, inviaRicevutaPagamento } = require('./services/email');
-const { normalizzaNumero } = require('./services/sms');
+const { normalizzaNumero, inviaPromemoria } = require('./services/sms');
 const { whatsappConfigurato, inviaTemplate, registraNumero } = require('./services/whatsapp');
 const authRoutes         = require('./routes/auth');
 const pazientiRoutes     = require('./routes/pazienti');
@@ -284,6 +284,42 @@ app.post('/api/test-sms', async (req, res) => {
       parametri_inviati: { numero, from: '(nessuno — usa numero fisso SMS Hosting)', apiKey_prefix: apiKey.slice(0, 6) + '...' }
     });
   } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Test SMS promemoria diretto — un SOLO invio, mai il batch ───────────
+// POST /api/test-promemoria
+// Verifica con un invio SMS reale (stessa funzione usata dal cron delle
+// 08:00) che il fix del 30/8 sul testo troppo lungo (link troncato a metà,
+// "Link non valido" — vedi commit b137eea) funzioni davvero end-to-end.
+//
+// Vincoli di sicurezza, per costruzione (non a runtime):
+//   - Il numero è FISSO nel codice, non letto dal body: non può mandare
+//     l'SMS a nessun altro che al Dott. Susino, qualunque cosa arrivi
+//     nella richiesta.
+//   - NON chiama la funzione batch (inviaPromemoriDomani): zero rischio di
+//     anticipare o duplicare il promemoria dei pazienti reali di domani.
+//   - Usa un token di conferma GIÀ esistente (quello dell'appuntamento di
+//     test del Dott. Susino): urlConferma() lo trova già valorizzato e
+//     salta la scrittura sul database — questa route non scrive MAI su
+//     Supabase, quindi non tocca promemoria_inviato_at né alcun altro
+//     campo, né dell'appuntamento di test né tantomeno dei pazienti reali.
+app.post('/api/test-promemoria', async (req, res) => {
+  const NUMERO_DOTTORE = '+393513746102';
+  const appFinto = {
+    id: '14456eca-9616-4173-824c-d0625c6eec14', // appuntamento di test, solo per riferimento nei log
+    conferma_token: 'h3DRquo',                   // token reale già esistente — nessuna scrittura DB
+    data_ora_inizio: new Date(Date.now() + 26 * 3600 * 1000).toISOString(), // "domani" per il testo del messaggio
+    pazienti: { telefono: NUMERO_DOTTORE },
+  };
+
+  try {
+    const r = await inviaPromemoria(appFinto);
+    console.log(`[Test Promemoria] Inviato a ${r.numero} — ${r.testo.length} caratteri:\n  "${r.testo}"`);
+    res.json({ ok: true, numero: r.numero, lunghezza: r.testo.length, testo: r.testo });
+  } catch (e) {
+    console.error('[Test Promemoria] Errore:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
