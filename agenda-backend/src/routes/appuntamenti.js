@@ -50,10 +50,18 @@ function promemoriaImmediatoSeServe(app) {
     const cronGiaPassato = adesso.getHours() >= ORA_CRON_PROMEMORIA;
 
     if (eDomani && cronGiaPassato) {
+      // Il WhatsApp parte DOPO l'SMS (non in parallelo): urlConferma() genera
+      // il conferma_token solo la prima volta e lo scrive anche su `app` in
+      // memoria (services/sms.js), quindi la seconda chiamata (WhatsApp)
+      // deve trovarlo già valorizzato e riusarlo, non rigenerarlo. In
+      // parallelo le due chiamate vedrebbero entrambe token assente e
+      // genererebbero due token diversi, con l'ultimo a sovrascrivere sul DB
+      // quello già spedito nel primo messaggio.
       inviaPromemoria(app)
         .then(() => segnaPromemoriaInviato(app))
-        .catch(e => console.error('[SMS] Promemoria immediato:', e.message));
-      inviaWhatsappPromemoria(app).catch(e => console.error('[WhatsApp] Promemoria immediato:', e.message));
+        .catch(e => console.error('[SMS] Promemoria immediato:', e.message))
+        .then(() => inviaWhatsappPromemoria(app))
+        .catch(e => console.error('[WhatsApp] Promemoria immediato:', e.message));
     }
   } catch (e) {
     console.error('[SMS] Controllo promemoria immediato:', e.message);

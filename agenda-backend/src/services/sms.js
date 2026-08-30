@@ -34,6 +34,17 @@ async function urlConferma(app) {
     if (error) {
       throw new Error(`conferma_token non salvato per ${app.id}: ${error.message}`);
     }
+
+    // Fondamentale: senza questa riga l'oggetto `app` in memoria resta con
+    // conferma_token assente. Se la stessa chiamata (stesso oggetto) viene
+    // passata subito dopo a un'altra funzione che richiama urlConferma()
+    // (es. inviaWhatsappPromemoria dopo inviaPromemoria, sullo stesso
+    // appuntamento — vedi services/reminder.js e
+    // routes/appuntamenti.js:promemoriaImmediatoSeServe), quella seconda
+    // chiamata rivede token falsy, ne genera uno NUOVO e lo salva sul DB,
+    // sovrascrivendo quello già spedito nel primo SMS/WhatsApp: il link già
+    // inviato punta quindi a un token ormai orfano → "Link non valido".
+    app.conferma_token = token;
   }
   return `${BASE_URL}/p/${token}`;
 }
