@@ -23,7 +23,17 @@ async function urlConferma(app) {
   let token = app.conferma_token;
   if (!token) {
     token = crypto.randomBytes(5).toString('base64url'); // ~7 caratteri
-    await supabase.from('appuntamenti').update({ conferma_token: token }).eq('id', app.id);
+    const { error } = await supabase
+      .from('appuntamenti')
+      .update({ conferma_token: token })
+      .eq('id', app.id);
+
+    // Se il token non si salva, il link finirebbe nell'SMS senza avere
+    // riscontro sul DB e il paziente vedrebbe "Link non valido". Meglio
+    // fallire qui, dove il chiamante logga l'errore, che spedire un link morto.
+    if (error) {
+      throw new Error(`conferma_token non salvato per ${app.id}: ${error.message}`);
+    }
   }
   return `${BASE_URL}/p/${token}`;
 }

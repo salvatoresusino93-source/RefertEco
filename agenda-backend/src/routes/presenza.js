@@ -65,11 +65,17 @@ function fmtOra(iso) {
 }
 
 async function trovaApp(code) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('appuntamenti')
     .select('*, pazienti(*), tipi_prestazione(*)')
     .eq('conferma_token', code)
     .single();
+
+  // Senza questo log un "Link non valido" non distingue fra token inesistente,
+  // appuntamento cancellato e problema sul DB: tre cause con rimedi diversi.
+  if (error) {
+    console.warn(`[Presenza] token "${code}" non risolto: ${error.message}`);
+  }
   return data || null;
 }
 
