@@ -13,7 +13,7 @@ const { costruisciEventoWebhook } = require('./services/stripe');
 const { creaEvento } = require('./services/googleCalendar');
 const { notificaPrenotazionePagata, notificaPrenotazioneOnline, inviaRicevutaPagamento } = require('./services/email');
 const { normalizzaNumero, inviaPromemoria } = require('./services/sms');
-const { whatsappConfigurato, inviaTemplate, registraNumero } = require('./services/whatsapp');
+const { whatsappConfigurato, inviaTemplate, registraNumero, inviaWhatsappPromemoria } = require('./services/whatsapp');
 const authRoutes         = require('./routes/auth');
 const pazientiRoutes     = require('./routes/pazienti');
 const appuntamentiRoutes = require('./routes/appuntamenti');
@@ -320,6 +320,88 @@ app.post('/api/test-promemoria', async (req, res) => {
     res.json({ ok: true, numero: r.numero, lunghezza: r.testo.length, testo: r.testo });
   } catch (e) {
     console.error('[Test Promemoria] Errore:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Test fix "token conferma sovrascritto" — prova end-to-end reale ─────
+// POST /api/test-token-fix
+// Riproduce ESATTAMENTE il caso segnalato: stesso appuntamento passato
+// prima a inviaPromemoria (SMS) poi a inviaWhatsappPromemoria (WhatsApp),
+// come fa il cron delle 08:00 (services/reminder.js). Prova che il token
+// spedito nell'SMS sia lo STESSO che risulta salvato su Supabase dopo
+// entrambi gli invii — non un secondo token generato dalla chiamata
+// WhatsApp che sovrascrive quello già spedito (vedi commit 635ba92).
+//
+// Vincoli di sicurezza, per costruzione (non a runtime):
+//   - Il numero è FISSO nel codice (numero del Dott. Susino): non può
+//     mandare a nessun altro, qualunque cosa arrivi nella richiesta.
+//   - Non chiama MAI la funzione batch (inviaPromemoriDomani): zero
+//     rischio sui promemoria reali di domani.
+//   - Tocca il campo conferma_token SOLO sull'appuntamento di test
+//     dedicato (lo stesso già usato da /api/test-promemoria) — nessun
+//     altro campo, nessun altro appuntamento, nessun paziente reale.
+app.post('/api/test-token-fix', async (req, res) => {
+  const NUMERO_DOTTORE = '+393513746102';
+  const APP_TEST_ID = '14456eca-9616-4173-824c-d0625c6eec14';
+
+  try {
+    // 1) Azzera il token sull'appuntamento di test, per obbligare urlConferma()
+    //    a generarne uno nuovo (come succede a un vero promemoria non ancora
+    //    inviato) — scrittura mirata solo su questa riga di test.
+    const { error: errReset } = await supabase
+      .from('appuntamenti')
+      .update({ conferma_token: null })
+      .eq('id', APP_TEST_ID);
+    if (errReset) throw new Error(`Reset token fallito: ${errReset.message}`);
+
+    // 2) Stesso oggetto passato prima all'SMS poi al WhatsApp, esattamente
+    //    come nel cron reale (services/reminder.js righe 108-117).
+    const appFinto = {
+      id: APP_TEST_ID,
+      conferma_token: null,
+      data_ora_inizio: new Date(Date.now() + 26 * 3600 * 1000).toISOString(),
+      pazienti: { telefono: NUMERO_DOTTORE },
+    };
+
+    const rSms = await inviaPromemoria(appFinto);
+    const tokenDopoSms = appFinto.conferma_token; // deve essere valorizzato dal fix
+
+    let whatsappEsito = 'saltato (non configurato)';
+    if (whatsappConfigurato()) {
+      await inviaWhatsappPromemoria(appFinto);
+      whatsappEsito = 'inviato';
+    }
+    const tokenDopoWhatsapp = appFinto.conferma_token; // deve restare identico
+
+    // 3) Rilettura indipendente dal DB: cosa risulta REALMENTE salvato ora.
+    const { data: rigaDb, error: errLettura } = await supabase
+      .from('appuntamenti')
+      .select('conferma_token')
+      .eq('id', APP_TEST_ID)
+      .single();
+    if (errLettura) throw new Error(`Rilettura DB fallita: ${errLettura.message}`);
+
+    const tokenSuDb = rigaDb.conferma_token;
+    const corrispondono = tokenDopoSms === tokenSuDb && tokenDopoWhatsapp === tokenSuDb;
+
+    console.log(
+      `[Test Token Fix] token SMS="${tokenDopoSms}" token dopo WhatsApp="${tokenDopoWhatsapp}" ` +
+      `token su DB="${tokenSuDb}" → ${corrispondono ? 'COINCIDONO ✅' : 'NON COINCIDONO ❌'}`
+    );
+
+    res.json({
+      ok: corrispondono,
+      token_inviato_sms: tokenDopoSms,
+      token_dopo_whatsapp: tokenDopoWhatsapp,
+      token_su_db: tokenSuDb,
+      corrispondono,
+      whatsapp: whatsappEsito,
+      testo_sms: rSms.testo,
+      link_provalo: `${process.env.APP_URL || 'https://conferma.studiosusino.it'}/p/${tokenSuDb}`,
+    });
+  } catch (e) {
+    console.error('[Test Token Fix] Errore:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
