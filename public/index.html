@@ -214,9 +214,9 @@
 
           <div class="form-actions">
             <button class="btn btn-primary" onclick="salvaReferto()">💾 Salva referto</button>
-            <button class="btn btn-success" onclick="salvaEFirma()" title="Salva il referto e avvia la firma digitale qualificata">✍ Salva e Firma</button>
-            <button class="btn btn-primary" onclick="salvaEdEsporta(false)">📄 Solo referto</button>
-            <button class="btn btn-primary" onclick="salvaEdEsporta(true)">🖼 Referto + immagini</button>
+            <button class="btn btn-secondary" onclick="stampaImmagini()" title="Stampa le immagini dell&apos;esame, senza il testo del referto">🖼 Stampa immagini</button>
+            <button class="btn btn-primary" onclick="salvaEdEsporta()" title="Stampa il referto SENZA firma digitale — da firmare a penna">📄 Stampa referto</button>
+            <button class="btn btn-success" onclick="salvaEFirma()" title="Firma digitale Namirial e stampa automatica del referto">✍ Firma e Stampa</button>
             <button class="btn btn-secondary" onclick="resetForm()">Reset</button>
             <span style="flex:1"></span>
             <span style="font-size:11px;color:var(--text-muted);font-family:'DM Mono',monospace;">Dati salvati su database locale · SQLite</span>
@@ -247,11 +247,12 @@
             <button class="viewer-measure-btn" id="viewer-zoom-mode-btn" onclick="toggleZoomMode()" title="Rotella: SCORRE immagini — clicca per passare allo zoom">🔍</button>
             <button class="viewer-measure-clr" id="viewer-measure-clr" onclick="clearMeasurements()" title="Cancella tutte le misure" style="display:none">✕ misure</button>
             <div class="viewer-pp-ctrl">
-              <button class="pp-btn" data-n="4" onclick="setPrintPerPage(4)" title="4 immagini per pagina">4</button>
-              <button class="pp-btn" data-n="6" onclick="setPrintPerPage(6)" title="6 immagini per pagina">6</button>
-              <button class="pp-btn" data-n="8" onclick="setPrintPerPage(8)" title="8 immagini per pagina">8</button>
+              <button class="pp-btn" data-n="4"  onclick="setPrintPerPage(4)"  title="4 immagini per pagina — le più grandi">4</button>
+              <button class="pp-btn" data-n="8"  onclick="setPrintPerPage(8)"  title="8 immagini per pagina">8</button>
+              <button class="pp-btn" data-n="12" onclick="setPrintPerPage(12)" title="12 immagini per pagina">12</button>
+              <button class="pp-btn" data-n="15" onclick="setPrintPerPage(15)" title="15 immagini per pagina — le più piccole">15</button>
             </div>
-            <button class="viewer-measure-btn" onclick="stampaImmagini()" title="Stampa tutte le immagini (solo immagini, qualità massima)">🖨️</button>
+            <button class="viewer-print-btn" onclick="stampaImmagini()" title="Stampa subito le immagini in alta qualità — non serve aver scritto il referto">🖨️ Stampa immagini</button>
             <button class="viewer-measure-btn" id="orthanc-open-btn" onclick="apriPanelOrthanc()" title="Importa immagini da Orthanc (ecografo)">🏥</button>
             <label class="viewer-import-btn" title="Importa file immagine">
               📁
@@ -416,9 +417,10 @@
           <span class="edit-title" id="edit-title">Modifica referto</span>
           <span style="flex:1"></span>
           <button class="btn btn-primary btn-sm" onclick="salvaModifiche()">💾 Salva</button>
-          <button class="btn btn-primary btn-sm" onclick="esportaDaEdit(false)">📄 Solo referto</button>
-          <button class="btn btn-primary btn-sm" onclick="esportaDaEdit(true)">🖼 Referto + immagini</button>
-          <button class="btn btn-success btn-sm" onclick="apriModalFirma(_editingId)" title="Firma digitale Namirial + stampa automatica">✍ Firma e Stampa</button>
+          <button class="btn btn-secondary btn-sm" onclick="stampaImmaginiArchivio(_editingId)" title="Stampa le immagini dell&apos;esame, senza il testo del referto">🖼 Stampa immagini</button>
+          <button class="btn btn-primary btn-sm" onclick="esportaDaEdit()" title="Stampa il referto SENZA firma digitale — da firmare a penna">📄 Stampa referto</button>
+          <button class="btn btn-success btn-sm" onclick="apriModalFirma(_editingId)" title="Firma digitale Namirial e stampa automatica del referto">✍ Firma e Stampa</button>
+          <span style="width:18px"></span>
           <button class="btn btn-danger btn-sm" onclick="eliminaDaEdit()">🗑 Elimina</button>
         </div>
 
@@ -612,6 +614,27 @@
 
         <div class="form-card" style="max-width:660px;margin-top:18px">
           <div class="form-section">
+            <div class="sec-lbl">🖨️ Stampante</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;line-height:1.6">
+              Con l'uso gli ugelli si ostruiscono e in stampa compaiono <strong>righe bianche</strong>,
+              che su un'ecografia si confondono con l'immagine.
+              Da qui si apre la finestra di manutenzione della stampante, dove trovi
+              <strong>Pulizia testine</strong> e <strong>Controllo ugelli</strong>.
+            </p>
+            <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;line-height:1.6">
+              💡 Fai prima il <strong>Controllo ugelli</strong>: stampa una griglia di prova e ti dice
+              <em>se</em> serve pulire. Ogni pulizia consuma inchiostro e dura qualche minuto,
+              quindi conviene farla solo quando serve davvero.
+            </p>
+            <button class="btn btn-secondary btn-sm" onclick="apriManutenzioneStampante()" type="button">
+              🖨️ Apri manutenzione stampante
+            </button>
+            <div id="stampante-result" style="font-size:12px;margin-top:8px;font-family:'DM Mono',monospace;color:var(--text-muted)"></div>
+          </div>
+        </div>
+
+        <div class="form-card" style="max-width:660px;margin-top:18px">
+          <div class="form-section">
             <div class="sec-lbl">Manutenzione</div>
             <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;line-height:1.6">
               Cerca e rimuove cartelle di immagini di referti che <strong>non esistono più</strong>
@@ -639,14 +662,15 @@
       <button class="m-close" onclick="closeModal()">✕</button>
     </div>
     <div class="m-ft">
-      <button class="btn btn-danger btn-sm" id="m-del">🗑 Elimina</button>
-      <button class="btn btn-secondary btn-sm" onclick="closeModal()">Chiudi</button>
       <button class="btn btn-secondary btn-sm" id="m-btn-annulla-mod" style="display:none" onclick="annullaModificaReferto()">Annulla</button>
       <button class="btn btn-primary btn-sm" id="m-btn-modifica" onclick="apriModificaReferto()">✏ Modifica</button>
       <button class="btn btn-primary btn-sm" id="m-btn-salva-mod" style="display:none" onclick="salvaModificaReferto()">💾 Salva modifiche</button>
-      <button class="btn btn-primary btn-sm" id="m-pdf-solo" title="PDF solo testo del referto, senza immagini">📄 Solo referto</button>
-      <button class="btn btn-primary btn-sm" id="m-pdf-img"  title="PDF con testo e tutte le immagini allegate">🖼 Referto + immagini</button>
-      <button class="btn btn-success btn-sm" id="m-firma-stampa" title="Firma digitale Namirial + stampa automatica">✍ Firma e Stampa</button>
+      <button class="btn btn-secondary btn-sm" id="m-pdf-img"  title="Stampa le immagini dell&apos;esame, senza il testo del referto">🖼 Stampa immagini</button>
+      <button class="btn btn-primary btn-sm" id="m-pdf-solo" title="Stampa il referto SENZA firma digitale — da firmare a penna">📄 Stampa referto</button>
+      <button class="btn btn-success btn-sm" id="m-firma-stampa" title="Firma digitale Namirial e stampa automatica del referto">✍ Firma e Stampa</button>
+      <span style="flex:1"></span>
+      <button class="btn btn-danger btn-sm" id="m-del">🗑 Elimina</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeModal()">Chiudi</button>
     </div>
     <div class="m-body">
       <div id="m-view-section">
@@ -657,9 +681,10 @@
           <span class="sec-lbl" style="margin:0">Immagini</span>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             <div class="viewer-pp-ctrl">
-              <button class="pp-btn" data-n="4" onclick="setPrintPerPage(4)" title="4 immagini per pagina">4</button>
-              <button class="pp-btn" data-n="6" onclick="setPrintPerPage(6)" title="6 immagini per pagina">6</button>
-              <button class="pp-btn" data-n="8" onclick="setPrintPerPage(8)" title="8 immagini per pagina">8</button>
+              <button class="pp-btn" data-n="4"  onclick="setPrintPerPage(4)"  title="4 immagini per pagina — le più grandi">4</button>
+              <button class="pp-btn" data-n="8"  onclick="setPrintPerPage(8)"  title="8 immagini per pagina">8</button>
+              <button class="pp-btn" data-n="12" onclick="setPrintPerPage(12)" title="12 immagini per pagina">12</button>
+              <button class="pp-btn" data-n="15" onclick="setPrintPerPage(15)" title="15 immagini per pagina — le più piccole">15</button>
             </div>
             <button class="btn btn-secondary btn-sm" onclick="stampaImmaginiArchivio(_modalRefertoId)" title="Stampa solo le immagini">🖨️ Stampa</button>
             <label class="btn btn-secondary btn-sm img-import-label" title="Importa file singoli">

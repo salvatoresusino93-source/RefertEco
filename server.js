@@ -6,6 +6,8 @@ const os = require('os');
 const multer = require('multer');
 const db = require('./database');
 const config = require('./config');
+const stampaImg = require('./stampa-immagini');
+const stampaCfg = require('./stampa-config');
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
@@ -55,25 +57,34 @@ const imgStorage = multer.diskStorage({
 });
 const upload = multer({ storage: imgStorage, limits: { fileSize: 100 * 1024 * 1024 } });
 
+// Elenco dei file immagine di un referto, nell'ordine giusto.
+// Lo usano sia la pagina web sia la stampa immagini: così quello che si vede
+// nel visualizzatore e quello che esce dalla stampante hanno lo stesso ordine.
+function elencoImmaginiOrdinate(refertoId) {
+  const dir = getImgDir(refertoId);
+  if (!fs.existsSync(dir)) return { files: [], hasCustomOrder: false, dir };
+  const files = fs.readdirSync(dir).filter(f => !f.startsWith('.')).sort();
+  const r = db.get().referti.find(x => x.id === refertoId);
+  const hasCustomOrder = !!(r && Array.isArray(r.immaginiOrdine) && r.immaginiOrdine.length > 0);
+  if (hasCustomOrder) {
+    const idx = new Map(r.immaginiOrdine.map((f, i) => [f, i]));
+    files.sort((a, b) => {
+      const ia = idx.has(a) ? idx.get(a) : Infinity;
+      const ib = idx.has(b) ? idx.get(b) : Infinity;
+      return ia !== ib ? ia - ib : a.localeCompare(b, undefined, { numeric: true });
+    });
+  } else {
+    // Natural sort: il numero nel nome file rispecchia l'ordine di acquisizione
+    // (es. _1.dcm, _2.dcm, ..., _10.dcm → ordine numerico corretto)
+    files.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }
+  return { files, hasCustomOrder, dir };
+}
+
 app.get('/api/referti/:id/immagini', (req, res) => {
   const dir = getImgDir(req.params.id);
   try {
-    if (!fs.existsSync(dir)) return res.json([]);
-    const files = fs.readdirSync(dir).filter(f => !f.startsWith('.')).sort();
-    const r = db.get().referti.find(x => x.id === req.params.id);
-    const hasCustomOrder = r && Array.isArray(r.immaginiOrdine) && r.immaginiOrdine.length > 0;
-    if (hasCustomOrder) {
-      const idx = new Map(r.immaginiOrdine.map((f, i) => [f, i]));
-      files.sort((a, b) => {
-        const ia = idx.has(a) ? idx.get(a) : Infinity;
-        const ib = idx.has(b) ? idx.get(b) : Infinity;
-        return ia !== ib ? ia - ib : a.localeCompare(b, undefined, { numeric: true });
-      });
-    } else {
-      // Natural sort: il numero nel nome file rispecchia l'ordine di acquisizione
-      // (es. _1.dcm, _2.dcm, ..., _10.dcm → ordine numerico corretto)
-      files.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    }
+    const { files, hasCustomOrder } = elencoImmaginiOrdinate(req.params.id);
     res.setHeader('X-Custom-Order', hasCustomOrder ? 'true' : 'false');
     return res.json(files);
   } catch (e) {
@@ -957,6 +968,150 @@ function stampaPdf(pdfPath) {
   });
 }
 
+// ── MANUTENZIONE STAMPANTE ───────────────────────────────────
+//
+// Con l'uso gli ugelli si ostruiscono e in stampa compaiono righe bianche:
+// su un'ecografia si confondono con l'immagine. La pulizia va fatta ogni
+// tanto, e da qui si arriva in un clic invece di girare nelle impostazioni
+// di Windows.
+//
+// NOTA: il programma NON avvia il ciclo di pulizia da solo. Apre la finestra
+// di manutenzione Epson e lascia decidere a chi guarda. Il motivo è che ogni
+// pulizia consuma inchiostro e dura qualche minuto: farla partire per errore
+// da un clic sbagliato sarebbe uno spreco, e in Windows non esiste un comando
+// documentato per avviarla in modo affidabile. Nella finestra ci sono anche
+// il "Controllo ugelli" (che dice SE serve pulire, prima di sprecare
+// inchiostro) e i livelli di inchiostro.
+
+// Nome della stampante predefinita di Windows.
+function stampantePredefinita() {
+  return new Promise(resolve => {
+    exec('powershell -NoProfile -Command "(Get-CimInstance Win32_Printer | ' +
+      'Where-Object {$_.Default -eq $true}).Name"',
+      (err, stdout) => resolve(err ? null : (stdout || '').trim() || null));
+  });
+}
+
+app.get('/api/stampante/stato', async (req, res) => {
+  try {
+    const nome = await stampantePredefinita();
+    res.json({ ok: !!nome, stampante: nome });
+  } catch (e) {
+    res.json({ ok: false, stampante: null, error: e.message });
+  }
+});
+
+app.post('/api/stampante/manutenzione', async (req, res) => {
+  try {
+    const nome = await stampantePredefinita();
+    if (!nome) {
+      return res.status(400).json({
+        error: 'Nessuna stampante predefinita impostata in Windows.',
+      });
+    }
+    // printui.dll è il componente Windows che apre le finestre delle
+    // stampanti: /e = Preferenze di stampa, /n = quale stampante.
+    // Da lì si va alla scheda Utility / Manutenzione.
+    const nomeSicuro = nome.replace(/"/g, '');
+    exec(`rundll32 printui.dll,PrintUIEntry /e /n "${nomeSicuro}"`, () => {});
+    res.json({ ok: true, stampante: nome });
+  } catch (e) {
+    console.error('[manutenzione stampante]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── STAMPA IMMAGINI (flusso separato dal referto) ────────────
+//
+// Percorso: file .dcm sul disco → JPEG interno → pipeline (ritaglio, gamma,
+// ombre, ingrandimento) → griglia HTML → PDF con Chrome → stampante.
+//
+// Funziona SEMPRE, anche con referto vuoto o appena iniziato: serve per
+// stampare le immagini appena finito l'esame, mentre si scrive il referto.
+// Non tocca mai gli originali sul disco né quelli su Orthanc.
+app.post('/api/referti/:id/stampa-immagini', async (req, res) => {
+  const { perPagina, intestazione, diretta } = req.body || {};
+  const refertoId = req.params.id;
+
+  let cartellaTemp = null;
+  let pdfPath = null;
+  try {
+    const { files, dir } = elencoImmaginiOrdinate(refertoId);
+    if (files.length === 0) {
+      return res.status(400).json({ error: 'Nessuna immagine da stampare per questo esame.' });
+    }
+
+    cartellaTemp = fs.mkdtempSync(path.join(os.tmpdir(), 'referteco_stampa_'));
+
+    const { preparate, cineSaltati, problemi } =
+      await stampaImg.preparaImmagini(dir, files, stampaCfg, cartellaTemp);
+
+    if (preparate.length === 0) {
+      return res.status(400).json({
+        error: cineSaltati > 0
+          ? 'Questo esame contiene solo filmati: non c\'è nessuna immagine fissa da stampare.'
+          : 'Non è stato possibile preparare nessuna immagine.',
+        dettagli: problemi,
+      });
+    }
+
+    // Intestazione: se la pagina web non ne manda una (referto ancora vuoto),
+    // la si ricava dai dati che l'ecografo ha scritto dentro il primo DICOM.
+    let testata = (intestazione || '').trim();
+    if (!testata) {
+      const primoDicom = files.find(f => /\.dcm$/i.test(f));
+      if (primoDicom) {
+        try {
+          testata = stampaImg.intestazioneDaDicom(fs.readFileSync(path.join(dir, primoDicom)));
+        } catch {}
+      }
+    }
+
+    const html = stampaImg.costruisciHtml(preparate, {
+      cfg: stampaCfg,
+      perPagina: perPagina,
+      intestazione: testata,
+    });
+
+    pdfPath = path.join(cartellaTemp, 'immagini.pdf');
+    await htmlToPdf(html, pdfPath);
+
+    // Stampa diretta se richiesto (o se così dice il file di configurazione):
+    // niente finestra di anteprima, il foglio parte sulla stampante predefinita.
+    const inDiretta = typeof diretta === 'boolean' ? diretta : stampaCfg.stampa.diretta !== false;
+
+    if (inDiretta) {
+      // Il PDF va tenuto finché il visualizzatore non l'ha mandato in coda:
+      // se lo cancelliamo subito, la stampa esce vuota.
+      const pdfPersistente = path.join(os.tmpdir(),
+        'referteco_immagini_' + Date.now() + '.pdf');
+      fs.copyFileSync(pdfPath, pdfPersistente);
+      await stampaPdf(pdfPersistente);
+      setTimeout(() => { try { fs.unlinkSync(pdfPersistente); } catch {} }, 120000);
+
+      return res.json({
+        ok: true, diretta: true,
+        immagini: preparate.length, cineSaltati, problemi,
+      });
+    }
+
+    // Anteprima: il PDF torna al browser, che lo apre in una scheda.
+    const pdfBase64 = fs.readFileSync(pdfPath).toString('base64');
+    return res.json({
+      ok: true, diretta: false, pdfBase64,
+      immagini: preparate.length, cineSaltati, problemi,
+    });
+  } catch (e) {
+    console.error('[stampa-immagini]', e);
+    return res.status(500).json({ error: 'Errore nella stampa immagini: ' + e.message });
+  } finally {
+    // Via i PNG temporanei: nessuna copia delle immagini dei pazienti resta in giro.
+    if (cartellaTemp) {
+      try { fs.rmSync(cartellaTemp, { recursive: true, force: true }); } catch {}
+    }
+  }
+});
+
 // Base URL del servizio firma: sandbox (gratis, per provare) o produzione (firma vera).
 // Si commuta dall'interruttore in Impostazioni → Firma Digitale.
 function firmaBaseUrl(cfg) {
@@ -1143,7 +1298,9 @@ app.post('/api/quit', (req, res) => {
 
 // ── AVVIO ────────────────────────────────────────────────────
 
-const PORT = 3000;
+// Resta 3000 come sempre. La variabile d'ambiente serve solo per poter
+// avviare una seconda copia di prova senza fermare quella in uso nello studio.
+const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, () => {
   console.log('');
   console.log('  ╔══════════════════════════════════╗');

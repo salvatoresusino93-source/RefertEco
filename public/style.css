@@ -244,10 +244,14 @@ tr:hover td{background:var(--accent-light);}
 .viewer-measure-btn{background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:2px 5px;border-radius:var(--r);transition:all 0.15s;color:var(--text-muted);}
 .viewer-measure-btn:hover{background:var(--surface2);}
 .viewer-measure-btn.active{background:var(--accent-light);color:var(--accent);border:1px solid var(--accent-mid);}
+/* Stampa immagini: azione principale del viewer, disponibile subito dopo
+   l'acquisizione — non richiede che il referto sia stato scritto. */
+.viewer-print-btn{background:var(--accent-light);border:1px solid var(--accent-mid);cursor:pointer;font-size:11.5px;font-weight:600;font-family:'DM Sans',sans-serif;line-height:1;padding:5px 10px;border-radius:var(--r);transition:all 0.15s;color:var(--accent);white-space:nowrap;}
+.viewer-print-btn:hover{background:var(--accent);color:#fff;}
 .viewer-measure-clr{background:none;border:none;cursor:pointer;font-size:10.5px;padding:2px 7px;border-radius:var(--r);color:var(--text-muted);font-family:'DM Sans',sans-serif;font-weight:500;transition:all 0.15s;}
 .viewer-measure-clr:hover{color:var(--red);background:var(--red-light);}
 .viewer-pp-ctrl{display:flex;align-items:center;gap:2px;margin:0 2px;}
-.pp-btn{background:none;border:1px solid var(--border);cursor:pointer;font-size:11px;font-weight:600;font-family:'DM Mono',monospace;width:22px;height:22px;border-radius:4px;color:var(--text-muted);transition:all 0.15s;line-height:1;padding:0;}
+.pp-btn{background:none;border:1px solid var(--border);cursor:pointer;font-size:11px;font-weight:600;font-family:'DM Mono',monospace;min-width:22px;padding:0 5px;height:22px;border-radius:4px;color:var(--text-muted);transition:all 0.15s;line-height:1;padding:0;}
 .pp-btn:hover{background:var(--surface2);color:var(--text);}
 .pp-btn.active{background:var(--accent-light);color:var(--accent);border-color:var(--accent-mid);}
 .img-thumb[draggable="true"]{cursor:grab;}

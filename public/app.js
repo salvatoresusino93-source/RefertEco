@@ -1055,8 +1055,8 @@ function openModal(id) {
     '<div class="ii"><label>Età</label><span>' + etaLabel(r.nascita, r.data) + '</span></div>';
   document.getElementById('m-referto').textContent = r.referto || '—';
   document.getElementById('m-del').onclick = () => confermaElimina(id);
-  document.getElementById('m-pdf-solo').onclick    = () => esportaPDF(id, false);
-  document.getElementById('m-pdf-img').onclick     = () => esportaPDF(id, true);
+  document.getElementById('m-pdf-solo').onclick    = () => esportaPDF(id);
+  document.getElementById('m-pdf-img').onclick     = () => stampaImmaginiArchivio(id);
   document.getElementById('m-firma-stampa').onclick = () => apriModalFirma(id);
   document.getElementById('modal-ov').classList.add('open');
   loadImmagini(id);
@@ -1321,7 +1321,11 @@ async function ordinaPerAcquisizione(refertoId) {
   } catch { toast('Errore ordinamento', 'err'); await loadImmagini(refertoId); }
 }
 
-let _printPerPage = parseInt(localStorage.getItem('print_per_page') || '4');
+// Valori ammessi per la stampa a griglia. Un valore vecchio rimasto salvato
+// nel browser (per esempio 6, che prima esisteva) viene riportato a 4.
+const PER_PAGINA_AMMESSI = [4, 8, 12, 15];
+let _printPerPage = parseInt(localStorage.getItem('print_per_page') || '4', 10);
+if (!PER_PAGINA_AMMESSI.includes(_printPerPage)) _printPerPage = 4;
 
 function setPrintPerPage(n) {
   _printPerPage = n;
@@ -1329,172 +1333,80 @@ function setPrintPerPage(n) {
   document.querySelectorAll('.pp-btn').forEach(b => b.classList.toggle('active', +b.dataset.n === n));
 }
 
-// Calcola colonne/righe per riempire al massimo una pagina A4 verticale con
-// immagini ecografiche panoramiche (landscape). Poche immagini → 1 colonna (più
-// grandi); da 4 in su → 2 colonne (è la disposizione che massimizza l'area).
-function _gridImmagini(n) {
-  if (n <= 1) return { cols: 1, rows: 1 };
-  if (n <= 3) return { cols: 1, rows: n };
-  const cols = 2;
-  return { cols, rows: Math.ceil(n / cols) };
-}
+// ── STAMPA IMMAGINI ───────────────────────────────────────────
+//
+// Flusso completamente separato da quello del referto. L'elaborazione
+// (ritaglio del settore, gamma, recupero delle ombre, ingrandimento) e
+// l'impaginazione a griglia le fa il MOTORE, non il browser: lavora sui
+// pixel originali del DICOM senza passaggi intermedi, quindi la qualità
+// è la massima ottenibile. I parametri stanno tutti in stampa-config.js.
+//
+// Funziona sempre, anche con il referto vuoto o appena iniziato.
 
-// Stile inline della griglia immagini: righe di PARI altezza che riempiono tutta
-// l'altezza utile della pagina. Così le immagini coprono lo spazio in modo
-// uniforme invece di restare schiacciate al centro con grandi bande bianche
-// sopra/sotto. object-fit:contain sulle immagini mantiene sempre le proporzioni
-// (niente deformazioni né ritagli), distribuendo lo spazio residuo in modo armonioso.
-function _gridStyle(cols, rows, pageWmm = 198, gapMm = 4, aspect = 1.33) {
-  return `grid-template-columns:repeat(${cols},1fr);grid-template-rows:repeat(${rows},1fr);height:100%;`;
-}
-
-// Verifica se un dataset DICOM è una cine/video (multiframe): NumberOfFrames > 1
-// Le cine vanno escluse dalla stampa (altrimenti stamperebbe centinaia di fotogrammi)
-function _isDicomCine(ds) {
+async function _inviaStampaImmagini(refertoId, intestazione) {
+  if (!refertoId) { toast('Nessuna immagine da stampare', 'err'); return; }
+  toast('Preparazione stampa…', 'ok');
   try {
-    const nf = parseInt(ds.intString('x00280008') || ds.string('x00280008') || '1', 10);
-    return nf > 1;
-  } catch { return false; }
-}
+    const resp = await fetch('/api/referti/' + refertoId + '/stampa-immagini', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ perPagina: _printPerPage, intestazione: intestazione || '' }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) { toast(data.error || 'Errore nella stampa', 'err'); return; }
 
-// Estrae info paziente/esame da un dataset DICOM per l'intestazione di stampa
-function _dicomPatientInfo(ds) {
-  const rawName = (ds.string('x00100010') || '').trim();
-  let patientName = '';
-  if (rawName) {
-    // Formato DICOM: COGNOME^NOME^... — teniamo solo i primi due componenti
-    const parts = rawName.split('^').map(s => s.trim()).filter(Boolean);
-    patientName = parts.slice(0, 2).join(' ');
+    if (data.cineSaltati > 0) toast(data.cineSaltati + ' video esclusi dalla stampa', 'ok');
+    if (data.problemi && data.problemi.length) console.warn('[stampa immagini]', data.problemi);
+
+    if (data.pdfBase64) {
+      // Modalità anteprima (stampa.diretta = false nel file di configurazione)
+      const byte = atob(data.pdfBase64);
+      const arr = new Uint8Array(byte.length);
+      for (let i = 0; i < byte.length; i++) arr[i] = byte.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([arr], { type: 'application/pdf' }));
+      window.open(url, '_blank');
+      toast('Anteprima pronta (' + data.immagini + ' immagini)', 'ok');
+    } else {
+      toast('🖨️ ' + data.immagini + ' immagini inviate alla stampante', 'ok');
+    }
+  } catch (e) {
+    toast('Errore nella stampa: ' + e.message, 'err');
   }
-  const rawBirth = (ds.string('x00100030') || '').replace(/\D/g, '');
-  const birthDate = rawBirth.length === 8
-    ? rawBirth.slice(6) + '/' + rawBirth.slice(4, 6) + '/' + rawBirth.slice(0, 4) : '';
-  const rawStudy = (ds.string('x00080020') || '').replace(/\D/g, '');
-  const studyDate = rawStudy.length === 8
-    ? rawStudy.slice(6) + '/' + rawStudy.slice(4, 6) + '/' + rawStudy.slice(0, 4) : '';
-  const description = (ds.string('x00081030') || ds.string('x0008103e') || '').trim();
-  return { patientName, birthDate, studyDate, description };
 }
 
-// Funzione comune per la stampa immagini — usata sia dal viewer che dall'archivio
-function _stampaImmaginiComune(srcList, perPage, headerText) {
-  let pagesHtml = '';
-  for (let p = 0; p * perPage < srcList.length; p++) {
-    const batch = srcList.slice(p * perPage, (p + 1) * perPage);
-    const { cols, rows } = _gridImmagini(perPage);
-    const padded = batch.concat(Array(cols * rows - batch.length).fill(null));
-    const hdrHtml = headerText ? `<div class="pg-hdr">${headerText}</div>` : '';
-    pagesHtml += `<div class="pg">${hdrHtml}<div class="grid-area"><div class="grid" style="${_gridStyle(cols, rows, 194)}">${
-      padded.map((src, i) => src !== null
-        ? `<div class="cell"><img src="${src}"><span class="n">${p * perPage + i + 1}</span></div>`
-        : `<div class="cell cell-empty"></div>`
-      ).join('')
-    }</div></div></div>`;
-  }
-  const win = window.open('', '_blank');
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Stampa immagini</title>
-<style>
-@page{size:A4 portrait;margin:8mm}
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{width:194mm;background:#fff}
-.pg{width:194mm;height:281mm;display:flex;flex-direction:column;page-break-after:always;break-after:page;}
-.pg-hdr{font-size:7.5pt;color:#555;font-family:sans-serif;padding-bottom:3mm;border-bottom:1px solid #ccc;margin-bottom:3mm;flex-shrink:0;}
-.grid-area{flex:1;min-height:0;display:flex;align-items:stretch;justify-content:center;}
-.grid{display:grid;gap:4mm;width:100%;max-height:100%;}
-.cell{border:1px solid #ccc;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;background:#fff;min-height:0;}
-.cell:not(:has(img)){background:#fff;border:none}
-.cell img{max-width:100%;max-height:100%;object-fit:contain;display:block;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
-.n{position:absolute;bottom:2px;right:4px;font:7.5px/1 monospace;color:rgba(0,0,0,.3);}
-</style></head><body>
-${pagesHtml}
-<script>window.onload=function(){window.print()}<\/script>
-</body></html>`);
-  win.document.close();
+// Intestazione ricavata dal modulo del referto, se già compilato.
+// Se è vuota ci pensa il motore, leggendo i dati dal file dell'ecografo:
+// così il foglio è intestato correttamente anche a referto non ancora scritto.
+function _intestazioneDaForm() {
+  const cognome = (document.getElementById('f-cognome')?.value || '').trim();
+  const nome    = (document.getElementById('f-nome')?.value    || '').trim();
+  const data    = (document.getElementById('f-data')?.value    || '').trim();
+  const selTipo = document.getElementById('f-tipo-sel');
+  const tipo    = (selTipo?.value === '__custom__'
+    ? document.getElementById('f-tipo-custom')?.value
+    : selTipo?.value || '').trim();
+  if (!cognome && !nome) return '';
+  const parti = [[cognome, nome].filter(Boolean).join(' ')];
+  if (tipo) parti.push(tipo);
+  if (data) parti.push(data.split('-').reverse().join('/'));
+  return parti.join('  —  ');
 }
 
+// Dal visualizzatore, subito dopo l'acquisizione
 async function stampaImmagini() {
   if (_viewerFiles.length === 0) { toast('Nessuna immagine da stampare', 'err'); return; }
-  toast('Preparazione stampa…', 'ok');
-  let _dicomInfo = null; // estratto dal primo DICOM trovato
-  let _cineEscluse = 0;  // conteggio video saltati
-  const srcRaw = await Promise.all(_viewerFiles.map(async f => {
-    if (/\.dcm$/i.test(f.filename) && _tempRefertoId) {
-      try {
-        const url = '/immagini/' + _tempRefertoId + '/' + encodeURIComponent(f.filename);
-        const resp = await fetch(url);
-        const buf = await resp.arrayBuffer();
-        const ds = dicomParser.parseDicom(new Uint8Array(buf));
-        if (!_dicomInfo) _dicomInfo = _dicomPatientInfo(ds);
-        if (_isDicomCine(ds)) { _cineEscluse++; return null; } // video: escluso dalla stampa
-        return await dicomDsToDataUrl(ds, buf, 'png') || f.displayUrl;
-      } catch { return f.displayUrl; }
-    }
-    if (_tempRefertoId && f.filename)
-      return '/immagini/' + _tempRefertoId + '/' + encodeURIComponent(f.filename);
-    return f.displayUrl;
-  }));
-  const srcList = srcRaw.filter(Boolean);
-  if (_cineEscluse > 0) toast(`${_cineEscluse} video esclusi dalla stampa`, 'ok');
-  if (srcList.length === 0) { toast('Nessuna immagine da stampare (solo video)', 'err'); return; }
-
-  // Costruisci intestazione da DICOM; fallback ai campi del form se DICOM non ha dati
-  let headerText = '';
-  if (_dicomInfo) {
-    const parts = [];
-    if (_dicomInfo.patientName) parts.push(_dicomInfo.patientName);
-    if (_dicomInfo.birthDate)   parts.push('n. ' + _dicomInfo.birthDate);
-    if (_dicomInfo.description) parts.push(_dicomInfo.description);
-    if (_dicomInfo.studyDate)   parts.push(_dicomInfo.studyDate);
-    headerText = parts.join(' — ');
-  }
-  if (!headerText) {
-    // Fallback: leggi i campi form già compilati
-    const cognome = (document.getElementById('f-cognome')?.value || '').trim();
-    const nome    = (document.getElementById('f-nome')?.value    || '').trim();
-    const data    = (document.getElementById('f-data')?.value    || '').trim();
-    const selTipo = document.getElementById('f-tipo-sel');
-    const tipo    = (selTipo?.value === '__custom__'
-      ? document.getElementById('f-tipo-custom')?.value
-      : selTipo?.value || '').trim();
-    const parts = [];
-    if (cognome || nome) parts.push([cognome, nome].filter(Boolean).join(' '));
-    if (tipo)   parts.push(tipo);
-    if (data)   parts.push(data.split('-').reverse().join('/'));
-    headerText = parts.join(' — ');
-  }
-
-  _stampaImmaginiComune(srcList, _printPerPage, headerText);
+  await _inviaStampaImmagini(_tempRefertoId, _intestazioneDaForm());
 }
 
+// Da un referto già in archivio
 async function stampaImmaginiArchivio(refertoId) {
   const r = referti.find(x => x.id === refertoId);
-  toast('Preparazione stampa…', 'ok');
-  const imgFiles = await apiGet('/api/referti/' + refertoId + '/immagini');
-  if (!imgFiles || imgFiles.length === 0) { toast('Nessuna immagine da stampare', 'err'); return; }
-  const srcList = [];
-  let _cineEscluse = 0;
-  for (const f of imgFiles) {
-    const url = '/immagini/' + refertoId + '/' + encodeURIComponent(f);
-    const isDcm = /\.dcm$/i.test(f);
-    if (isDcm) {
-      // Parsa il DICOM per escludere le cine/video (multiframe)
-      try {
-        const buf = await (await fetch(url)).arrayBuffer();
-        const ds  = dicomParser.parseDicom(new Uint8Array(buf));
-        if (_isDicomCine(ds)) { _cineEscluse++; continue; } // video: escluso dalla stampa
-        const dataUrl = await dicomDsToDataUrl(ds, buf, 'png');
-        if (dataUrl) srcList.push(dataUrl);
-      } catch {}
-    } else {
-      const dataUrl = await imgToDataUrl(url);
-      if (dataUrl) srcList.push(dataUrl);
-    }
-  }
-  if (_cineEscluse > 0) toast(`${_cineEscluse} video esclusi dalla stampa`, 'ok');
-  if (srcList.length === 0) { toast('Nessuna immagine da stampare (solo video)', 'err'); return; }
-  const headerText = r ? `${esc(r.cognome)} ${esc(r.nome)} — ${esc(r.tipo)} — ${fmt(r.data)}` : '';
-  _stampaImmaginiComune(srcList, _printPerPage, headerText);
+  const intestazione = r
+    ? [`${r.cognome} ${r.nome}`, r.tipo, fmt(r.data)].filter(Boolean).join('  —  ')
+    : '';
+  await _inviaStampaImmagini(refertoId, intestazione);
 }
+
 
 async function eliminaImmagine(refertoId, filename) {
   await apiDelete('/api/referti/' + refertoId + '/immagini/' + encodeURIComponent(filename));
@@ -2353,45 +2265,11 @@ function confermaElimina(id) {
 function closeConfirm() { document.getElementById('conf-ov').classList.remove('open'); }
 
 // ── EXPORT PDF ────────────────────────────────────────────────
-async function esportaPDF(id, conImmagini = true) {
+// Stampa del solo REFERTO (testo). Le immagini hanno una stampa dedicata
+// (stampaImmagini dal viewer, stampaImmaginiArchivio dall'archivio): i due
+// flussi sono indipendenti e si rifanno separatamente in qualsiasi momento.
+async function esportaPDF(id) {
   const r = referti.find(x => x.id === id); if (!r) return;
-
-  // Carica immagini solo se richiesto
-  let paginaImmagini = '';
-  if (conImmagini) {
-    const imgFiles = await apiGet('/api/referti/' + id + '/immagini');
-    const imgDataUrls = [];
-    for (const f of imgFiles) {
-      const url = '/immagini/' + id + '/' + encodeURIComponent(f);
-      const isDcm = /\.dcm$/i.test(f);
-      if (isDcm) {
-        // Parsa il DICOM per escludere le cine/video (multiframe) dal PDF
-        try {
-          const buf = await (await fetch(url)).arrayBuffer();
-          const ds  = dicomParser.parseDicom(new Uint8Array(buf));
-          if (_isDicomCine(ds)) continue; // video: escluso dal PDF
-          const dataUrl = await dicomDsToDataUrl(ds, buf, 'png'); // PNG lossless: massima qualità
-          if (dataUrl) imgDataUrls.push(dataUrl);
-        } catch {}
-      } else {
-        const dataUrl = await imgToDataUrl(url);
-        if (dataUrl) imgDataUrls.push(dataUrl);
-      }
-    }
-    const pdfPP = _printPerPage;
-    for (let p = 0; p * pdfPP < imgDataUrls.length; p++) {
-      const batch = imgDataUrls.slice(p * pdfPP, p * pdfPP + pdfPP);
-      const { cols, rows } = _gridImmagini(pdfPP);
-      const padded = batch.concat(Array(cols * rows - batch.length).fill(null));
-      paginaImmagini += `
-      <div class="img-page">
-        <div class="img-hdr">${esc(r.cognome)} ${esc(r.nome)} — ${esc(r.tipo)} — ${fmt(r.data)}</div>
-        <div class="img-area"><div class="img-grid-print" style="${_gridStyle(cols, rows)}">
-          ${padded.map(src => src !== null ? `<div class="img-cell"><img src="${src}"></div>` : `<div class="img-cell img-cell-empty"></div>`).join('')}
-        </div></div>
-      </div>`;
-    }
-  }
   const dataStampa = new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
   const etaStr = etaLabel(r.nascita, r.data);
   const T = PDF_THEMES[localStorage.getItem('pdf_tema') || 'verde'];
@@ -2469,7 +2347,6 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
     <span>Documento generato il ${dataStampa}</span>
   </div>
 </div>
-${paginaImmagini}
 <script>window.onload=()=>window.print();<\/script>
 </body></html>`);
   win.document.close();
@@ -2622,6 +2499,33 @@ async function salvaConfig() {
 }
 
 // ── PULIZIA CARTELLE ORFANE ───────────────────────────────────
+// ── MANUTENZIONE STAMPANTE ────────────────────────────────────
+//
+// Apre la finestra di manutenzione della stampante predefinita, dove stanno
+// "Pulizia testine" e "Controllo ugelli". Il programma non avvia il ciclo da
+// solo: ogni pulizia consuma inchiostro, e va decisa guardando.
+async function apriManutenzioneStampante() {
+  const out = document.getElementById('stampante-result');
+  if (out) out.textContent = 'Apertura in corso…';
+  try {
+    const resp = await fetch('/api/stampante/manutenzione', { method: 'POST' });
+    const data = await resp.json();
+    if (!resp.ok) {
+      if (out) out.textContent = '❌ ' + (data.error || 'Errore');
+      toast(data.error || 'Errore apertura manutenzione', 'err');
+      return;
+    }
+    if (out) {
+      out.textContent = 'Finestra aperta per: ' + data.stampante +
+        ' — cerca la scheda "Utility" o "Manutenzione".';
+    }
+    toast('Finestra manutenzione aperta', 'ok');
+  } catch (e) {
+    if (out) out.textContent = '❌ ' + e.message;
+    toast('Errore: ' + e.message, 'err');
+  }
+}
+
 async function pulisciOrfane() {
   const out = document.getElementById('pulisci-result');
   if (!confirm('Cercare e cancellare cartelle di immagini SENZA referto associato?\n\nLe cartelle dei referti esistenti NON verranno toccate.')) return;
@@ -2894,11 +2798,11 @@ async function salvaModifiche() {
     `Modifica referto — ${cognome} ${nome}`;
 }
 
-async function esportaDaEdit(conImmagini) {
+async function esportaDaEdit() {
   if (!_editingId) return;
   // Salva prima, poi esporta
   await salvaModifiche();
-  await esportaPDF(_editingId, conImmagini);
+  await esportaPDF(_editingId);
 }
 
 async function eliminaDaEdit() {
@@ -2912,7 +2816,7 @@ async function eliminaDaEdit() {
 }
 
 // ── EXPORT IN NUOVO REFERTO (salva poi esporta) ───────────────
-async function salvaEdEsporta(conImmagini) {
+async function salvaEdEsporta() {
   // Verifica campi minimi
   const cognome = document.getElementById('f-cognome').value.trim();
   const nome    = document.getElementById('f-nome').value.trim();
@@ -2937,7 +2841,7 @@ async function salvaEdEsporta(conImmagini) {
   // Archivia su Orthanc in background
   fetch(`/api/orthanc/archivia/${id}`, { method: 'POST' }).catch(() => {});
   await loadReferti();
-  await esportaPDF(id, conImmagini);
+  await esportaPDF(id);
   _viewerFiles = []; _viewerIndex = 0; _tempRefertoId = null;
   renderViewer();
   resetForm();
@@ -3421,40 +3325,6 @@ async function generaHtmlFirma(id) {
   const r = referti.find(x => x.id === id);
   if (!r) throw new Error('Referto non trovato');
 
-  const imgFiles = await apiGet('/api/referti/' + id + '/immagini');
-  const imgDataUrls = [];
-  for (const f of imgFiles) {
-    const url = '/immagini/' + id + '/' + encodeURIComponent(f);
-    const isDcm = /\.dcm$/i.test(f);
-    if (isDcm) {
-      try {
-        const buf = await (await fetch(url)).arrayBuffer();
-        const ds  = dicomParser.parseDicom(new Uint8Array(buf));
-        if (_isDicomCine(ds)) continue;
-        const dataUrl = await dicomDsToDataUrl(ds, buf, 'png');
-        if (dataUrl) imgDataUrls.push(dataUrl);
-      } catch {}
-    } else {
-      const dataUrl = await imgToDataUrl(url);
-      if (dataUrl) imgDataUrls.push(dataUrl);
-    }
-  }
-
-  const pdfPP = _printPerPage;
-  let paginaImmagini = '';
-  for (let p = 0; p * pdfPP < imgDataUrls.length; p++) {
-    const batch = imgDataUrls.slice(p * pdfPP, p * pdfPP + pdfPP);
-    const { cols, rows } = _gridImmagini(pdfPP);
-    const padded = batch.concat(Array(cols * rows - batch.length).fill(null));
-    paginaImmagini += `
-    <div class="img-page">
-      <div class="img-hdr">${esc(r.cognome)} ${esc(r.nome)} — ${esc(r.tipo)} — ${fmt(r.data)}</div>
-      <div class="img-area"><div class="img-grid-print" style="${_gridStyle(cols, rows)}">
-        ${padded.map(src => src !== null ? `<div class="img-cell"><img src="${src}"></div>` : `<div class="img-cell img-cell-empty"></div>`).join('')}
-      </div></div>
-    </div>`;
-  }
-
   const _now = new Date();
   const dataStampa = _now.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
   const oraStampa  = _now.toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
@@ -3535,7 +3405,6 @@ body{font-family:'Source Sans 3',sans-serif;font-size:11pt;color:#1c1c1c;backgro
   <div class="sec">Referto</div>
   <div class="body-text">${esc(r.referto || '—')}</div>
 </div>
-${paginaImmagini}
 </body></html>`;
 }
 
