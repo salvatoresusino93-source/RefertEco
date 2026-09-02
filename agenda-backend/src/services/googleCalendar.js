@@ -184,6 +184,73 @@ async function aggiornaEvento(googleEventId, appuntamento) {
   }
 }
 
+// ─── Aggiorna evento cercandolo per ID appuntamento ──────────────────────
+// Come eliminaEventoByAgendaId, non serve il google_event_id salvato in DB:
+// cerca l'evento tramite extendedProperties.private.agendaStudioId e lo
+// aggiorna (spostamento data/ora, cambio paziente/esame). Se l'evento non
+// esiste ancora sul calendario, lo crea (fallback), così un appuntamento
+// confermato ma senza evento viene comunque sincronizzato.
+async function aggiornaEventoByAgendaId(appuntamentoId, appuntamento) {
+  if (!appuntamentoId) return;
+  const creds = getCreds();
+  if (!creds) return;
+
+  const token = await getAccessToken();
+  const calId = encodeURIComponent(creds.calendarId);
+
+  // Cerca l'evento per agendaStudioId nelle extended properties
+  const params = new URLSearchParams({
+    privateExtendedProperty: `agendaStudioId=${appuntamentoId}`,
+    maxResults: '5',
+  });
+
+  const listRes = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${calId}/events?${params}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+
+  const listData = await listRes.json();
+  if (!listRes.ok) throw new Error(`Google Calendar cerca errore: ${JSON.stringify(listData)}`);
+
+  // Nessun evento trovato: crealo (fallback)
+  if (!listData.items?.length) return creaEvento(appuntamento);
+
+  const paziente = appuntamento.pazienti;
+  const esame    = appuntamento.tipi_prestazione?.nome || 'Visita';
+
+  const summary = paziente
+    ? `🏥 ${esame} — ${paziente.cognome} ${paziente.nome}`
+    : `🏥 ${esame}`;
+
+  const event = {
+    summary,
+    description: paziente
+      ? `Tel: ${paziente.telefono || '—'}\nPrenotato da Agenda Studio`
+      : 'Prenotato da Agenda Studio',
+    start: gCalDateTime(appuntamento.data_ora_inizio),
+    end:   gCalDateTime(appuntamento.data_ora_fine),
+  };
+
+  // Aggiorna tutti gli eventi trovati con questo ID (di solito uno solo)
+  for (const ev of listData.items) {
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${calId}/events/${ev.id}`,
+      {
+        method:  'PATCH',
+        headers: {
+          Authorization:  `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(event),
+      }
+    );
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(`Google Calendar aggiorna errore: ${JSON.stringify(data)}`);
+    }
+  }
+}
+
 // ─── Leggi eventi personali da Google Calendar (per blocchi agenda) ───────
 // Restituisce eventi NON creati da Agenda Studio (= impegni personali del medico)
 async function leggiEventiPersonali(da, a) {
@@ -216,4 +283,4 @@ async function leggiEventiPersonali(da, a) {
   });
 }
 
-module.exports = { creaEvento, eliminaEventoByAgendaId, aggiornaEvento, leggiEventiPersonali, getCreds };
+module.exports = { creaEvento, eliminaEventoByAgendaId, aggiornaEvento, aggiornaEventoByAgendaId, leggiEventiPersonali, getCreds };

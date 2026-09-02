@@ -5,7 +5,7 @@ const { getIO }  = require('../socket');
 const { notificaNuovoAppuntamento, notificaAppuntamentoAnnullato } = require('../services/email');
 const { inviaPromemoria, inviaSmsConferma, inviaSmsAnnullamento } = require('../services/sms');
 const { inviaWhatsappPromemoria } = require('../services/whatsapp');
-const { creaEvento, eliminaEventoByAgendaId } = require('../services/googleCalendar');
+const { creaEvento, eliminaEventoByAgendaId, aggiornaEventoByAgendaId } = require('../services/googleCalendar');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -309,6 +309,22 @@ router.put('/:id', async (req, res) => {
     creaEvento(data).catch(e =>
       console.error('[GCal] Crea evento (conferma da agenda):', e.message));
     promemoriaImmediatoSeServe(data);
+  } else if (
+    // Appuntamento spostato o modificato (data/ora, paziente o esame): tieni
+    // allineato l'evento su Google Calendar. Prima la PUT aggiornava solo il
+    // DB, così spostando un appuntamento dall'agenda il calendario del medico
+    // restava sull'orario vecchio. Vale solo per appuntamenti confermati
+    // (che hanno un evento): non in_attesa (nessun evento ancora) né
+    // annullato (l'evento viene eliminato dalla DELETE).
+    (updates.data_ora_inizio !== undefined ||
+     updates.data_ora_fine   !== undefined ||
+     updates.paziente_id     !== undefined ||
+     updates.tipo_id         !== undefined) &&
+    data.stato !== 'in_attesa' &&
+    data.stato !== 'annullato'
+  ) {
+    aggiornaEventoByAgendaId(data.id, data).catch(e =>
+      console.error('[GCal] Aggiorna evento (spostamento):', e.message));
   }
 
   res.json(data);
