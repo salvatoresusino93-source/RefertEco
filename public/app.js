@@ -2908,7 +2908,7 @@ async function loadPazientiAttesa() {
       const acc = app.accession_number;
       if (!acc || _worklistGenerate.has(acc)) continue;
       try {
-        await fetch('/api/worklist/crea', {
+        const response = await fetch('/api/worklist/crea', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2920,6 +2920,10 @@ async function loadPazientiAttesa() {
             data_ora_inizio:       app.data_ora_inizio,
           }),
         });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.ok) {
+          throw new Error(result.error || `Errore HTTP ${response.status}`);
+        }
         _worklistGenerate.add(acc);
         console.log('[Worklist] Creata per', acc);
       } catch (e) {

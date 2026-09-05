@@ -6,23 +6,10 @@ const { notificaNuovoAppuntamento, notificaAppuntamentoAnnullato } = require('..
 const { inviaPromemoria, inviaSmsConferma, inviaSmsAnnullamento } = require('../services/sms');
 const { inviaWhatsappPromemoria } = require('../services/whatsapp');
 const { creaEvento, eliminaEventoByAgendaId, aggiornaEventoByAgendaId } = require('../services/googleCalendar');
+const { generaAccessionNumber } = require('../services/accessionNumber');
 
 const router = express.Router();
 router.use(requireAuth);
-
-// ─── Helper: genera Accession Number YYYYMMDD-NNNN ───────────────────────
-async function generaAccessionNumber() {
-  const oggi = new Date();
-  const dataStr = oggi.toISOString().slice(0, 10).replace(/-/g, ''); // es. "20260523"
-
-  const { count, error } = await supabase
-    .from('appuntamenti')
-    .select('*', { count: 'exact', head: true })
-    .like('accession_number', `${dataStr}-%`);
-
-  const n = (error ? 0 : (count || 0)) + 1;
-  return `${dataStr}-${String(n).padStart(4, '0')}`;
-}
 
 // ─── Rete di sicurezza: promemoria per un appuntamento di DOMANI creato o
 // confermato quando il cron di oggi è già passato ─────────────────────────
@@ -196,7 +183,12 @@ router.post('/', async (req, res) => {
     }
   }
 
-  const accession_number = await generaAccessionNumber();
+  let accession_number;
+  try {
+    accession_number = await generaAccessionNumber(supabase);
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
 
   const { data, error } = await supabase
     .from('appuntamenti')
@@ -278,13 +270,27 @@ router.put('/:id', async (req, res) => {
   // finiva sul calendario del medico. Serve leggere lo stato precedente per
   // riconoscere la transizione in_attesa → prenotato.
   let statoPrecedente = null;
-  if (updates.stato === 'prenotato') {
-    const { data: prima } = await supabase
+  if (updates.stato === 'prenotato' || updates.stato === 'arrivato') {
+    const { data: prima, error: readError } = await supabase
       .from('appuntamenti')
-      .select('stato')
+      .select('stato, accession_number')
       .eq('id', req.params.id)
       .single();
+    if (readError || !prima) {
+      return res.status(404).json({ error: 'Appuntamento non trovato' });
+    }
     statoPrecedente = prima?.stato || null;
+
+    // Le prenotazioni online create prima del fix non hanno questo valore.
+    // Riparale al passaggio ad "arrivato", prima che RefertEco generi la MWL.
+    if (updates.stato === 'arrivato' && !prima.accession_number) {
+      try {
+        updates.accession_number = await generaAccessionNumber(supabase);
+        updates.worklist_status = 'pending';
+      } catch (e) {
+        return res.status(500).json({ error: e.message });
+      }
+    }
   }
 
   const { data, error } = await supabase
